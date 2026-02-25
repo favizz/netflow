@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  # 1. Database (Postgres + TimescaleDB)
+  timescaledb:
+    image: timescale/timescaledb:latest-pg14
+    container_name: ta_db
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: passwordTA2026 # Ganti yang aman nanti
+      POSTGRES_DB: iot_system
+    ports:
+      - "5433:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    networks:
+      - iot_net
+
+  # 2. MQTT Broker (EMQX)
+  emqx:
+    image: emqx/emqx:5.0.26
+    container_name: ta_broker
+    ports:
+      - "1883:1883"    # MQTT TCP Port (Untuk Alat/ESP32)
+      - "8083:8083"    # MQTT Websocket (Untuk React/Flutter)
+      - "18083:18083"  # Dashboard Admin EMQX
+    networks:
+      - iot_net
+
+  # 3. DB GUI (Opsional, biar gampang cek data)
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: ta_pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@ta.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    depends_on:
+      - timescaledb
+    networks:
+      - iot_net
+
+volumes:
+  db_data:
+
+networks:
+  iot_net:
+    driver: bridge
