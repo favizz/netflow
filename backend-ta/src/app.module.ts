@@ -1,31 +1,35 @@
-// src/app.module.ts
 import { Module } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule } from '@nestjs/config';
-import { DeviceModule } from './device/device.module'; // Kita akan buat ini nanti
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { AdminModule } from './admin/admin.module';
+import { DeviceModule } from './device/device.module';
+import { GatewayModule } from './gateway/gateway.module';
+import { PaymentsModule } from './payments/payments.module';
+import { ReportingModule } from './reporting/reporting.module';
 import { UnitModule } from './unit/unit.module';
+import { AuthModule } from './auth/auth.module';
 
 @Module({
   imports: [
-    // 1. Load Environment Variables
     ConfigModule.forRoot({ isGlobal: true }),
-
-    // 2. Koneksi Database
     TypeOrmModule.forRoot({
       type: 'postgres',
-      host: 'localhost',
-      port: 5433,            // <--- PENTING: Pakai port 5433 (sesuai docker-compose solusi 1)
-      username: 'admin',
-      password: 'passwordTA2026',
-      database: 'iot_system',
+      host: process.env.DB_HOST || 'localhost',
+      port: Number(process.env.DB_PORT || 5433),
+      username: process.env.DB_USER || 'admin',
+      password: process.env.DB_PASSWORD || 'passwordTA2026',
+      database: process.env.DB_NAME || 'iot_system',
       autoLoadEntities: true,
-      synchronize: false,    // FALSE karena kita sudah bikin tabel manual di PgAdmin. Aman.
+      synchronize: false,
     }),
-
-    // 3. Module Fitur Utama
-    DeviceModule,
-
     UnitModule,
+    DeviceModule,
+    ReportingModule,
+    PaymentsModule,
+    GatewayModule,
+    AdminModule,
+    AuthModule,
   ],
 })
 export class AppModule {}
+

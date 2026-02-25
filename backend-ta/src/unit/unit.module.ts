@@ -1,14 +1,14 @@
-// src/unit/unit.module.ts
 import { Module } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm'; // <--- Import ini
-import { UnitService } from './unit.service';
-import { UnitController } from './unit.controller';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { MeterReading } from '../device/entities/device.entity';
 import { Unit } from './entities/unit.entity';
+import { UnitController } from './unit.controller';
+import { UnitService } from './unit.service';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Unit])], // <--- Daftarkan Entity di sini
+  imports: [TypeOrmModule.forFeature([Unit, MeterReading])],
   controllers: [UnitController],
   providers: [UnitService],
-  exports: [TypeOrmModule] // <--- EKSPOR agar DeviceModule bisa pakai Repository<Unit>
+  exports: [TypeOrmModule, UnitService],
 })
 export class UnitModule {}

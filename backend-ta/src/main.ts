@@ -1,22 +1,33 @@
-// src/main.ts
+import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module';
 import { MicroserviceOptions, Transport } from '@nestjs/microservices';
+import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // 1. Koneksi ke MQTT Broker
+  app.enableCors({
+    origin: process.env.CORS_ORIGIN?.split(',') || ['http://localhost:5173', 'http://localhost:3000'],
+    credentials: true,
+  });
+
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      transform: true,
+      forbidNonWhitelisted: true,
+    }),
+  );
+
   app.connectMicroservice<MicroserviceOptions>({
     transport: Transport.MQTT,
     options: {
-      url: 'mqtt://localhost:1883', // Port Broker Docker
+      url: process.env.MQTT_BROKER_URL || 'mqtt://localhost:1883',
     },
   });
 
-  // 2. Jalankan Microservice & HTTP Server
   await app.startAllMicroservices();
-  await app.listen(3000);
-  console.log('🚀 Backend IoT siap menerima data!');
+  await app.listen(Number(process.env.PORT || 3000));
 }
-bootstrap();
+
+void bootstrap();

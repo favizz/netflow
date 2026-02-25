@@ -1,95 +1,85 @@
-// src/device/device.service.ts
-import { Injectable, Inject } from '@nestjs/common'; // Tambah Inject
-import { ClientProxy } from '@nestjs/microservices'; // Tambah ClientProxy
+import { Inject, Injectable } from '@nestjs/common';
+import { ClientProxy } from '@nestjs/microservices';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource } from 'typeorm';
-import { MeterReading } from './entities/device.entity';
+import { DataSource, Repository } from 'typeorm';
 import { Unit } from '../unit/entities/unit.entity';
+import { MeterReading } from './entities/device.entity';
 
 @Injectable()
 export class DeviceService {
   constructor(
     @InjectRepository(MeterReading)
-    private meterRepo: Repository<MeterReading>,
-    @InjectRepository(Unit)
-    private unitRepo: Repository<Unit>,
-    private dataSource: DataSource,
-    
-    // INJEKSI CLIENT MQTT DI SINI
-    @Inject('MQTT_CLIENT') private mqttClient: ClientProxy,
+    private readonly meterRepo: Repository<MeterReading>,
+    private readonly dataSource: DataSource,
+    @Inject('MQTT_CLIENT') private readonly mqttClient: ClientProxy,
   ) {}
 
-  async saveSensorData(data: any) {
-    // ... (Kode parsing data sebelumnya tetap sama) ...
-    // Pastikan variabel incomingEnergyTotal sudah ada
-    const incomingEnergyTotal = parseFloat(data.et) || 0; 
+  async saveSensorData(payload: any) {
+    const deviceId = payload?.dev_id || payload?.device_id;
+    if (!deviceId) {
+      return;
+    }
+
+    const incomingEnergyTotal = Number(payload?.et || payload?.energy_total || 0);
+    const voltage = this.toNumber(payload?.v);
+    const current = this.toNumber(payload?.i);
+    const power = this.toNumber(payload?.p);
+    const waterFlow = this.toNumber(payload?.wf || payload?.water_flow);
 
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
     try {
-      // A. Ambil Data Unit (Lock row agar aman dari race condition)
-      const unit = await queryRunner.manager.findOne(Unit, { 
-        where: { device_id: data.dev_id },
-        lock: { mode: 'pessimistic_write' } // Cegah double update
+      const unit = await queryRunner.manager.findOne(Unit, {
+        where: { device_id: deviceId },
+        lock: { mode: 'pessimistic_write' },
       });
 
-      if (!unit) return;
-
-      // B. Hitung Delta & Biaya
-      let deltaEnergy = 0;
-      if (incomingEnergyTotal > unit.last_energy_reading) {
-        deltaEnergy = incomingEnergyTotal - unit.last_energy_reading;
-      }
-      const cost = deltaEnergy * unit.energy_tariff;
-
-      // C. Update Saldo
-      if (cost > 0) {
-        unit.balance -= cost;
-        unit.last_energy_reading = incomingEnergyTotal;
-
-        // --- LOGIKA AUTO-CUTOFF ---
-        // Jika saldo <= 0 DAN relay masih nyala, Matikan!
-        if (unit.balance <= 0 && unit.relay_status === true) {
-            
-            // 1. Update status di DB
-            unit.relay_status = false;
-            
-            // 2. Kirim Perintah ke Alat via MQTT
-            // Topik: device/{ID}/cmd
-            // Pesan: { "relay": "OFF" }
-            this.mqttClient.emit(`device/${data.dev_id}/cmd`, { 
-                relay: 'OFF',
-                reason: 'NO_BALANCE'
-            });
-            
-            console.log(`[CUTOFF] Mematikan listrik unit ${unit.unit_no}!`);
+      if (unit) {
+        let deltaEnergy = 0;
+        if (incomingEnergyTotal > Number(unit.last_energy_reading)) {
+          deltaEnergy = incomingEnergyTotal - Number(unit.last_energy_reading);
         }
-        // --------------------------
 
-        await queryRunner.manager.save(unit);
+        const cost = deltaEnergy * Number(unit.energy_tariff);
+
+        if (cost > 0) {
+          unit.balance = Number(unit.balance) - cost;
+          unit.last_energy_reading = incomingEnergyTotal;
+
+          if (Number(unit.balance) <= 0 && unit.relay_status) {
+            unit.balance = 0;
+            unit.relay_status = false;
+            this.mqttClient.emit(`device/${deviceId}/cmd`, { relay: 'OFF', reason: 'NO_BALANCE' });
+          }
+
+          await queryRunner.manager.save(unit);
+        }
       }
 
-      // D. Simpan Log (Sama seperti sebelumnya)
-      const newLog = this.meterRepo.create({
+      const row = queryRunner.manager.create(MeterReading, {
         time: new Date(),
-        device_id: data.dev_id,
-        voltage: parseFloat(data.v),
-        current: parseFloat(data.i),
-        power: parseFloat(data.p),
-        energy_total: incomingEnergyTotal, 
+        device_id: deviceId,
+        voltage,
+        current,
+        power,
+        water_flow: waterFlow,
+        energy_total: incomingEnergyTotal || null,
       });
-      await queryRunner.manager.save(newLog);
+      await queryRunner.manager.save(row);
 
       await queryRunner.commitTransaction();
-      // console.log(`Saldo: ${unit.balance}`); // Uncomment untuk debug
-
-    } catch (err) {
+    } catch (error) {
       await queryRunner.rollbackTransaction();
-      console.error(err);
+      throw error;
     } finally {
       await queryRunner.release();
     }
+  }
+
+  private toNumber(value: unknown): number | null {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
   }
 }

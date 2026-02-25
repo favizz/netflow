@@ -1,26 +1,38 @@
-// src/device/entities/meter-reading.entity.ts
 import { Entity, Column, PrimaryColumn } from 'typeorm';
 
-@Entity('meter_readings') // Nama tabel di PgAdmin tadi
+class NumericTransformer {
+  to(data: number | null): number | null {
+    return data;
+  }
+
+  from(data: string | null): number | null {
+    if (data === null || data === undefined) {
+      return null;
+    }
+    return parseFloat(data);
+  }
+}
+
+@Entity('meter_readings')
 export class MeterReading {
-  
   @PrimaryColumn({ type: 'timestamptz' })
   time!: Date;
 
   @PrimaryColumn({ type: 'varchar' })
   device_id!: string;
 
-  @Column('decimal', { nullable: true })
-  voltage!: number;
+  @Column('decimal', { nullable: true, transformer: new NumericTransformer() })
+  voltage!: number | null;
 
-  @Column('decimal', { nullable: true })
-  current!: number;
+  @Column('decimal', { nullable: true, transformer: new NumericTransformer() })
+  current!: number | null;
 
-  @Column('decimal', { nullable: true })
-  power!: number;
+  @Column('decimal', { nullable: true, transformer: new NumericTransformer() })
+  power!: number | null;
 
-  @Column('decimal', { nullable: true })
-  water_flow!: number;
+  @Column('decimal', { nullable: true, transformer: new NumericTransformer() })
+  water_flow!: number | null;
 
-  // Kolom lain (energy_total, dll) bisa ditambah nanti
+  @Column('decimal', { nullable: true, transformer: new NumericTransformer() })
+  energy_total!: number | null;
 }

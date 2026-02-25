@@ -1,10 +1,11 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { CheckCircle, Zap, ArrowLeft, Droplets, Smartphone, CreditCard, Building } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { api } from "@/lib/api"
 
 interface TokenPurchaseProps {
   unitId: string
@@ -12,51 +13,85 @@ interface TokenPurchaseProps {
 }
 
 const TOKEN_PACKAGES = [
-  { id: 1, nominal: 50000, kwh: 400, popular: false },
-  { id: 2, nominal: 100000, kwh: 850, popular: true },
-  { id: 3, nominal: 200000, kwh: 1750, popular: false },
-  { id: 4, nominal: 500000, kwh: 4500, popular: false },
+  { id: 1, nominal: 50000, kwh: 34.6, popular: false },
+  { id: 2, nominal: 100000, kwh: 69.2, popular: true },
+  { id: 3, nominal: 200000, kwh: 138.4, popular: false },
+  { id: 4, nominal: 500000, kwh: 346.1, popular: false },
 ]
 
 const PAYMENT_METHODS = [
-  { id: "qris", name: "QRIS", icon: <Smartphone size={24} />, description: "" },
-  { id: "transfer", name: "Transfer Bank", icon: <Building size={24} />, description: "" },
-  { id: "ewallet", name: "E-Wallet (OVO/Dana)", icon: <CreditCard size={24} />, description: "" },
-]
+  { id: "qris", name: "QRIS", icon: <Smartphone size={24} /> },
+  { id: "transfer", name: "Transfer Bank", icon: <Building size={24} /> },
+  { id: "ewallet", name: "E-Wallet", icon: <CreditCard size={24} /> },
+] as const
 
 export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
   const [selectedPackage, setSelectedPackage] = useState<number | null>(null)
   const [utilityType, setUtilityType] = useState<"electricity" | "water">("electricity")
   const [customAmount, setCustomAmount] = useState("")
-  const [selectedMethod, setSelectedMethod] = useState<string | null>(null)
+  const [selectedMethod, setSelectedMethod] = useState<(typeof PAYMENT_METHODS)[number]["id"] | null>(null)
   const [loading, setLoading] = useState(false)
   const [transactionId, setTransactionId] = useState("")
   const [isSuccess, setIsSuccess] = useState(false)
+  const [errorMessage, setErrorMessage] = useState("")
+  const [currentBalance, setCurrentBalance] = useState("0 KWh")
 
-  // Mock data for balance
-  const currentBalance = utilityType === "electricity" ? "2,450 KWh" : "125.5 M³"
-  const lastUpdate = "2 menit lalu"
+  useEffect(() => {
+    let active = true
+
+    const loadSummary = async () => {
+      try {
+        const data = await api.getDashboard(unitId)
+        if (!active) return
+        const kwh = data.summary.remainingEstimate.kwh
+        setCurrentBalance(`${kwh.toFixed(2)} KWh`)
+      } catch {
+        if (!active) return
+        setCurrentBalance("N/A")
+      }
+    }
+
+    void loadSummary()
+
+    return () => {
+      active = false
+    }
+  }, [unitId])
 
   const handleSelectPackage = (id: number) => {
     setSelectedPackage(id)
     setCustomAmount("")
+    setErrorMessage("")
   }
 
   const handleCustomAmount = (amount: string) => {
     setCustomAmount(amount)
     setSelectedPackage(null)
+    setErrorMessage("")
   }
 
-  const handlePayment = () => {
+  const selectedAmount = selectedPackage
+    ? TOKEN_PACKAGES.find((p) => p.id === selectedPackage)?.nominal ?? 0
+    : Number(customAmount || 0)
+
+  const handlePayment = async () => {
+    if (!selectedMethod || selectedAmount < 1000) return
+
     setLoading(true)
-    // Simulate payment processing
-    setTimeout(() => {
-      setTransactionId(
-        `TRX-${utilityType.toUpperCase().slice(0, 3)}-${new Date().toISOString().split("T")[0]}-${String(Math.floor(Math.random() * 1000)).padStart(3, "0")}`,
-      )
+    setErrorMessage("")
+
+    try {
+      const initiated = await api.initiateTopup(unitId, selectedAmount, selectedMethod)
+      const confirmed = await api.autoConfirmTopup(unitId, initiated.transactionId)
+
+      setTransactionId(confirmed.id)
       setIsSuccess(true)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Top-up gagal diproses"
+      setErrorMessage(message)
+    } finally {
       setLoading(false)
-    }, 2000)
+    }
   }
 
   const handleBack = () => {
@@ -64,10 +99,6 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
   }
 
   if (isSuccess && transactionId) {
-    const amount = selectedPackage
-      ? TOKEN_PACKAGES.find(p => p.id === selectedPackage)?.nominal ?? 0
-      : parseInt(customAmount) || 0
-
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 space-y-6">
         <div className="bg-primary/10 p-6 rounded-full animate-in zoom-in duration-300">
@@ -76,7 +107,7 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
 
         <div className="text-center space-y-2">
           <h1 className="text-2xl font-bold text-foreground">Pembayaran Berhasil</h1>
-          <p className="text-muted-foreground">Token {utilityType === "electricity" ? "Listrik" : "Air"} berhasil dibeli</p>
+          <p className="text-muted-foreground">Token berhasil dikonfirmasi otomatis oleh gateway callback.</p>
         </div>
 
         <Card className="w-full max-w-sm bg-muted/30 p-6 space-y-4">
@@ -86,11 +117,11 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
           </div>
           <div className="flex justify-between items-center">
             <span className="text-muted-foreground">Nominal</span>
-            <span className="font-semibold">Rp {amount.toLocaleString("id-ID")}</span>
+            <span className="font-semibold">Rp {selectedAmount.toLocaleString("id-ID")}</span>
           </div>
           <div className="flex justify-between items-center">
             <span className="text-muted-foreground">Metode</span>
-            <span className="font-medium text-right">{PAYMENT_METHODS.find(m => m.id === selectedMethod)?.name}</span>
+            <span className="font-medium text-right">{PAYMENT_METHODS.find((m) => m.id === selectedMethod)?.name}</span>
           </div>
         </Card>
 
@@ -115,7 +146,6 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
 
   return (
     <div className="min-h-screen bg-background pb-24">
-      {/* Header */}
       <div className="flex items-center gap-4 p-4 sticky top-0 bg-background z-10">
         <button onClick={handleBack} className="p-2 hover:bg-muted rounded-full">
           <ArrowLeft size={24} />
@@ -124,40 +154,37 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
       </div>
 
       <div className="px-5 space-y-6">
-        {/* Utility Toggle */}
         <div className="bg-muted p-1 rounded-2xl flex relative">
           <button
             onClick={() => setUtilityType("electricity")}
-            className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold transition-all duration-300 ${utilityType === "electricity"
-              ? "bg-white text-teal-700 shadow-sm"
-              : "text-muted-foreground hover:text-foreground"
-              }`}
+            className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold transition-all duration-300 ${
+              utilityType === "electricity"
+                ? "bg-white text-teal-700 shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
           >
             <Zap size={18} className={utilityType === "electricity" ? "fill-teal-700 text-teal-700" : ""} />
             Listrik
           </button>
           <button
             onClick={() => setUtilityType("water")}
-            className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold transition-all duration-300 ${utilityType === "water"
-              ? "bg-white text-teal-700 shadow-sm"
-              : "text-muted-foreground hover:text-foreground"
-              }`}
+            className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold transition-all duration-300 ${
+              utilityType === "water"
+                ? "bg-white text-teal-700 shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
           >
             <Droplets size={18} className={utilityType === "water" ? "fill-teal-700 text-teal-700" : ""} />
             Air
           </button>
         </div>
 
-        {/* Balance Card */}
         <div className="bg-teal-50/50 dark:bg-teal-950/20 rounded-3xl p-6 text-center space-y-1">
           <p className="text-sm text-muted-foreground font-medium">Sisa Saldo Saat Ini</p>
-          <h2 className="text-4xl font-bold text-teal-800 dark:text-teal-400 font-mono tracking-tight">
-            {currentBalance}
-          </h2>
-          <p className="text-xs text-muted-foreground italic">Terakhir update: {lastUpdate}</p>
+          <h2 className="text-4xl font-bold text-teal-800 dark:text-teal-400 font-mono tracking-tight">{currentBalance}</h2>
+          <p className="text-xs text-muted-foreground italic">Unit {unitId}</p>
         </div>
 
-        {/* Package Selection */}
         <div className="space-y-3">
           <h3 className="font-bold text-base">Pilih Paket</h3>
           <div className="grid grid-cols-2 gap-3">
@@ -165,28 +192,26 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
               <button
                 key={pkg.id}
                 onClick={() => handleSelectPackage(pkg.id)}
-                className={`relative p-4 rounded-2xl border transition-all text-left space-y-1 ${selectedPackage === pkg.id
-                  ? "border-teal-600 bg-teal-50/50 dark:bg-teal-950/20 ring-1 ring-teal-600"
-                  : "border-border hover:border-teal-200 bg-card"
-                  }`}
+                className={`relative p-4 rounded-2xl border transition-all text-left space-y-1 ${
+                  selectedPackage === pkg.id
+                    ? "border-teal-600 bg-teal-50/50 dark:bg-teal-950/20 ring-1 ring-teal-600"
+                    : "border-border hover:border-teal-200 bg-card"
+                }`}
               >
                 {pkg.popular && (
                   <span className="absolute top-0 right-0 bg-teal-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-bl-lg rounded-tr-lg">
                     POPULER
                   </span>
                 )}
-                <p className="font-bold text-lg text-foreground">
-                  Rp {pkg.nominal.toLocaleString("id-ID")}
-                </p>
+                <p className="font-bold text-lg text-foreground">Rp {pkg.nominal.toLocaleString("id-ID")}</p>
                 <p className="text-xs text-muted-foreground">
-                  ≈ {pkg.kwh} {utilityType === "electricity" ? "KWh" : "M³"}
+                  sekitar {pkg.kwh} {utilityType === "electricity" ? "KWh" : "m3"}
                 </p>
               </button>
             ))}
           </div>
         </div>
 
-        {/* Custom Amount */}
         <div className="space-y-3">
           <h3 className="font-bold text-base">Jumlah Lainnya</h3>
           <div className="relative">
@@ -201,40 +226,41 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
           </div>
         </div>
 
-        {/* Payment Methods */}
         <div className="space-y-3">
           <h3 className="font-bold text-base">Metode Pembayaran</h3>
           <div className="space-y-3">
             {PAYMENT_METHODS.map((method) => (
               <button
                 key={method.id}
-                onClick={() => setSelectedMethod(method.id)}
-                className={`w-full p-4 rounded-2xl border transition-all flex items-center justify-between bg-card ${selectedMethod === method.id
-                  ? "border-teal-600 ring-1 ring-teal-600"
-                  : "border-border hover:border-teal-200"
-                  }`}
+                onClick={() => {
+                  setSelectedMethod(method.id)
+                  setErrorMessage("")
+                }}
+                className={`w-full p-4 rounded-2xl border transition-all flex items-center justify-between bg-card ${
+                  selectedMethod === method.id
+                    ? "border-teal-600 ring-1 ring-teal-600"
+                    : "border-border hover:border-teal-200"
+                }`}
               >
                 <div className="flex items-center gap-4">
-                  <div className="text-muted-foreground">
-                    {method.icon}
-                  </div>
+                  <div className="text-muted-foreground">{method.icon}</div>
                   <span className="font-bold text-sm">{method.name}</span>
                 </div>
-                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${selectedMethod === method.id
-                  ? "border-teal-600 bg-teal-600"
-                  : "border-muted-foreground/30"
-                  }`}>
-                  {selectedMethod === method.id && (
-                    <div className="w-2 h-2 bg-white rounded-full" />
-                  )}
+                <div
+                  className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                    selectedMethod === method.id ? "border-teal-600 bg-teal-600" : "border-muted-foreground/30"
+                  }`}
+                >
+                  {selectedMethod === method.id && <div className="w-2 h-2 bg-white rounded-full" />}
                 </div>
               </button>
             ))}
           </div>
         </div>
+
+        {errorMessage && <p className="text-sm text-destructive">{errorMessage}</p>}
       </div>
 
-      {/* Bottom Action */}
       <div className="fixed bottom-0 left-0 right-0 p-5 bg-background border-t">
         <Button
           onClick={handlePayment}
