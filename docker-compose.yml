@@ -5,14 +5,16 @@ services:
   timescaledb:
     image: timescale/timescaledb:latest-pg14
     container_name: ta_db
+    restart: always
     environment:
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: passwordTA2026 # Ganti yang aman nanti
-      POSTGRES_DB: iot_system
-    ports:
-      - "5433:5432"
+      POSTGRES_USER: ta_user
+      POSTGRES_PASSWORD: strongpassword
+      POSTGRES_DB: taflow
     volumes:
-      - db_data:/var/lib/postgresql/data
+      - timescale_data:/var/lib/postgresql/data
+    ports:
+      # Bound explicitly to localhost so CloudPanel firewall is respected
+      - "127.0.0.1:5432:5432"
     networks:
       - iot_net
 
@@ -20,29 +22,58 @@ services:
   emqx:
     image: emqx/emqx:5.0.26
     container_name: ta_broker
+    restart: always
     ports:
-      - "1883:1883"    # MQTT TCP Port (Untuk Alat/ESP32)
-      - "8083:8083"    # MQTT Websocket (Untuk React/Flutter)
-      - "18083:18083"  # Dashboard Admin EMQX
+      # These must be public for devices, unless devices connect via Nginx TCP stream
+      - "1883:1883"
+      # Websocket exposed to localhost, Caddy/Nginx should reverse proxy wss:// to this
+      - "127.0.0.1:8083:8083"
+      - "127.0.0.1:18083:18083"
     networks:
       - iot_net
 
-  # 3. DB GUI (Opsional, biar gampang cek data)
-  pgadmin:
-    image: dpage/pgadmin4
-    container_name: ta_pgadmin
-    environment:
-      PGADMIN_DEFAULT_EMAIL: admin@ta.com
-      PGADMIN_DEFAULT_PASSWORD: admin
-    ports:
-      - "5050:80"
+  # 3. Backend (NestJS)
+  backend:
+    build: ./backend-ta
+    container_name: ta_backend
+    restart: always
     depends_on:
       - timescaledb
+    environment:
+      DB_HOST: timescaledb
+      DB_PORT: 5432
+      DB_USER: ta_user
+      DB_PASSWORD: strongpassword
+      DB_NAME: taflow
+    ports:
+      - "127.0.0.1:5000:5000"
+    networks:
+      - iot_net
+
+  # 4. Dashboard (Next.js)
+  dashboard:
+    build: ./frontend-ta/dashboard
+    container_name: ta_dashboard
+    restart: always
+    ports:
+      # Nginx proxy_pass should point to this port
+      - "127.0.0.1:3000:3000"
+    networks:
+      - iot_net
+
+  # 5. Mobile Web (Nginx Static)
+  mobile:
+    build: ./frontend-ta/mobile
+    container_name: ta_mobile
+    restart: always
+    ports:
+      # Nginx proxy_pass can point here if subdomain is used
+      - "127.0.0.1:8080:80"
     networks:
       - iot_net
 
 volumes:
-  db_data:
+  timescale_data:
 
 networks:
   iot_net:
