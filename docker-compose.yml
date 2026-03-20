@@ -7,14 +7,15 @@ services:
     container_name: ta_db
     restart: always
     environment:
-      POSTGRES_USER: ta_user
-      POSTGRES_PASSWORD: strongpassword
-      POSTGRES_DB: taflow
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASS}
+      POSTGRES_DB: ${DB_NAME}
     volumes:
       - timescale_data:/var/lib/postgresql/data
+      - ./db-init:/docker-entrypoint-initdb.d
     ports:
       # Bound explicitly to localhost so CloudPanel firewall is respected
-      - "127.0.0.1:5432:5432"
+      - "127.0.0.1:5433:5432"
     networks:
       - iot_net
 
@@ -42,9 +43,9 @@ services:
     environment:
       DB_HOST: timescaledb
       DB_PORT: 5432
-      DB_USER: ta_user
-      DB_PASSWORD: strongpassword
-      DB_NAME: taflow
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASS}
+      DB_NAME: ${DB_NAME}
     ports:
       - "127.0.0.1:5000:5000"
     networks:
