@@ -1,12 +1,11 @@
-"use client";
-
 import { useState } from "react";
 import { X, Check } from "lucide-react";
+import { InventoryItem } from "@/lib/mockData";
 
 interface AddDeviceModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onAdd: (device: any) => void;
+    onAdd: (device: InventoryItem) => void;
 }
 
 export function AddDeviceModal({ isOpen, onClose, onAdd }: AddDeviceModalProps) {

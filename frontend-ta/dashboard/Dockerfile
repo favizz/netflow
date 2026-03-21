@@ -12,25 +12,12 @@ RUN corepack enable pnpm
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-
-# Ensure standalone output is enabled in next.config.js for this to work natively
-ENV NEXT_TELEMETRY_DISABLED=1
 RUN pnpm run build
 
-# Stage 3: Runner
-FROM node:18-alpine AS runner
-WORKDIR /app
-
-ENV NODE_ENV=production
-ENV NEXT_TELEMETRY_DISABLED=1
-
-# Automatically leverage output traces to reduce image size
-# https://nextjs.org/docs/advanced-features/output-file-tracing
-COPY --from=builder /app/public ./public
-COPY --from=builder /app/.next/standalone ./
-COPY --from=builder /app/.next/static ./.next/static
+# Stage 3: Runner (Nginx static — same pattern as mobile)
+FROM nginx:alpine AS runner
+COPY --from=builder /app/dist /usr/share/nginx/html
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 EXPOSE 3000
-
-ENV PORT=3000
-CMD ["node", "server.js"]
+CMD ["nginx", "-g", "daemon off;"]

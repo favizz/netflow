@@ -21,7 +21,7 @@ Two user roles:
         ▼                             ▼
 [NestJS Backend :5000]        [Mobile App (React+Vite)]
         │  REST API
-        ├──────────────────► [Dashboard (Next.js :3000)]
+        ├──────────────────► [Dashboard (React+Vite :3000)]
         ▼
 [PostgreSQL 14 + TimescaleDB]
 ```
@@ -41,8 +41,9 @@ Two user roles:
 - **TypeORM**: native NestJS integration; repository pattern separates service logic from query logic
 - **PostgreSQL 14 + TimescaleDB**: relational integrity for operational data + columnar compression and time partitioning for telemetry — all in one engine
 
-### Dashboard — Next.js 16 + React 19 + Tailwind CSS 4
-- **Next.js App Router**: server components reduce client JS; co-located layouts avoid re-fetching nav data on every page; SSR is useful for the admin panel even without strict SEO requirements
+### Dashboard — React 19 + Vite 7 + React Router 7 + Tailwind CSS 4
+- **Vite 7**: same build tool as mobile; consistent toolchain, fast HMR, Rollup-based production output as static files served by Nginx
+- **React Router 7**: client-side routing with nested layout (`<Outlet />`); the dashboard is auth-gated so SSR provides no SEO benefit
 - **Recharts**: composable chart primitives that integrate naturally with React's data model; used for consumption trend and telemetry graphs
 - **Tailwind CSS 4**: utility-first; consistent spacing and typography without a separate design token system
 
@@ -111,7 +112,7 @@ TA-Flowmeter/
 │   └── Dockerfile
 ├── frontend-ta/
 │   ├── README.md
-│   ├── dashboard/                     # Next.js admin — port 3000
+│   ├── dashboard/                     # React+Vite admin — port 3000 (Nginx static)
 │   │   ├── src/app/
 │   │   └── Dockerfile
 │   └── mobile/                        # React+Vite user app — port 5173 dev / 8080 prod
@@ -142,7 +143,7 @@ Run all commands from inside each app's directory.
 | Functions and variables | `camelCase` |
 | Classes, interfaces, types | `PascalCase` |
 | TypeScript | Strict mode — no `any`. Use `unknown` with type narrowing or explicit interfaces |
-| Imports (Next.js) | Absolute paths via `@/` alias preferred |
+| Imports | Absolute paths via `@/` alias preferred in both frontend apps |
 | Imports (Vite/Mobile) | Relative paths |
 | IDs | UUIDs for user-facing entities; meaningful string keys for device/unit hardware correlation |
 | Secrets | Environment variables only — never hardcoded |

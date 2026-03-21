@@ -4,7 +4,7 @@ There are two isolated frontend apps. They share **no code, config, or build too
 
 | App | Path | Framework | Dev Port | Prod Port | Audience |
 |---|---|---|---|---|---|
-| Dashboard | `frontend-ta/dashboard/` | Next.js 16 + React 19 | 3000 | 3000 | Admin |
+| Dashboard | `frontend-ta/dashboard/` | React 19 + Vite 7 + React Router 7 | 3000 | 3000 (Nginx) | Admin |
 | Mobile | `frontend-ta/mobile/` | React 19 + Vite 7 | 5173 | 8080 (Nginx) | Resident |
 
 Both use **pnpm**, **Tailwind CSS 4**, and **Recharts** for visual consistency without shared code.
@@ -19,30 +19,39 @@ Admin management interface: device inventory, tenant management, tariff configur
 ### Structure
 ```
 src/
-├── app/                           # Next.js App Router
-│   ├── layout.tsx                 # Root layout (fonts, global styles)
-│   ├── page.tsx                   # Entry — redirect or dashboard home
-│   └── (dashboard)/               # Route group for admin pages
-│       └── [feature]/page.tsx     # Individual admin sections
+├── main.tsx                       # React entry point
+├── App.tsx                        # BrowserRouter + route definitions
+├── index.css                      # Tailwind v4 + Inter font import
+├── pages/                         # One file per route
+│   ├── DashboardPage.tsx          # Overview with stats and charts
+│   ├── InventoryPage.tsx          # Device list with add modal
+│   ├── UnitDetailPage.tsx         # Live telemetry + relay/valve control
+│   ├── ManagementPage.tsx         # RBAC and OTA firmware
+│   └── TransactionsPage.tsx       # Transaction log table
 ├── components/
-│   ├── dashboard/                 # Telemetry charts, stats cards, device status
-│   ├── inventory/                 # Device and unit management UI
-│   └── layout/                    # Sidebar, header, navigation
+│   ├── layout/
+│   │   ├── DashboardLayout.tsx    # Nested layout with <Outlet />
+│   │   ├── Sidebar.tsx            # Nav links via react-router-dom <Link>
+│   │   └── Header.tsx             # Search, notifications, user info
+│   ├── dashboard/                 # Stat cards, area charts, tower heatmap
+│   └── inventory/                 # InventoryTable, AddDeviceModal
 └── lib/
-    └── mockData.ts                # Dev-only mock data (replace with real API calls)
+    ├── mockData.ts                # Dev-only mock data (replace with real API calls)
+    └── utils.ts                   # cn() class merge helper
 ```
 
 ### Key Decisions
 
 | Decision | Why |
 |---|---|
-| App Router (not Pages Router) | Server components reduce client JS; layouts co-locate data fetching with the component that uses it |
-| No global state library | Server components handle most data; client state is local to components — adding Redux/Zustand here would be premature |
-| Recharts for charts | Composable, React-native API; data arrives as arrays from `/reporting` endpoints, which maps directly to Recharts' data prop |
+| Vite + React (not Next.js) | Dashboard is fully auth-gated — no SEO, no SSR benefit; Vite output is static files served by Nginx, same pattern as mobile |
+| React Router 7 nested layout | `<Outlet />` in DashboardLayout renders the active page; sidebar/header are rendered once, not per page |
+| No global state library | Client state is local to components; no server state caching needed at this stage |
+| Recharts for charts | Composable, React-native API; data arrives as arrays from `/reporting` endpoints |
 | pnpm | Consistent with mobile; faster installs; strict isolation |
 
 ### API Integration
-Dashboard calls the backend REST API at the URL configured via environment variables. Key endpoint groups:
+Dashboard calls the backend REST API. Key endpoint groups:
 - `/reporting/*` — aggregated telemetry data for charts
 - `/device/*` — device CRUD and relay/valve control
 - `/admin/*` — tenant and tariff management (requires `x-api-key` header)
