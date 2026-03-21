@@ -9,6 +9,7 @@ backend/.env
 # build files
 build/
 dist/
+.next/
 
 # logs
 npm-debug.log*

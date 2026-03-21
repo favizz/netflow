@@ -15,9 +15,9 @@ import { AuthModule } from './auth/auth.module';
     TypeOrmModule.forRoot({
       type: 'postgres',
       host: process.env.DB_HOST || 'localhost',
-      port: Number(process.env.DB_PORT || 5433),
+      port: Number(process.env.DB_PORT || 5432),
       username: process.env.DB_USER || 'admin',
-      password: process.env.DB_PASSWORD || 'passwordTA2026',
+      password: process.env.DB_PASS || 'public',
       database: process.env.DB_NAME || 'iot_system',
       autoLoadEntities: true,
       synchronize: false,
