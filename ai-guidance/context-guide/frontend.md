@@ -1,257 +1,104 @@
-# Frontend Developer Roadmap
+# Frontend Context
 
-## Internet Fundamentals
+There are two isolated frontend apps. They share **no code, config, or build tooling**. Each app is self-contained to avoid cross-app styling/build/import interference.
 
-Before learning frontend development, understand how the web works.
+| App | Path | Framework | Dev Port | Prod Port | Audience |
+|---|---|---|---|---|---|
+| Dashboard | `frontend-ta/dashboard/` | Next.js 16 + React 19 | 3000 | 3000 | Admin |
+| Mobile | `frontend-ta/mobile/` | React 19 + Vite 7 | 5173 | 8080 (Nginx) | Resident |
 
-- How the Internet works
-- What is HTTP
-- What is a Domain Name
-- What is Hosting
-- DNS and how it works
-- How browsers work
+Both use **pnpm**, **Tailwind CSS 4**, and **Recharts** for visual consistency without shared code.
 
 ---
 
-# HTML
+## Dashboard (`frontend-ta/dashboard/`)
 
-## Core HTML Skills
+### Purpose
+Admin management interface: device inventory, tenant management, tariff configuration, transaction history, and live telemetry charts.
 
-- Learn HTML basics
-- Write **semantic HTML**
-- Forms and validation
-- Accessibility (a11y)
-- SEO basics
+### Structure
+```
+src/
+├── app/                           # Next.js App Router
+│   ├── layout.tsx                 # Root layout (fonts, global styles)
+│   ├── page.tsx                   # Entry — redirect or dashboard home
+│   └── (dashboard)/               # Route group for admin pages
+│       └── [feature]/page.tsx     # Individual admin sections
+├── components/
+│   ├── dashboard/                 # Telemetry charts, stats cards, device status
+│   ├── inventory/                 # Device and unit management UI
+│   └── layout/                    # Sidebar, header, navigation
+└── lib/
+    └── mockData.ts                # Dev-only mock data (replace with real API calls)
+```
 
----
+### Key Decisions
 
-# CSS
+| Decision | Why |
+|---|---|
+| App Router (not Pages Router) | Server components reduce client JS; layouts co-locate data fetching with the component that uses it |
+| No global state library | Server components handle most data; client state is local to components — adding Redux/Zustand here would be premature |
+| Recharts for charts | Composable, React-native API; data arrives as arrays from `/reporting` endpoints, which maps directly to Recharts' data prop |
+| pnpm | Consistent with mobile; faster installs; strict isolation |
 
-## CSS Fundamentals
-
-- Learn CSS basics
-- Layout systems
-- Responsive design
-
-## Writing CSS
-
-- Tailwind CSS
-- BEM methodology
-
-## CSS Architecture
-
-- CSS architecture patterns
-
-## CSS Preprocessors
-
-- Sass
-- PostCSS
-
-> Additional topics worth learning:
-- CSS Modules
-- Styled Components
-- CSS-in-JS
-- Panda CSS
-- Shadcn UI
-- Mantine
+### API Integration
+Dashboard calls the backend REST API at the URL configured via environment variables. Key endpoint groups:
+- `/reporting/*` — aggregated telemetry data for charts
+- `/device/*` — device CRUD and relay/valve control
+- `/admin/*` — tenant and tariff management (requires `x-api-key` header)
 
 ---
 
-# JavaScript
+## Mobile (`frontend-ta/mobile/`)
 
-## Core JavaScript
+### Purpose
+Resident-facing SPA: login, real-time consumption display, relay/valve status, token purchase history, and live MQTT telemetry.
 
-- Learn JavaScript basics
-- DOM manipulation
-- Fetch API / AJAX (XHR)
+### Structure
+```
+src/
+├── components/
+│   ├── ui/                        # Radix UI + Shadcn primitives
+│   │                              # (Button, Dialog, Dropdown, Toast, etc.)
+│   └── [feature]/                 # Login, Dashboard, DeviceControl,
+│                                  # TokenPurchase, ConsumptionHistory, etc.
+├── hooks/
+│   ├── use-app-state.ts           # Global auth state + active device
+│   ├── use-mobile.ts              # Viewport detection
+│   └── use-toast.ts               # Toast notification hook
+└── lib/
+    ├── api.ts                     # Axios client with JWT Bearer interceptor
+    └── config.ts                  # VITE_* env variable access (typed)
+```
 
----
+### Key Decisions
 
-# Version Control
+| Decision | Why |
+|---|---|
+| SPA (not SSR) | No SEO requirement; all routes are behind auth; client-side routing is sufficient |
+| Radix UI + Shadcn | Accessible, headless primitives — correct a11y without a full UI kit's weight |
+| React Hook Form + Zod | Minimal re-renders on input; one Zod schema drives both runtime validation and TypeScript types |
+| MQTT over WebSocket | Real-time telemetry without polling; `VITE_MQTT_BROKER_URL` points to EMQX WS port `:8083` |
+| Vitest | Same ecosystem as Vite; faster than Jest for this stack |
 
-## Git
+### MQTT Connection
+The mobile app connects to EMQX WebSocket at `VITE_MQTT_BROKER_URL` using credentials from `VITE_MQTT_USERNAME` / `VITE_MQTT_PASSWORD`. Subscriptions:
 
-- Git fundamentals
+| Topic | Purpose |
+|---|---|
+| `device/{id}/telemetry` | Live sensor readings (kWh, m³, voltage, flow rate) |
+| `device/{id}/status` | Online/offline heartbeat |
 
-## VCS Hosting Platforms
+The connection is established in `use-app-state.ts` after login. On logout, the client unsubscribes and disconnects.
 
-- GitHub
-- GitLab
-- Bitbucket
-
----
-
-# Package Managers
-
-- npm
-- pnpm
-- yarn
-
----
-
-# Pick a Frontend Framework
-
-Choose one major framework:
-
-- React
-- Vue.js
-- Angular
-- Svelte
-- Solid JS
-- Qwik
-
----
-
-# Build Tools
-
-## Module Bundlers
-
-- Vite
-- Webpack
-- Rollup
-- Parcel
-- esbuild
-- SWC
-
-## Linters & Formatters
-
-- ESLint
-- Prettier
+### API Client (`lib/api.ts`)
+Axios instance with a request interceptor that attaches the JWT `Authorization: Bearer` header from local storage. On 401 response, it attempts a token refresh via `POST /auth/refresh` before retrying.
 
 ---
 
-# Testing
+## Shared Conventions (both apps)
 
-Testing frameworks for frontend applications:
-
-- Vitest
-- Jest
-- Playwright
-- Cypress
-
----
-
-# Web Security Basics
-
-- CORS
-- HTTPS
-- Content Security Policy
-- OWASP security risks
-
----
-
-# Authentication Strategies
-
-- JWT
-- OAuth
-- SSO
-- Basic Authentication
-- Session Authentication
-
----
-
-# Web Components
-
-- HTML Templates
-- Custom Elements
-- Shadow DOM
-
----
-
-# Type Checking
-
-- TypeScript
-
----
-
-# Server Side Rendering (SSR)
-
-Frameworks supporting SSR:
-
-- React
-- Vue.js
-- Angular
-- Svelte
-
-Frameworks and routers:
-
-- React Router
-- Next.js
-- Nuxt.js
-- SvelteKit
-
----
-
-# GraphQL
-
-- Apollo
-- Relay Modern
-
----
-
-# Static Site Generators
-
-- Next.js
-- Astro
-- VuePress
-- Nuxt.js
-- Eleventy
-
----
-
-# Progressive Web Apps (PWA)
-
-Key browser APIs used in PWAs:
-
-- Service Workers
-- WebSockets
-- Server Sent Events
-- Storage APIs
-- Location APIs
-- Notifications
-- Device Orientation
-- Payments
-- Credentials
-
----
-
-# Performance Optimization
-
-Important performance concepts:
-
-- PRPL Pattern
-- RAIL Model
-- Performance metrics
-- Using Lighthouse
-- Using DevTools
-
-## Performance Best Practices
-
-- Storage optimization
-- WebSockets usage
-- Server Sent Events
-- Service Workers
-
----
-
-# Mobile Apps
-
-Frontend technologies for mobile development:
-
-- React Native
-- Flutter
-- Ionic
-
----
-
-# Desktop Apps
-
-Frontend technologies for desktop applications:
-
-- Electron
-- Tauri
-- Flutter
-- Node.js
-- TypeScript
-
----
+- **Tailwind CSS 4** — same utility class naming provides visual consistency without shared design tokens
+- **Recharts** — same chart API; data shape from the backend maps to both apps without transformation
+- **TypeScript strict** — no `any`; Zod schemas in mobile, typed API responses in dashboard
+- **No cross-app imports** — each app compiles independently; `frontend-ta/` has no shared `src/` directory

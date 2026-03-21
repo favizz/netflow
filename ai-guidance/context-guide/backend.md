@@ -1,357 +1,134 @@
-# Frontend Developer Roadmap (Beginner → Job Ready)
+# Backend Context (NestJS)
 
-This roadmap organizes frontend learning in a practical order so you can progress from beginner to a job-ready developer.
-
----
-
-# 1. Internet Fundamentals
-
-Before writing code, understand how the web works.
-
-- How the Internet works
-- What HTTP is
-- Domain names
-- Hosting
-- DNS
-- How browsers work
+The backend lives in `backend-ta/` and is the single source of truth for all business logic, authentication, IoT data ingestion, and payment processing. It runs on **port 5000**.
 
 ---
 
-# 2. HTML (Structure of the Web)
-
-Learn how web pages are structured.
-
-- HTML basics
-- Semantic HTML
-- Forms and validation
-- Accessibility (a11y)
-- SEO basics
-
-Goal: build a fully structured static webpage.
-
----
-
-# 3. CSS (Styling and Layout)
-
-Learn how to design and layout websites.
-
-### Core CSS
-- CSS basics
-- Box model
-- Flexbox
-- Grid
-
-### Layout & Responsive Design
-- Responsive layouts
-- Media queries
-- Mobile-first design
-
-### CSS Architecture
-- BEM methodology
-- CSS architecture patterns
-
-### CSS Tools
-- Tailwind CSS
-- Sass
-- PostCSS
-
-Optional advanced styling systems:
-- CSS Modules
-- Styled Components
-- CSS-in-JS
-
-Goal: build responsive webpages that work on desktop and mobile.
-
----
-
-# 4. JavaScript Fundamentals
-
-Learn programming concepts used in the browser.
-
-### Core JavaScript
-- Variables
-- Functions
-- Arrays and objects
-- Loops
-- Promises
-- Async / await
-
-### Browser APIs
-- DOM manipulation
-- Events
-- Fetch API / AJAX
-
-Goal: create interactive web pages.
-
----
-
-# 5. Version Control
-
-Essential for professional development.
-
-### Git Basics
-- Commit
-- Branch
-- Merge
-- Pull requests
-
-### Repository Hosting
-- GitHub
-- GitLab
-- Bitbucket
-
-Goal: manage and collaborate on code.
-
----
-
-# 6. Package Managers
-
-Used to install and manage dependencies.
-
-- npm
-- pnpm
-- yarn
-
-Goal: install and manage frontend libraries.
-
----
-
-# 7. Modern Frontend Framework
-
-Choose **one primary framework**.
-
-Most common choices:
-
-- React
-- Vue
-- Angular
-- Svelte
-
-Learn:
-
-- components
-- state management
-- routing
-- API calls
-
-Goal: build full frontend applications.
-
----
-
-# 8. Build Tools
-
-Modern frontend requires build tooling.
-
-### Module Bundlers
-- Vite
-- Webpack
-- Rollup
-- Parcel
-- esbuild
-
-### Code Quality Tools
-- ESLint
-- Prettier
-
-Goal: optimize and structure your frontend project.
-
----
-
-# 9. Type Safety
-
-Improve code reliability.
-
-- TypeScript
-- Static type checking
-- Interface design
-
-Goal: build maintainable codebases.
-
----
-
-# 10. Working with APIs
-
-Frontend apps communicate with servers.
-
-### API Concepts
-- REST
-- GraphQL
-
-### Tools
-- Fetch API
-- Axios
-- Apollo (GraphQL)
-
-Goal: build applications that fetch and display real data.
-
----
-
-# 11. Authentication
-
-Learn how login systems work.
-
-Common authentication strategies:
-
-- JWT
-- OAuth
-- Session authentication
-- Token authentication
-- SSO
-- Basic authentication
-
-Goal: implement login and protected routes.
-
----
-
-# 12. Web Security Basics
-
-Security knowledge is important for frontend developers.
-
-- HTTPS
-- CORS
-- Content Security Policy
-- OWASP security risks
-
-Goal: understand common web security vulnerabilities.
-
----
-
-# 13. Testing
-
-Testing ensures application reliability.
-
-### Testing Tools
-- Vitest
-- Jest
-- Playwright
-- Cypress
-
-Types of testing:
-
-- Unit testing
-- Integration testing
-- End-to-end testing
-
-Goal: maintain stable applications.
-
----
-
-# 14. Server-Side Rendering (SSR)
-
-Improve SEO and performance.
-
-Frameworks supporting SSR:
-
-- Next.js
-- Nuxt.js
-- SvelteKit
-
-Goal: build production-grade frontend applications.
-
----
-
-# 15. Static Site Generators
-
-Useful for blogs, docs, and marketing sites.
-
-- Astro
-- Next.js
-- Nuxt.js
-- VuePress
-- Eleventy
-
----
-
-# 16. Progressive Web Apps (PWA)
-
-Build installable web applications.
-
-Technologies:
-
-- Service Workers
-- Web Storage
-- WebSockets
-- Server Sent Events
-
-Browser APIs:
-
-- Location
-- Notifications
-- Device Orientation
-- Payments
-- Credentials
-
-Goal: build apps that behave like native apps.
-
----
-
-# 17. Performance Optimization
-
-Frontend performance is critical.
-
-Concepts to learn:
-
-- PRPL pattern
-- RAIL model
-- Performance metrics
-
-Tools:
-
-- Lighthouse
-- Chrome DevTools
-
-Goal: build fast and optimized web applications.
-
----
-
-# 18. Advanced Web APIs
-
-Advanced browser features.
-
-- WebSockets
-- Service Workers
-- Storage APIs
-- Notification APIs
-
----
-
-# 19. Cross-Platform Development
-
-Use frontend technologies beyond the browser.
-
-### Mobile Apps
-- React Native
-- Flutter
-- Ionic
-
-### Desktop Apps
-- Electron
-- Tauri
-- Flutter
-
----
-
-# 20. Job-Ready Frontend Skills
-
-To be ready for a frontend job, you should be able to:
-
-- Build a full frontend application
-- Connect to APIs
-- Implement authentication
-- Write tests
-- Optimize performance
-- Use Git professionally
-- Deploy applications
-
-Typical stack used in industry:
+## Module Map
 
 ```
-React / Vue
-TypeScript
-Vite
-REST APIs
-Testing (Jest / Playwright)
-Git + GitHub
+backend-ta/src/
+├── app.module.ts              # Root module — imports all feature modules
+├── main.ts                    # Bootstrap: CORS, global pipes, port 5000
+│
+├── auth/                      # JWT authentication and token lifecycle
+│   ├── auth.module.ts
+│   ├── auth.controller.ts     # POST /auth/login, POST /auth/refresh
+│   ├── auth.service.ts        # bcrypt compare, JWT sign, refresh token CRUD
+│   ├── jwt.strategy.ts        # Passport JWT strategy (validates Bearer tokens)
+│   └── guards/
+│       ├── jwt-auth.guard.ts  # Protects resident endpoints
+│       └── admin-api-key.guard.ts  # Protects admin endpoints via x-api-key header
+│
+├── admin/                     # Admin-only management endpoints
+│   ├── admin.module.ts
+│   └── admin.controller.ts    # Requires AdminApiKeyGuard
+│
+├── device/                    # Device and unit CRUD
+│   ├── device.module.ts
+│   ├── device.controller.ts
+│   └── device.service.ts
+│
+├── gateway/                   # MQTT ingestion — subscribes to broker topics
+│   ├── gateway.module.ts
+│   └── mqtt.gateway.ts        # @MessagePattern handlers for device telemetry
+│
+├── payments/                  # Payment webhook — validates, credits balance
+│   ├── payments.module.ts
+│   └── payments.controller.ts # POST /payments/webhook
+│
+├── reporting/                 # Aggregated read queries for dashboard charts
+│   ├── reporting.module.ts
+│   └── reporting.service.ts
+│
+└── common/                    # Shared guards, decorators, type helpers
 ```
 
 ---
+
+## Data Flows
+
+### Telemetry Ingestion
+```
+IoT Device
+  │  MQTT publish — device/{id}/telemetry  (QoS 1)
+  ▼
+EMQX Broker
+  │  backend subscribes via @nestjs/microservices MQTT transport
+  ▼
+mqtt.gateway.ts
+  ├── writes row to telemetry_logs (TimescaleDB hypertable)
+  ├── updates current_balance (current_kwh or current_m3)
+  └── updates devices.relay_status / valve_status
+```
+
+### Authentication Flow
+```
+Client
+  │  POST /auth/login  { username, password }
+  ▼
+auth.service.ts
+  ├── bcrypt.compare(password, hash)
+  ├── signs JWT access token (short TTL, from JWT_EXPIRES_IN_SECONDS)
+  ├── creates refresh token record in auth_refresh_tokens table
+  └── returns { accessToken, refreshToken }
+
+Client (when access token expires)
+  │  POST /auth/refresh  { refreshToken }
+  ▼
+auth.service.ts
+  ├── validates against auth_refresh_tokens table (persisted — survives restarts)
+  └── returns new access token
+```
+
+### Payment Webhook
+```
+Payment provider
+  │  POST /payments/webhook  (HMAC-SHA256 signed body)
+  ▼
+payments.controller.ts
+  ├── validate source IP against PAYMENT_WEBHOOK_ALLOWED_IPS
+  ├── validate HMAC signature using PAYMENT_WEBHOOK_SECRET
+  ├── validate timestamp skew < PAYMENT_WEBHOOK_MAX_SKEW_MS
+  ├── credit current_balance (m3 or kWh depending on utility_type)
+  └── insert record into transactions
+```
+
+### Relay / Valve Control
+```
+Admin (Dashboard)
+  │  PUT /device/{id}/relay  { status: true/false }
+  ▼
+device.service.ts
+  ├── updates devices.relay_status in DB
+  └── publishes MQTT message to device/{id}/relay/set
+```
+
+---
+
+## Key Design Decisions
+
+| Decision | Why |
+|---|---|
+| Refresh tokens in `auth_refresh_tokens` table | Survives server restarts; allows explicit revocation; avoids in-memory state |
+| `AdminApiKeyGuard` separate from JWT | Admin tooling (e.g., scripts, CI) should not need to simulate a login flow |
+| `OWNER_LOGIN_PIN` | Initial owner setup credential; separate from the user table |
+| IP allowlist on webhook endpoint | Payment providers publish fixed IP ranges; allowlisting is a first line of defence against spoofed webhooks |
+| `PAYMENT_WEBHOOK_MAX_SKEW_MS` | Replay attack prevention; reject requests with a timestamp too far from server time |
+| `current_balance` updated on every telemetry message | Keeps balance reads O(1); the alternative (aggregating transactions) is expensive at query time |
+
+---
+
+## Environment
+
+See `backend-ta/.env.example` for all variables. Notable ones:
+
+| Variable | Purpose |
+|---|---|
+| `PORT` | Server port (default 5000 in Docker, 3000 in local dev) |
+| `JWT_SECRET` | HMAC secret for signing access tokens — must be strong |
+| `JWT_EXPIRES_IN_SECONDS` | Short TTL for access tokens (e.g., 900 = 15 min) |
+| `ADMIN_API_KEY` | Static key required in `x-api-key` header for admin routes |
+| `MQTT_BROKER_URL` | MQTT TCP URL for backend subscription (e.g., `mqtt://emqx:1883`) |
+| `PAYMENT_WEBHOOK_SECRET` | Shared secret for HMAC webhook validation |
+| `PAYMENT_WEBHOOK_ALLOWED_IPS` | Comma-separated list; empty string disables check |

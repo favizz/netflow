@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find C:UsersLenovoDocumentsGitHubTA-Flowmeter -not -path */node_modules/* -type d)",
+      "Bash(pnpm install:*)"
+    ]
+  }
+}
