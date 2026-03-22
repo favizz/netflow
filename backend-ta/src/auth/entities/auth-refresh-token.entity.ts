@@ -8,11 +8,11 @@ export class AuthRefreshToken {
   @Column({ type: 'varchar', unique: true })
   token_hash!: string;
 
-  @Column({ type: 'int' })
-  user_sub!: number;
+  @Column({ type: 'varchar' })
+  user_sub!: string; // UUID of User
 
   @Column({ type: 'varchar' })
-  unit_no!: string;
+  username!: string;
 
   @Column({ type: 'timestamptz' })
   expires_at!: Date;

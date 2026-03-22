@@ -3,7 +3,7 @@ CREATE EXTENSION IF NOT EXISTS timescaledb;
 
 -- 2. Users
 CREATE TABLE users (
-    user_id UUID PRIMARY KEY,
+    user_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     username VARCHAR(50) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
     role VARCHAR(20) NOT NULL,
@@ -40,7 +40,7 @@ CREATE TABLE current_balance (
 
 -- 6. Transactions (token purchases)
 CREATE TABLE transactions (
-    transaction_id UUID PRIMARY KEY,
+    transaction_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID REFERENCES users(user_id),
     device_id VARCHAR(50) REFERENCES devices(device_id),
     amount_rp NUMERIC(12,2),
@@ -94,3 +94,14 @@ SELECT add_compression_policy('telemetry_logs', INTERVAL '7 days');
 
 -- 11. Optional indexes (important)
 CREATE INDEX idx_device_time ON telemetry_logs(device_id, time DESC);
+
+-- 12. Auth Refresh Tokens
+CREATE TABLE auth_refresh_tokens (
+    id SERIAL PRIMARY KEY,
+    token_hash VARCHAR(255) UNIQUE NOT NULL,
+    user_sub UUID REFERENCES users(user_id) ON DELETE CASCADE,
+    username VARCHAR(50) NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
+    revoked_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);

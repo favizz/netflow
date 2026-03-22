@@ -1,8 +1,9 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { MeterReading } from '../device/entities/device.entity';
-import { Unit } from '../unit/entities/unit.entity';
+import { TelemetryLog } from '../device/entities/telemetry-log.entity';
+import { Property } from '../unit/entities/property.entity';
+import { Device } from '../device/entities/device.entity';
 
 export interface TrendPoint {
   bucket: string;
@@ -15,20 +16,23 @@ export interface TrendPoint {
 @Injectable()
 export class ReportingService {
   constructor(
-    @InjectRepository(MeterReading)
-    private readonly meterRepo: Repository<MeterReading>,
-    @InjectRepository(Unit)
-    private readonly unitRepo: Repository<Unit>,
+    @InjectRepository(TelemetryLog)
+    private readonly telemetryRepo: Repository<TelemetryLog>,
+    @InjectRepository(Property)
+    private readonly propertyRepo: Repository<Property>,
+    @InjectRepository(Device)
+    private readonly deviceRepo: Repository<Device>,
   ) {}
 
   async getConsumptionTrends(unitNo: string, period: 'daily' | 'monthly' = 'daily'): Promise<TrendPoint[]> {
-    const unit = await this.unitRepo.findOne({ where: { unit_no: unitNo } });
-    if (!unit) {
-      throw new NotFoundException('Unit not found');
-    }
+    const property = await this.propertyRepo.findOne({ where: { unit_id: unitNo } });
+    if (!property) throw new NotFoundException('Property not found');
 
-    const rows = await this.meterRepo.find({
-      where: { device_id: unit.device_id },
+    const device = await this.deviceRepo.findOne({ where: { unit_id: property.unit_id } });
+    if (!device) return [];
+
+    const rows = await this.telemetryRepo.find({
+      where: { device_id: device.device_id },
       order: { time: 'ASC' },
       take: 5000,
     });
@@ -43,8 +47,8 @@ export class ReportingService {
           : `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
 
       const item = grouped.get(bucket) || { powerSum: 0, flowSum: 0, count: 0 };
-      item.powerSum += Number(row.power || 0);
-      item.flowSum += Number(row.water_flow || 0);
+      item.powerSum += Number(row.power_factor || 0); 
+      item.flowSum += Number(row.debit_lpm || 0);
       item.count += 1;
       grouped.set(bucket, item);
     }
@@ -53,7 +57,6 @@ export class ReportingService {
       const avgPowerW = v.count > 0 ? v.powerSum / v.count : 0;
       const avgFlowLpm = v.count > 0 ? v.flowSum / v.count : 0;
 
-      // Approximation for client trend visuals. Actual billing must use server token engine.
       const kwh = Number(((avgPowerW / 1000) * 24).toFixed(3));
       const waterM3 = Number(((avgFlowLpm * 60 * 24) / 1000).toFixed(3));
 

@@ -2,9 +2,10 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
+import * as bcrypt from 'bcryptjs';
 import { createHash, randomBytes } from 'crypto';
 import { Repository } from 'typeorm';
-import { UnitService } from '../unit/unit.service';
+import { User } from '../admin/entities/user.entity';
 import { LoginDto } from './dto/login.dto';
 import { AuthRefreshToken } from './entities/auth-refresh-token.entity';
 import type { JwtPayload } from './interfaces/jwt-payload.interface';
@@ -14,23 +15,28 @@ export class AuthService {
   constructor(
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
-    private readonly unitService: UnitService,
+    @InjectRepository(User)
+    private readonly userRepo: Repository<User>,
     @InjectRepository(AuthRefreshToken)
     private readonly refreshTokenRepo: Repository<AuthRefreshToken>,
   ) {}
 
   async login(dto: LoginDto) {
-    const unit = await this.unitService.findByUnitNo(dto.unitNo);
+    const user = await this.userRepo.findOne({ where: { username: dto.username } });
 
-    const configuredPin = this.configService.get<string>('OWNER_LOGIN_PIN') || '123456';
-    if (!unit || dto.pin !== configuredPin) {
+    if (!user) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    const isMatch = await bcrypt.compare(dto.password, user.password_hash);
+    if (!isMatch) {
       throw new UnauthorizedException('Invalid credentials');
     }
 
     const payload: JwtPayload = {
-      sub: unit.id,
-      unitNo: unit.unit_no,
-      role: 'owner',
+      sub: user.user_id,
+      username: user.username,
+      role: user.role,
     };
 
     return this.issueTokenPair(payload);
@@ -57,10 +63,15 @@ export class AuthService {
     record.revoked_at = new Date();
     await this.refreshTokenRepo.save(record);
 
+    const user = await this.userRepo.findOne({ where: { user_id: record.user_sub } });
+    if (!user) {
+      throw new UnauthorizedException('User no longer exists');
+    }
+
     const payload: JwtPayload = {
-      sub: record.user_sub,
-      unitNo: record.unit_no,
-      role: 'owner',
+      sub: user.user_id,
+      username: user.username,
+      role: user.role,
     };
 
     return this.issueTokenPair(payload);
@@ -90,9 +101,9 @@ export class AuthService {
 
   me(user: JwtPayload) {
     return {
-      unitNo: user.unitNo,
+      username: user.username,
       role: user.role,
-      unitId: user.sub,
+      userId: user.sub,
     };
   }
 
@@ -115,7 +126,7 @@ export class AuthService {
     const refreshEntity = this.refreshTokenRepo.create({
       token_hash: refreshKey,
       user_sub: payload.sub,
-      unit_no: payload.unitNo,
+      username: payload.username,
       expires_at: new Date(Date.now() + refreshExpiresInSeconds * 1000),
       revoked_at: null,
     });
@@ -125,7 +136,7 @@ export class AuthService {
       accessToken,
       refreshToken,
       tokenType: 'Bearer' as const,
-      unitNo: payload.unitNo,
+      username: payload.username,
       expiresIn: `${accessExpiresInSeconds}s`,
       refreshExpiresIn: `${refreshExpiresInSeconds}s`,
     };

@@ -1,28 +1,29 @@
-// src/device/device.module.ts
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { ClientsModule, Transport } from '@nestjs/microservices'; // <--- Import ini
+import { ClientsModule, Transport } from '@nestjs/microservices';
 import { DeviceService } from './device.service';
 import { DeviceController } from './device.controller';
-import { MeterReading } from './entities/device.entity';
-import { Unit } from '../unit/entities/unit.entity';
+import { Device } from './entities/device.entity';
+import { Property } from '../unit/entities/property.entity';
+import { CurrentBalance } from './entities/current-balance.entity';
+import { TelemetryLog } from './entities/telemetry-log.entity';
+import { UtilityTariff } from '../payments/entities/utility-tariff.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([MeterReading, Unit]),
-    
-    // Registrasi Client agar bisa PUBLISH ke Broker
+    TypeOrmModule.forFeature([Device, Property, CurrentBalance, TelemetryLog, UtilityTariff]),
     ClientsModule.register([
       {
-        name: 'MQTT_CLIENT', // Nama token injeksi (ingat nama ini)
+        name: 'MQTT_CLIENT',
         transport: Transport.MQTT,
         options: {
-          url: 'mqtt://localhost:1883', // Sesuaikan URL Broker
+          url: process.env.MQTT_BROKER_URL || 'mqtt://localhost:1883',
         },
       },
     ]),
   ],
   controllers: [DeviceController],
   providers: [DeviceService],
+  exports: [DeviceService, TypeOrmModule],
 })
 export class DeviceModule {}

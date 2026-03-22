@@ -6,52 +6,50 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHmac, timingSafeEqual } from 'crypto';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { UnitService } from '../unit/unit.service';
 import { InitiateTopupDto } from './dto/initiate-topup.dto';
 import { PaymentWebhookDto } from './dto/payment-webhook.dto';
-
-export interface PaymentTransaction {
-  id: string;
-  unitNo: string;
-  amount: number;
-  method: 'qris' | 'transfer' | 'ewallet';
-  status: 'pending' | 'success' | 'failed';
-  createdAt: string;
-  confirmedAt?: string;
-  gatewayReference: string;
-}
+import { Transaction } from './entities/transaction.entity';
+import { Property } from '../unit/entities/property.entity';
 
 @Injectable()
 export class PaymentsService {
-  private readonly transactions = new Map<string, PaymentTransaction>();
   private readonly processedEvents = new Set<string>();
 
   constructor(
+    @InjectRepository(Transaction)
+    private readonly txRepo: Repository<Transaction>,
+    @InjectRepository(Property)
+    private readonly propertyRepo: Repository<Property>,
     private readonly unitService: UnitService,
     private readonly configService: ConfigService,
   ) {}
 
-  initiateTopup(dto: InitiateTopupDto) {
-    const transactionId = `TRX-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+  async initiateTopup(dto: InitiateTopupDto) {
     const gatewayReference = `PG-${Math.floor(100000 + Math.random() * 900000)}`;
+    const property = await this.propertyRepo.findOne({ where: { unit_id: dto.unitNo } });
+    
+    // We allow topups even if property doesn't exist yet, by associating to unit_no via token_code temporarily if needed.
+    // However, the schema expects user_id. We'll leave user_id null if no property is found.
+    const userId = property ? property.user_id : null;
 
-    const tx: PaymentTransaction = {
-      id: transactionId,
-      unitNo: dto.unitNo,
-      amount: dto.amount,
-      method: dto.method,
+    const tx = this.txRepo.create({
+      user_id: userId || undefined,
+      amount_rp: dto.amount,
+      utility_type: 'electricity',
       status: 'pending',
-      createdAt: new Date().toISOString(),
-      gatewayReference,
-    };
-
-    this.transactions.set(transactionId, tx);
+      token_code: gatewayReference,
+    });
+    
+    const saved = await this.txRepo.save(tx);
 
     return {
-      transactionId,
+      transactionId: saved.transaction_id,
       gatewayReference,
-      checkoutUrl: `/payments/checkout/${transactionId}`,
-      status: tx.status,
+      checkoutUrl: `/payments/checkout/${saved.transaction_id}`,
+      status: saved.status,
     };
   }
 
@@ -59,27 +57,24 @@ export class PaymentsService {
     this.verifyWebhookSecurity(dto);
 
     if (this.processedEvents.has(dto.eventId)) {
-      const existingTx = this.transactions.get(dto.transactionId);
-      if (!existingTx) {
-        throw new NotFoundException('Transaction not found');
-      }
+      const existingTx = await this.txRepo.findOne({ where: { transaction_id: dto.transactionId } });
+      if (!existingTx) throw new NotFoundException('Transaction not found');
       return { ...existingTx, idempotent: true };
     }
 
-    const tx = this.transactions.get(dto.transactionId);
-    if (!tx) {
-      throw new NotFoundException('Transaction not found');
-    }
+    const tx = await this.txRepo.findOne({ where: { transaction_id: dto.transactionId } });
+    if (!tx) throw new NotFoundException('Transaction not found');
 
     if (tx.status === 'pending') {
       tx.status = dto.status;
-      tx.confirmedAt = new Date().toISOString();
+      await this.txRepo.save(tx);
 
-      if (dto.status === 'success') {
-        await this.unitService.creditBalanceByUnitNo(tx.unitNo, tx.amount);
+      if (dto.status === 'success' && tx.user_id) {
+        const property = await this.propertyRepo.findOne({ where: { user_id: tx.user_id } });
+        if (property) {
+          await this.unitService.creditBalanceByUnitNo(property.unit_id, Number(tx.amount_rp));
+        }
       }
-
-      this.transactions.set(tx.id, tx);
     }
 
     this.processedEvents.add(dto.eventId);
@@ -87,75 +82,70 @@ export class PaymentsService {
   }
 
   async autoConfirm(transactionId: string) {
-    const tx = this.getTransaction(transactionId);
+    const tx = await this.txRepo.findOne({ where: { transaction_id: transactionId } });
+    if (!tx) throw new NotFoundException('Transaction not found');
 
-    if (tx.status !== 'pending') {
-      return tx;
-    }
+    if (tx.status !== 'pending') return tx;
 
     tx.status = 'success';
-    tx.confirmedAt = new Date().toISOString();
-    await this.unitService.creditBalanceByUnitNo(tx.unitNo, tx.amount);
-    this.transactions.set(tx.id, tx);
+    await this.txRepo.save(tx);
 
-    return tx;
-  }
-
-  listTransactionsForUnit(unitNo: string) {
-    return [...this.transactions.values()]
-      .filter((tx) => tx.unitNo === unitNo)
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  }
-
-  getTransaction(transactionId: string) {
-    const tx = this.transactions.get(transactionId);
-    if (!tx) {
-      throw new NotFoundException('Transaction not found');
+    if (tx.user_id) {
+      const property = await this.propertyRepo.findOne({ where: { user_id: tx.user_id } });
+      if (property) {
+        await this.unitService.creditBalanceByUnitNo(property.unit_id, Number(tx.amount_rp));
+      }
     }
+
     return tx;
   }
 
-  getTransactionForUnit(unitNo: string, transactionId: string) {
-    const tx = this.getTransaction(transactionId);
-    if (tx.unitNo !== unitNo) {
+  async listTransactionsForUnit(unitNo: string) {
+    const property = await this.propertyRepo.findOne({ where: { unit_id: unitNo } });
+    if (!property || !property.user_id) return [];
+    
+    return this.txRepo.find({
+      where: { user_id: property.user_id },
+      order: { transaction_date: 'DESC' },
+    });
+  }
+
+  async getTransaction(transactionId: string) {
+    const tx = await this.txRepo.findOne({ where: { transaction_id: transactionId } });
+    if (!tx) throw new NotFoundException('Transaction not found');
+    return tx;
+  }
+
+  async getTransactionForUnit(unitNo: string, transactionId: string) {
+    const property = await this.propertyRepo.findOne({ where: { unit_id: unitNo } });
+    if (!property) throw new NotFoundException('Property not found');
+
+    const tx = await this.getTransaction(transactionId);
+    if (tx.user_id !== property.user_id) {
       throw new ForbiddenException('Transaction does not belong to this unit');
     }
     return tx;
   }
 
-  buildInvoice(transactionId: string) {
-    const tx = this.getTransaction(transactionId);
-
-    const lines = [
-      'INVOICE TOKEN TOP-UP',
-      `Transaction ID: ${tx.id}`,
-      `Gateway Ref: ${tx.gatewayReference}`,
-      `Unit: ${tx.unitNo}`,
-      `Amount: Rp ${tx.amount.toLocaleString('id-ID')}`,
-      `Method: ${tx.method}`,
-      `Status: ${tx.status}`,
-      `Created: ${tx.createdAt}`,
-      `Confirmed: ${tx.confirmedAt ?? '-'}`,
-    ];
-
-    return lines.join('\n');
+  async buildInvoice(transactionId: string) {
+    const tx = await this.getTransaction(transactionId);
+    return this.formatInvoiceTemplate(tx);
   }
 
-  buildInvoiceForUnit(unitNo: string, transactionId: string) {
-    const tx = this.getTransactionForUnit(unitNo, transactionId);
+  async buildInvoiceForUnit(unitNo: string, transactionId: string) {
+    const tx = await this.getTransactionForUnit(unitNo, transactionId);
+    return this.formatInvoiceTemplate(tx);
+  }
 
+  private formatInvoiceTemplate(tx: Transaction) {
     const lines = [
       'INVOICE TOKEN TOP-UP',
-      `Transaction ID: ${tx.id}`,
-      `Gateway Ref: ${tx.gatewayReference}`,
-      `Unit: ${tx.unitNo}`,
-      `Amount: Rp ${tx.amount.toLocaleString('id-ID')}`,
-      `Method: ${tx.method}`,
+      `Transaction ID: ${tx.transaction_id}`,
+      `Gateway Ref: ${tx.token_code}`,
+      `Amount: Rp ${Number(tx.amount_rp || 0).toLocaleString('id-ID')}`,
       `Status: ${tx.status}`,
-      `Created: ${tx.createdAt}`,
-      `Confirmed: ${tx.confirmedAt ?? '-'}`,
+      `Created: ${new Date(tx.transaction_date).toLocaleString()}`,
     ];
-
     return lines.join('\n');
   }
 

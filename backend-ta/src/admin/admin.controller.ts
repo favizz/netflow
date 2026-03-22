@@ -1,20 +1,34 @@
-import { Body, Controller, Get, Param, Patch, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards } from '@nestjs/common';
 import { AdminApiKeyGuard } from '../common/guards/admin-api-key.guard';
-import { UpdateAdminAccessDto } from './dto/update-admin-access.dto';
 import { AdminService } from './admin.service';
 
-@Controller('admin')
+@Controller('admin/users')
 @UseGuards(AdminApiKeyGuard)
 export class AdminController {
   constructor(private readonly adminService: AdminService) {}
 
-  @Get('accounts')
-  listAccounts() {
-    return this.adminService.listAccounts();
+  @Post()
+  create(@Body() createDto: any) {
+    return this.adminService.create(createDto);
   }
 
-  @Patch('accounts/:email/access')
-  updateAccess(@Param('email') email: string, @Body() payload: UpdateAdminAccessDto) {
-    return this.adminService.updateAccount(email, payload);
+  @Get()
+  findAll() {
+    return this.adminService.findAll();
+  }
+
+  @Get(':id')
+  findOne(@Param('id') id: string) {
+    return this.adminService.findOne(id);
+  }
+
+  @Patch(':id')
+  update(@Param('id') id: string, @Body() updateDto: any) {
+    return this.adminService.update(id, updateDto);
+  }
+
+  @Delete(':id')
+  remove(@Param('id') id: string) {
+    return this.adminService.remove(id);
   }
 }
