@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find C:UsersLenovoDocumentsGitHubTA-Flowmeter -not -path */node_modules/* -type d)",
+      "Bash(pnpm install:*)",
+      "Bash(grep -E \"\\\\.\\(env|config|js|mjs|cjs\\)$\")",
+      "Bash(rm -f next.config.ts next-env.d.ts)",
+      "Bash(rm -rf src/app)",
+      "Bash(rm -f pnpm-lock.yaml)",
+      "Bash(pnpm run:*)"
+    ]
+  }
+}

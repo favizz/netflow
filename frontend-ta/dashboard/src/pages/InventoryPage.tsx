@@ -1,5 +1,3 @@
-"use client";
-
 import { useState } from "react";
 import { InventoryTable } from "@/components/inventory/InventoryTable";
 import { AddDeviceModal } from "@/components/inventory/AddDeviceModal";
@@ -8,11 +6,6 @@ import { initialData, InventoryItem } from "@/lib/mockData";
 export default function InventoryPage() {
     const [data, setData] = useState<InventoryItem[]>(initialData);
     const [isModalOpen, setIsModalOpen] = useState(false);
-
-    const handleToggleUtility = (id: string, type: "power" | "water") => {
-        // Read-only in this view, so this might not be needed or can be a no-op/toast
-        console.log("Utilities are read-only in the summary view");
-    };
 
     const handleAddDevice = (device: InventoryItem) => {
         setData((prev) => [device, ...prev]);
@@ -33,10 +26,7 @@ export default function InventoryPage() {
                 </button>
             </div>
 
-            <InventoryTable
-                data={data}
-                onToggleUtility={handleToggleUtility}
-            />
+            <InventoryTable data={data} />
 
             <AddDeviceModal
                 isOpen={isModalOpen}

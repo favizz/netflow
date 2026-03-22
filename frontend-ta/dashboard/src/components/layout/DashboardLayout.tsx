@@ -1,12 +1,11 @@
-"use client";
-
 import { useState } from "react";
+import { Outlet } from "react-router-dom";
 import { Sidebar } from "./Sidebar";
 import { Header } from "./Header";
 import { Menu } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export function DashboardLayout({ children }: { children: React.ReactNode }) {
+export function DashboardLayout() {
     const [sidebarOpen, setSidebarOpen] = useState(false);
 
     return (
@@ -29,7 +28,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
             {/* Main Content */}
             <div className="flex flex-1 flex-col overflow-hidden">
-                {/* Mobile Header Toggle - visible only on mobile */}
+                {/* Mobile Header Toggle */}
                 <div className="flex items-center justify-between border-b border-gray-200 bg-white p-4 lg:hidden">
                     <span className="font-bold">JarrdinUMS</span>
                     <button onClick={() => setSidebarOpen(true)}>
@@ -42,7 +41,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                 </div>
 
                 <main className="flex-1 overflow-y-auto p-4 lg:p-8">
-                    {children}
+                    <Outlet />
                 </main>
             </div>
         </div>

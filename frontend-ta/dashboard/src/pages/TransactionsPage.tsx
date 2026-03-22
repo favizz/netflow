@@ -35,10 +35,11 @@ export default function TransactionsPage() {
                                 <td className="px-6 py-4">{tx.type}</td>
                                 <td className="px-6 py-4 font-medium text-gray-900">{tx.amount}</td>
                                 <td className="px-6 py-4">
-                                    <span className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ring-1 ring-inset ${tx.status === 'Success' ? 'bg-green-50 text-green-700 ring-green-600/20' :
-                                            tx.status === 'Pending' ? 'bg-yellow-50 text-yellow-700 ring-yellow-600/20' :
-                                                'bg-gray-50 text-gray-600 ring-gray-500/10'
-                                        }`}>
+                                    <span className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ring-1 ring-inset ${
+                                        tx.status === 'Success' ? 'bg-green-50 text-green-700 ring-green-600/20' :
+                                        tx.status === 'Pending' ? 'bg-yellow-50 text-yellow-700 ring-yellow-600/20' :
+                                        'bg-gray-50 text-gray-600 ring-gray-500/10'
+                                    }`}>
                                         {tx.status}
                                     </span>
                                 </td>

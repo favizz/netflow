@@ -1,23 +1,16 @@
-"use client";
-
 import { useState, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { Search, Power, Droplets, MoreHorizontal, Filter, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
-
 import { InventoryItem } from "@/lib/mockData";
-import { useRouter } from "next/navigation";
-
-// export interface InventoryItem { ... } // Removed, imported from shared library
-
 
 interface InventoryTableProps {
     data: InventoryItem[];
-    // onToggleUtility is removed or optional/unused for now
     onToggleUtility?: (id: string, type: "power" | "water") => void;
 }
 
 export function InventoryTable({ data }: InventoryTableProps) {
-    const router = useRouter();
+    const navigate = useNavigate();
     const [searchQuery, setSearchQuery] = useState("");
     const [statusFilter, setStatusFilter] = useState<"All" | "Online" | "Offline">("All");
     const [isFilterOpen, setIsFilterOpen] = useState(false);
@@ -63,11 +56,11 @@ export function InventoryTable({ data }: InventoryTableProps) {
                             </button>
                             {isFilterOpen && (
                                 <div className="absolute right-0 mt-2 w-40 rounded-md bg-white py-1 shadow-lg ring-1 ring-black ring-opacity-5 z-10">
-                                    {["All", "Online", "Offline"].map((status) => (
+                                    {(["All", "Online", "Offline"] as const).map((status) => (
                                         <button
                                             key={status}
                                             onClick={() => {
-                                                setStatusFilter(status as any);
+                                                setStatusFilter(status);
                                                 setIsFilterOpen(false);
                                             }}
                                             className={cn(
@@ -104,7 +97,7 @@ export function InventoryTable({ data }: InventoryTableProps) {
                                 <tr
                                     key={item.id}
                                     className="hover:bg-gray-50 cursor-pointer"
-                                    onClick={() => router.push(`/inventory/${item.id}`)}
+                                    onClick={() => navigate(`/inventory/${item.id}`)}
                                 >
                                     <td className="px-6 py-4">
                                         <div className="font-medium text-gray-900">{item.unit}</div>

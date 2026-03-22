@@ -1,14 +1,11 @@
-"use client";
-
-import { useState, use, useMemo, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useMemo, useEffect } from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Power, Droplets, Zap, TrendingUp, Clock, FileText, ChevronDown, ChevronUp, Wifi, WifiOff, Activity } from "lucide-react";
 import { initialData } from "@/lib/mockData";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, AreaChart, Area } from "recharts";
 import { cn } from "@/lib/utils";
 import mqtt from "mqtt";
 
-// Types for our data
 type TimeRange = "Real-Time" | "Today" | "Custom";
 
 interface LogEntry {
@@ -16,7 +13,7 @@ interface LogEntry {
     value: number;
     unit: string;
     rawPayload: string;
-    details?: any; // To store full parsed payload for the table
+    details?: IoTPayload;
 }
 
 interface IoTPayload {
@@ -38,7 +35,6 @@ interface IoTPayload {
         remaining_token_m3?: number;
         valve_status?: "OPEN" | "CLOSE" | string;
     };
-    // For command echo or errors
     action?: string;
     commands?: {
         relay_command?: string;
@@ -46,11 +42,10 @@ interface IoTPayload {
     };
 }
 
-// MQTT Configuration
 const MQTT_CONFIG = {
-    brokerUrl: 'wss://860d79cbf30e4ed9bd13903e0dbd6db5.s1.eu.hivemq.cloud:8884/mqtt', // Using public HiveMQTT WebSocket broker
+    brokerUrl: 'wss://860d79cbf30e4ed9bd13903e0dbd6db5.s1.eu.hivemq.cloud:8884/mqtt',
     options: {
-        clientId: 'jarrdin-client-' + Math.random().toString(16).substr(2, 8),
+        clientId: 'jarrdin-client-' + Math.random().toString(16).substring(2, 10),
         username: 'alat_iot',
         password: 'Flowmeter123',
     },
@@ -58,42 +53,39 @@ const MQTT_CONFIG = {
         telemetry: 'jarrdin/A-1204/telemetry',
         powerCommand: 'jarrdin/A-1204/power/command',
         waterCommand: 'jarrdin/A-1204/water/command',
-    }
+    },
 };
 
-// Helper to generate mock data based on range (Fallback)
 const generateMockData = (range: TimeRange, baseValue: number, variance: number) => {
     const data = [];
     const now = new Date();
 
     if (range === "Real-Time") {
-        // Last 60 minutes, 1-minute interval
         for (let i = 59; i >= 0; i--) {
             const t = new Date(now.getTime() - i * 60000);
             data.push({
                 time: t.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                 value: Number((baseValue + (Math.random() * variance - variance / 2)).toFixed(2)),
-                timestamp: t.toISOString()
+                timestamp: t.toISOString(),
             });
         }
     } else {
-        // Today, hourly
         for (let i = 0; i <= now.getHours(); i++) {
             const t = new Date();
             t.setHours(i, 0, 0, 0);
             data.push({
                 time: t.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                 value: Number((baseValue + (Math.random() * variance - variance / 2)).toFixed(2)),
-                timestamp: t.toISOString()
+                timestamp: t.toISOString(),
             });
         }
     }
     return data;
 };
 
-export default function UnitDetailPage({ params }: { params: Promise<{ id: string }> }) {
-    const { id } = use(params);
-    const router = useRouter();
+export default function UnitDetailPage() {
+    const { id } = useParams<{ id: string }>();
+    const navigate = useNavigate();
 
     const initialItem = initialData.find((item) => item.id === id);
     const [powerState, setPowerState] = useState(initialItem?.power ?? false);
@@ -101,49 +93,53 @@ export default function UnitDetailPage({ params }: { params: Promise<{ id: strin
     const [timeRange, setTimeRange] = useState<TimeRange>("Real-Time");
     const [isLogsOpen, setIsLogsOpen] = useState(false);
 
-    // MQTT State
     const [isConnected, setIsConnected] = useState(false);
     const [mqttClient, setMqttClient] = useState<mqtt.MqttClient | null>(null);
-    const [realTimePower, setRealTimePower] = useState<any[]>([]);
-    const [realTimeWater, setRealTimeWater] = useState<any[]>([]);
+    const [realTimePower, setRealTimePower] = useState<{ time: string; value: number; timestamp: string }[]>([]);
+    const [realTimeWater, setRealTimeWater] = useState<{ time: string; value: number; timestamp: string }[]>([]);
     const [liveLogs, setLiveLogs] = useState<LogEntry[]>([]);
 
-    // Real-time Stats State
     const [energyStats, setEnergyStats] = useState({ total_kwh: 0, active_power_w: 0 });
     const [waterStats, setWaterStats] = useState({ total_m3: 0, flow_rate_lpm: 0 });
 
-    const unitInfo = initialItem || {
+    const unitInfo = initialItem ?? {
         unit: "Unknown Unit",
         tenant: "Unknown Tenant",
         meterSerial: "N/A",
         status: "Offline",
-        lastUpdate: "N/A"
+        lastUpdate: "N/A",
     };
 
     const isOnline = unitInfo.status === "Online";
-    const isTargetUnit = id === "101"; // Sarah Chen (A-1204)
+    const isTargetUnit = id === "101";
 
-    // Initialize Mock Data logic if not real-time or not target unit
     const mockPowerData = useMemo(() => generateMockData(timeRange, 3.5, 1.5), [timeRange]);
     const mockWaterData = useMemo(() => generateMockData(timeRange, 0.5, 0.3), [timeRange]);
 
-    // Initialize Real-time buffer with some mock history on load so chart isn't empty
+    const fallbackLogs = useMemo(() => {
+        return [...mockPowerData].reverse().slice(0, 10).map(d => ({
+            timestamp: d.timestamp,
+            value: d.value,
+            unit: "kWh",
+            rawPayload: JSON.stringify({ device_id: unitInfo.meterSerial, t: new Date(d.timestamp).getTime(), v: d.value, q: "mock" }),
+        }));
+    }, [mockPowerData, unitInfo.meterSerial]);
+
+    const displayLogs = isTargetUnit ? liveLogs : fallbackLogs;
+
     useEffect(() => {
         if (isTargetUnit && realTimePower.length === 0) {
             setRealTimePower(generateMockData("Real-Time", 3.5, 1.5));
             setRealTimeWater(generateMockData("Real-Time", 0.5, 0.3));
         }
-    }, [isTargetUnit]);
+    }, [isTargetUnit, realTimePower.length]);
 
-    // MQTT Connection Logic
     useEffect(() => {
         if (!isTargetUnit) return;
 
-        console.log("Connecting to MQTT broker...");
         const client = mqtt.connect(MQTT_CONFIG.brokerUrl, MQTT_CONFIG.options);
 
         client.on('connect', () => {
-            console.log("MQTT Connected");
             setIsConnected(true);
             client.subscribe([MQTT_CONFIG.topics.telemetry], (err) => {
                 if (err) console.error("Subscription error:", err);
@@ -155,127 +151,85 @@ export default function UnitDetailPage({ params }: { params: Promise<{ id: strin
             const now = new Date();
             const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-            let value = 0;
-            let unit = "";
             let parsed: IoTPayload = {};
 
             try {
                 parsed = JSON.parse(payload);
 
-                // Logic to extract value based on topic
-                // Unified Telemetry Handler
                 if (topic === MQTT_CONFIG.topics.telemetry) {
-
-                    // --- Power Data ---
-                    const powerVal = parsed.electricity?.active_power_w;
-                    value = powerVal !== undefined ? Number(powerVal) : 0;
-                    unit = "W"; // Default unit for the list, though we likely have mixed data now
-
-                    // Update Power Stats
                     if (parsed.electricity) {
                         setEnergyStats({
-                            total_kwh: parsed.electricity.total_energy_kwh || 0,
-                            active_power_w: parsed.electricity.active_power_w || 0
+                            total_kwh: parsed.electricity.total_energy_kwh ?? 0,
+                            active_power_w: parsed.electricity.active_power_w ?? 0,
                         });
-
-                        // Update Relay State
                         if (parsed.electricity.relay_status !== undefined) {
-                            const relayStatus = String(parsed.electricity.relay_status).toUpperCase();
-                            setPowerState(relayStatus === 'ON');
+                            setPowerState(String(parsed.electricity.relay_status).toUpperCase() === 'ON');
                         }
                     }
 
-                    // --- Water Data ---
-                    // Note: 'value' variable above is overwritten if we process water last? 
-                    // Actually, for the GRAPH, we need to distinguish which chart gets what.
-                    // But we only have ONE message handler.
-                    // The 'newPoint' logic below adds to BOTH buffers if we want, OR we split it here.
-
-                    // Let's create TWO points, one for each chart
-                    const powerPoint = {
+                    setRealTimePower(prev => [...prev.slice(-59), {
                         time: timeStr,
-                        value: parsed.electricity?.active_power_w || 0,
-                        timestamp: now.toISOString()
-                    };
-                    setRealTimePower(prev => [...prev.slice(-59), powerPoint]);
+                        value: parsed.electricity?.active_power_w ?? 0,
+                        timestamp: now.toISOString(),
+                    }]);
 
-                    const waterPoint = {
+                    setRealTimeWater(prev => [...prev.slice(-59), {
                         time: timeStr,
-                        value: parsed.water?.flow_rate_lpm || 0,
-                        timestamp: now.toISOString()
-                    };
-                    setRealTimeWater(prev => [...prev.slice(-59), waterPoint]);
+                        value: parsed.water?.flow_rate_lpm ?? 0,
+                        timestamp: now.toISOString(),
+                    }]);
 
-                    // Update Water Stats
                     if (parsed.water) {
                         setWaterStats({
-                            total_m3: parsed.water.total_volume_m3 || 0,
-                            flow_rate_lpm: parsed.water.flow_rate_lpm || 0
+                            total_m3: parsed.water.total_volume_m3 ?? 0,
+                            flow_rate_lpm: parsed.water.flow_rate_lpm ?? 0,
                         });
-                        // Update Valve State
                         if (parsed.water.valve_status !== undefined) {
-                            const valveStatus = String(parsed.water.valve_status).toUpperCase();
-                            setWaterState(valveStatus === 'OPEN');
+                            setWaterState(String(parsed.water.valve_status).toUpperCase() === 'OPEN');
                         }
                     }
 
-                    // Log Entry (Unified)
-                    const logEntry: LogEntry = {
+                    setLiveLogs(prev => [{
                         timestamp: now.toISOString(),
-                        value: 0, // Placeholder, details has full data
+                        value: 0,
                         unit: 'Unified',
                         rawPayload: payload,
-                        details: parsed
-                    };
-                    setLiveLogs(prev => [logEntry, ...prev.slice(0, 49)]);
-
-                    return; // parsing done
+                        details: parsed,
+                    }, ...prev.slice(0, 49)]);
                 }
-
-            } catch (e) {
+            } catch {
                 console.log("Failed to parse payload", payload);
             }
         });
 
-        client.on('error', (err) => {
-            console.error("MQTT Error:", err);
-            setIsConnected(false);
-        });
+        client.on('error', () => setIsConnected(false));
 
         setMqttClient(client);
 
-        return () => {
-            console.log("Disconnecting MQTT...");
-            client.end();
-        };
+        return () => { client.end(); };
     }, [isTargetUnit]);
 
-    // Handle Toggles
     const handlePowerToggle = (e: React.ChangeEvent<HTMLInputElement>) => {
         const newState = e.target.checked;
         setPowerState(newState);
 
         if (isTargetUnit && mqttClient && isConnected) {
-            // New Payload: Action Command
             const payloadObj = {
                 timestamp: new Date().toISOString(),
                 action: "device_control",
                 commands: {
                     relay_command: newState ? "ON" : "OFF",
-                    valve_command: waterState ? "OPEN" : "CLOSE" // Current water state
-                }
+                    valve_command: waterState ? "OPEN" : "CLOSE",
+                },
             };
             const payload = JSON.stringify(payloadObj);
-
             mqttClient.publish(MQTT_CONFIG.topics.powerCommand, payload);
-
-            // Log the command
             setLiveLogs(prev => [{
                 timestamp: new Date().toISOString(),
                 value: newState ? 1 : 0,
                 unit: 'CMD',
                 rawPayload: `OUTGOING: ${payload}`,
-                details: payloadObj
+                details: payloadObj,
             }, ...prev.slice(0, 49)]);
         }
     };
@@ -285,54 +239,36 @@ export default function UnitDetailPage({ params }: { params: Promise<{ id: strin
         setWaterState(newState);
 
         if (isTargetUnit && mqttClient && isConnected) {
-            // New Payload: Action Command
             const payloadObj = {
                 timestamp: new Date().toISOString(),
                 action: "device_control",
                 commands: {
-                    relay_command: powerState ? "ON" : "OFF", // Current power state
-                    valve_command: newState ? "OPEN" : "CLOSE"
-                }
+                    relay_command: powerState ? "ON" : "OFF",
+                    valve_command: newState ? "OPEN" : "CLOSE",
+                },
             };
             const payload = JSON.stringify(payloadObj);
-
             mqttClient.publish(MQTT_CONFIG.topics.waterCommand, payload);
-
             setLiveLogs(prev => [{
                 timestamp: new Date().toISOString(),
                 value: newState ? 1 : 0,
                 unit: 'CMD',
                 rawPayload: `OUTGOING: ${payload}`,
-                details: payloadObj
+                details: payloadObj,
             }, ...prev.slice(0, 49)]);
         }
     };
 
-    // Decide which data to show
-    // If Real-Time AND Target Unit -> Use Streamed Data
-    // Else -> Use Mock Data
     const displayPowerData = (timeRange === "Real-Time" && isTargetUnit) ? realTimePower : mockPowerData;
     const displayWaterData = (timeRange === "Real-Time" && isTargetUnit) ? realTimeWater : mockWaterData;
 
-    // Logs: Combine live logs with generated logs if not target unit (for demo consistency)
-    // But requirement says "Validation Logs: Every incoming message". So for target unit, use liveLogs.
-    const displayLogs = isTargetUnit ? liveLogs : useMemo(() => {
-        // Fallback logs for other units
-        return [...mockPowerData].reverse().slice(0, 10).map(d => ({
-            timestamp: d.timestamp,
-            value: d.value,
-            unit: "kWh",
-            rawPayload: JSON.stringify({ device_id: unitInfo.meterSerial, t: new Date(d.timestamp).getTime(), v: d.value, q: "mock" })
-        }));
-    }, [mockPowerData, unitInfo.meterSerial]);
-
     return (
-        <div className="space-y-6 animate-in fade-in duration-500">
+        <div className="space-y-6">
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-4">
                     <button
-                        onClick={() => router.back()}
+                        onClick={() => navigate(-1)}
                         className="p-2 hover:bg-gray-100 rounded-full transition-colors"
                     >
                         <ArrowLeft className="w-5 h-5 text-gray-600" />
@@ -364,7 +300,7 @@ export default function UnitDetailPage({ params }: { params: Promise<{ id: strin
                 {/* Control Panel */}
                 <div className="lg:col-span-1 space-y-6">
                     <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-                        <h2 className="text-lg font-semibold text-gray-900 mb-4 ">Utility Controls</h2>
+                        <h2 className="text-lg font-semibold text-gray-900 mb-4">Utility Controls</h2>
 
                         {/* Power Control */}
                         <div className="mb-6 p-4 rounded-lg bg-gray-50 border border-gray-100">
@@ -417,7 +353,6 @@ export default function UnitDetailPage({ params }: { params: Promise<{ id: strin
 
                     {/* Live Telemetry Cards */}
                     <div className="grid grid-cols-1 gap-4">
-                        {/* Electricity Card */}
                         <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm relative overflow-hidden">
                             <div className="absolute top-0 right-0 p-3">
                                 <Activity className={cn("w-4 h-4", isConnected ? "text-green-500 animate-pulse" : "text-gray-300")} />
@@ -444,7 +379,6 @@ export default function UnitDetailPage({ params }: { params: Promise<{ id: strin
                             </div>
                         </div>
 
-                        {/* Water Card */}
                         <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm relative overflow-hidden">
                             <div className="absolute top-0 right-0 p-3">
                                 <Activity className={cn("w-4 h-4", isConnected ? "text-cyan-500 animate-pulse" : "text-gray-300")} />
@@ -472,7 +406,7 @@ export default function UnitDetailPage({ params }: { params: Promise<{ id: strin
                         </div>
                     </div>
 
-                    {/* Quick Stats / Insights */}
+                    {/* Quick Stats */}
                     <div className="grid grid-cols-1 gap-4">
                         <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex items-start gap-4">
                             <div className="p-2 bg-amber-50 rounded-lg text-amber-600">
@@ -531,7 +465,6 @@ export default function UnitDetailPage({ params }: { params: Promise<{ id: strin
                                     <RechartsTooltip
                                         contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                                     />
-                                    {/* Stepped Area Chart with Visible Dots */}
                                     <Area
                                         type="stepAfter"
                                         dataKey="value"
@@ -564,7 +497,6 @@ export default function UnitDetailPage({ params }: { params: Promise<{ id: strin
                                     <RechartsTooltip
                                         contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                                     />
-                                    {/* Stepped Line Chart with Visible Dots */}
                                     <Line
                                         type="stepAfter"
                                         dataKey="value"

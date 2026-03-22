@@ -1,25 +1,40 @@
-# TA-Flowmeter Constraints (CLAUDE.md)
+# Project Constraints
 
-## Tech Stack & Locations
-- **Backend**: `backend-ta/` (Node.js/NestJS, TypeORM + PostgreSQL, MQTT)
-- **Dashboard**: `frontend-ta/dashboard/` (React/Next.js)
-- **Mobile**: `frontend-ta/mobile/` (React/Vite)
+> The primary AI context is the root `CLAUDE.md`. Read it first for architecture, tech decisions, and commands. This file contains only hard rules that override defaults.
 
-## Commands
-*Execute commands from inside the specific app's directory.*
+---
 
-| App | Install | Dev Server | Build | Tests |
-| --- | --- | --- | --- | --- |
-| **Backend** | `npm install` | `npm run start:dev` | `npm run build` | `npm run test`<br>`npm run test:e2e` |
-| **Dashboard** | `npm install` | `npm run dev` | `npm run build` | - |
-| **Mobile** | `pnpm install` | `pnpm dev` | `pnpm build` | - |
+## Package Managers
 
-## Coding Rules
-- **Naming**: `kebab-case` for files/folders. `camelCase` for functions/variables. `PascalCase` for classes/types.
-- **Types**: Strict TypeScript. No `any`.
+- `frontend-ta/dashboard/` — **pnpm only**. Do not use `npm install` or `yarn`.
+- `frontend-ta/mobile/` — **pnpm only**.
+- `backend-ta/` — npm.
 
-## Environment Variables
-Always copy the `.env.example` to `.env` in the target directory and fill out the values locally.
+## TypeScript
 
-- **Backend**: See `backend-ta/.env.example`
-- **Mobile**: See `frontend-ta/mobile/.env.example`
+- No `any`. Use `unknown` with type narrowing, or define explicit interfaces.
+- Strict mode is on in all `tsconfig.json` files — do not disable it.
+
+## Naming
+
+- Files and folders: `kebab-case`
+- Functions and variables: `camelCase`
+- Classes, interfaces, types, enums: `PascalCase`
+
+## Database
+
+- Never write `SELECT *` — always specify columns.
+- Do not introduce Redis or a separate in-memory cache — `current_balance` table handles fast reads.
+- Do not introduce InfluxDB — telemetry stays in the `telemetry_logs` TimescaleDB hypertable.
+- Do not drop or modify compression/retention policies without understanding the data impact.
+
+## Secrets
+
+- No credentials, tokens, API keys, or connection strings in source code.
+- All secrets via environment variables (see `.env.example` in each app).
+
+## Architecture
+
+- Do not split the backend into microservices without explicit agreement.
+- Do not merge `dashboard/` and `mobile/` into a single app.
+- Do not add new top-level services to `docker-compose.yml` without updating this guidance.

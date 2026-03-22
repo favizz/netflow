@@ -1,15 +1,10 @@
-"use client";
-
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { Link, useLocation } from "react-router-dom";
 import {
     LayoutDashboard,
     Activity,
     Users,
-    Settings,
     LogOut,
     Zap,
-    Droplets
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -21,7 +16,7 @@ const navigation = [
 ];
 
 export function Sidebar() {
-    const pathname = usePathname();
+    const { pathname } = useLocation();
 
     return (
         <div className="flex h-full w-64 flex-col bg-white border-r border-gray-200">
@@ -37,7 +32,7 @@ export function Sidebar() {
                         return (
                             <Link
                                 key={item.name}
-                                href={item.href}
+                                to={item.href}
                                 className={cn(
                                     "group flex items-center rounded-md px-2 py-2 text-sm font-medium transition-colors",
                                     isActive
