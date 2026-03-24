@@ -1,8 +1,10 @@
 import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
 import { CurrentUser } from './current-user.decorator';
-import { LoginDto } from './dto/login.dto';
+import { DevLoginDto } from './dto/dev-login.dto';
+import { GoogleAuthDto } from './dto/google-auth.dto';
 import { LogoutDto } from './dto/logout.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
+import { SelectUnitDto } from './dto/select-unit.dto';
 import type { JwtPayload } from './interfaces/jwt-payload.interface';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
@@ -11,9 +13,21 @@ import { JwtAuthGuard } from './jwt-auth.guard';
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
-  @Post('login')
-  login(@Body() dto: LoginDto) {
-    return this.authService.login(dto);
+  /** Development only — disabled in production (NODE_ENV=production) */
+  @Post('dev-login')
+  devLogin(@Body() dto: DevLoginDto) {
+    return this.authService.devLogin(dto.email);
+  }
+
+  @Post('google')
+  googleLogin(@Body() dto: GoogleAuthDto) {
+    return this.authService.googleLogin(dto.credential);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('select-unit')
+  selectUnit(@CurrentUser() user: JwtPayload, @Body() dto: SelectUnitDto) {
+    return this.authService.selectUnit(user, dto.unitId);
   }
 
   @Post('refresh')

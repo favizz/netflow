@@ -1,21 +1,23 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Home, ShoppingCart, TrendingUp, LogOut } from "lucide-react"
+import { Home, ShoppingCart, TrendingUp, LogOut, Building2 } from "lucide-react"
 import Dashboard from "@/components/dashboard"
 import TokenPurchase from "@/components/token-purchase"
 import ConsumptionHistory from "@/components/consumption-history"
 import LoginForm from "@/components/login-form"
 import AdminView from "@/components/admin-view"
 import { useAppState } from "@/hooks/use-app-state"
-import { api, authStore } from "@/lib/api"
+import { api, authStore, type UnitSummary } from "@/lib/api"
 
 export default function Page() {
   const [currentPage, setCurrentPage] = useState<"login" | "home" | "purchase" | "history" | "admin">("login")
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [userUnit, setUserUnit] = useState("")
+  const [availableUnits, setAvailableUnits] = useState<UnitSummary[]>([])
   const [unreadAlerts, setUnreadAlerts] = useState(0)
   const [showTechView, setShowTechView] = useState(false)
+  const [isUnitPickerOpen, setIsUnitPickerOpen] = useState(false)
 
   const { utility, devices } = useAppState()
 
@@ -28,9 +30,25 @@ export default function Page() {
       try {
         const me = await api.me()
         if (!active) return
-        setUserUnit(me.unitNo)
-        setIsLoggedIn(true)
-        setCurrentPage("home")
+
+        setAvailableUnits(me.units)
+
+        if (me.unitNo) {
+          setUserUnit(me.unitNo)
+          setIsLoggedIn(true)
+          setCurrentPage("home")
+        } else if (me.units.length > 0) {
+          // Auto-select first unit
+          const selected = await api.selectUnit(me.units[0].id)
+          if (!active) return
+          setUserUnit(selected.unitNo!)
+          setAvailableUnits(selected.units)
+          setIsLoggedIn(true)
+          setCurrentPage("home")
+        } else {
+          // No units assigned
+          authStore.clear()
+        }
       } catch {
         if (!active) return
         authStore.clear()
@@ -70,12 +88,40 @@ export default function Page() {
     }
   }, [isLoggedIn, userUnit])
 
-  const handleLogin = async ({ unitNo, pin }: { unitNo: string; pin: string }) => {
-    const result = await api.login(unitNo, pin)
+  const applyLoginResult = async (result: { unitNo: string | null; units: { id: number; unitNo: string }[] }) => {
+    setAvailableUnits(result.units)
+    if (result.unitNo) {
+      setUserUnit(result.unitNo)
+      setIsLoggedIn(true)
+      setCurrentPage("home")
+    } else if (result.units.length > 0) {
+      // Auto-select first unit
+      const selected = await api.selectUnit(result.units[0].id)
+      setUserUnit(selected.unitNo!)
+      setAvailableUnits(selected.units)
+      setIsLoggedIn(true)
+      setCurrentPage("home")
+    }
+    setShowTechView(false)
+  }
+
+  const handleGoogleLogin = async (credential: string) => {
+    await applyLoginResult(await api.googleLogin(credential))
+  }
+
+  const handleDevLogin = async (email: string) => {
+    await applyLoginResult(await api.devLogin(email))
+  }
+
+  const handleSelectUnit = async (unitId: number) => {
+    const result = await api.selectUnit(unitId)
+    if (!result.unitNo) throw new Error("Unit selection failed")
     setUserUnit(result.unitNo)
+    setAvailableUnits(result.units)
     setIsLoggedIn(true)
     setCurrentPage("home")
     setShowTechView(false)
+    setIsUnitPickerOpen(false)
   }
 
   const handleLogout = async () => {
@@ -83,6 +129,7 @@ export default function Page() {
     setIsLoggedIn(false)
     setCurrentPage("login")
     setUserUnit("")
+    setAvailableUnits([])
     setUnreadAlerts(0)
     setShowTechView(false)
   }
@@ -91,8 +138,8 @@ export default function Page() {
     console.log("Device toggle requested:", deviceId, newStatus)
   }
 
-  if (!isLoggedIn) {
-    return <LoginForm onLogin={handleLogin} />
+  if (currentPage === "login") {
+    return <LoginForm onGoogleLogin={handleGoogleLogin} onDevLogin={handleDevLogin} />
   }
 
   if (showTechView) {
@@ -115,6 +162,15 @@ export default function Page() {
             <Home size={24} />
             <span className="text-xs font-medium">Beranda</span>
           </button>
+          {availableUnits.length > 1 && (
+            <button
+              onClick={() => setIsUnitPickerOpen(true)}
+              className="flex flex-col items-center justify-center gap-1 flex-1 h-full text-muted-foreground hover:text-primary transition-colors"
+            >
+              <Building2 size={24} />
+              <span className="text-xs font-medium">{userUnit}</span>
+            </button>
+          )}
           <button
             onClick={() => void handleLogout()}
             className="flex flex-col items-center justify-center gap-1 flex-1 h-full text-muted-foreground hover:text-destructive transition-colors"
@@ -164,6 +220,15 @@ export default function Page() {
           <TrendingUp size={24} />
           <span className="text-xs font-medium">Riwayat</span>
         </button>
+        {availableUnits.length > 1 && (
+          <button
+            onClick={() => setIsUnitPickerOpen(true)}
+            className={`flex flex-col items-center justify-center gap-1 flex-1 h-full transition-colors relative ${isUnitPickerOpen ? "text-primary bg-muted" : "text-muted-foreground hover:text-primary"}`}
+          >
+            <Building2 size={24} />
+            <span className="text-xs font-medium">{userUnit}</span>
+          </button>
+        )}
         <button
           onClick={() => void handleLogout()}
           className="flex flex-col items-center justify-center gap-1 flex-1 h-full text-muted-foreground hover:text-destructive transition-colors relative"
@@ -179,6 +244,28 @@ export default function Page() {
           <span className="text-xs font-medium">Keluar</span>
         </button>
       </nav>
+
+      {isUnitPickerOpen && (
+        <div className="fixed inset-0 z-50 flex items-end">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setIsUnitPickerOpen(false)} />
+          <div className="relative w-full bg-card rounded-t-2xl p-6 space-y-3 border-t border-border">
+            <h3 className="text-base font-semibold text-center mb-4">Pilih Unit</h3>
+            {availableUnits.map((unit) => (
+              <button
+                key={unit.id}
+                onClick={() => void handleSelectUnit(unit.id)}
+                className={`w-full h-12 rounded-lg border text-sm font-medium transition-colors ${
+                  unit.unitNo === userUnit
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "bg-background text-foreground border-border hover:bg-muted"
+                }`}
+              >
+                {unit.unitNo}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

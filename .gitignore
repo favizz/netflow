@@ -5,6 +5,9 @@ node_modules/
 .env
 frontend/.env
 backend/.env
+backend-ta/.env
+frontend-ta/mobile/.env
+frontend-ta/dashboard/.env
 
 # build files
 build/
@@ -13,3 +16,12 @@ dist/
 
 # logs
 npm-debug.log*
+
+# local / AI context files
+.claude/
+ai-guidance/
+CLAUDE.md
+AGENTS.md
+temp.md
+dbnotes.md
+backup_iot.sql

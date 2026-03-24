@@ -4,7 +4,7 @@ Two isolated frontend applications — each with its own tooling, dependencies, 
 
 | App | Path | Framework | Package Manager |
 |---|---|---|---|
-| Dashboard | `dashboard/` | Next.js 16 | pnpm |
+| Dashboard | `dashboard/` | React + Vite 7 | pnpm |
 | Mobile | `mobile/` | React + Vite 7 | pnpm |
 
 ---
@@ -36,11 +36,12 @@ VITE_API_BASE_URL=http://localhost:5000
 VITE_MQTT_BROKER_URL=ws://localhost:8083/mqtt
 VITE_MQTT_USERNAME=
 VITE_MQTT_PASSWORD=
+VITE_GOOGLE_CLIENT_ID=replace-with-google-client-id
 ```
 
 ---
 
-## Backend authentication and webhook environment
+## Backend environment
 
 Set these in `backend-ta/.env`:
 
@@ -48,14 +49,14 @@ Set these in `backend-ta/.env`:
 JWT_SECRET=replace-with-strong-random-secret
 JWT_EXPIRES_IN_SECONDS=900
 JWT_REFRESH_EXPIRES_IN_SECONDS=604800
-OWNER_LOGIN_PIN=replace-with-strong-pin
+GOOGLE_CLIENT_ID=replace-with-google-client-id
 ADMIN_API_KEY=replace-with-strong-admin-key
 PAYMENT_WEBHOOK_SECRET=replace-with-strong-webhook-secret
 PAYMENT_WEBHOOK_MAX_SKEW_MS=300000
-PAYMENT_WEBHOOK_ALLOWED_IPS=203.0.113.10,203.0.113.11
+PAYMENT_WEBHOOK_ALLOWED_IPS=
 ```
 
 Notes:
 - Leave `PAYMENT_WEBHOOK_ALLOWED_IPS` empty to disable IP allowlisting in local development.
 - Backend runs on **port 5000**.
-- Backend requires a running PostgreSQL + TimescaleDB instance (see `docker-compose.yml`).
+- Backend requires a running MySQL 8.0 instance (VPS or local Docker — see `docker-compose.yml`).

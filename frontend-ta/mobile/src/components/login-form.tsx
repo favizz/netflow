@@ -1,30 +1,34 @@
 "use client"
 
 import { useState } from "react"
-import { Button } from "@/components/ui/button"
+import { GoogleLogin } from "@react-oauth/google"
 import { Card } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Lock, Home } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Home } from "lucide-react"
+
+const isDev = !import.meta.env.VITE_GOOGLE_CLIENT_ID ||
+  (import.meta.env.VITE_GOOGLE_CLIENT_ID as string).startsWith('replace-')
+
+const DEV_EMAIL = '18222070@std.stei.itb.ac.id'
 
 interface LoginFormProps {
-  onLogin: (payload: { unitNo: string; pin: string }) => Promise<void>
+  onGoogleLogin: (credential: string) => Promise<void>
+  onDevLogin: (email: string) => Promise<void>
 }
 
-export default function LoginForm({ onLogin }: LoginFormProps) {
+export default function LoginForm({ onGoogleLogin, onDevLogin }: LoginFormProps) {
   const [isLoading, setIsLoading] = useState(false)
-  const [unitNo, setUnitNo] = useState("A-2401")
-  const [pin, setPin] = useState("")
   const [error, setError] = useState("")
 
-  const handleLogin = async () => {
+  const withLoading = async (fn: () => Promise<void>) => {
     setIsLoading(true)
     setError("")
-
     try {
-      await onLogin({ unitNo: unitNo.trim().toUpperCase(), pin: pin.trim() })
+      await fn()
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Login gagal"
-      setError(message)
+      const raw = err instanceof Error ? err.message : "Login gagal"
+      const parsed = (() => { try { return JSON.parse(raw) as { message?: string } } catch { return null } })()
+      setError(parsed?.message ?? raw)
     } finally {
       setIsLoading(false)
     }
@@ -44,35 +48,43 @@ export default function LoginForm({ onLogin }: LoginFormProps) {
             <p className="text-base text-slate-500 dark:text-slate-400">Manajemen Utilitas Apartemen Anda</p>
           </div>
 
-          <div className="space-y-4 pt-2">
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Nomor Unit</label>
-              <Input value={unitNo} onChange={(e) => setUnitNo(e.target.value)} placeholder="A-2401" />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700 dark:text-slate-300">PIN</label>
-              <Input type="password" value={pin} onChange={(e) => setPin(e.target.value)} placeholder="Masukkan PIN" />
-            </div>
+          <div className="flex flex-col items-center gap-4 pt-2">
+            {isLoading ? (
+              <p className="text-sm text-slate-500">Memproses...</p>
+            ) : isDev ? (
+              <Button
+                variant="outline"
+                className="h-14 w-full max-w-xs text-base font-semibold border-dashed border-amber-400 text-amber-700 hover:bg-amber-50"
+                onClick={() => void withLoading(() => onDevLogin(DEV_EMAIL))}
+              >
+                [Dev] Masuk sebagai {DEV_EMAIL}
+              </Button>
+            ) : (
+              <GoogleLogin
+                onSuccess={(response) => {
+                  if (response.credential) {
+                    void withLoading(() => onGoogleLogin(response.credential!))
+                  }
+                }}
+                onError={() => setError("Login dengan Google gagal. Coba lagi.")}
+                theme="outline"
+                size="large"
+                width="320"
+                text="signin_with"
+                locale="id"
+              />
+            )}
 
-            {error && <p className="text-sm text-destructive">{error}</p>}
-
-            <Button
-              variant="outline"
-              type="button"
-              onClick={handleLogin}
-              className="w-full h-14 text-base font-semibold"
-              disabled={isLoading || !unitNo || !pin}
-            >
-              {isLoading ? "Memproses..." : "Masuk"}
-            </Button>
+            {error && (
+              <p className="text-sm text-destructive text-center">{error}</p>
+            )}
           </div>
 
-          <div className="bg-slate-50 dark:bg-slate-900/50 p-4 rounded-xl space-y-2 text-center mt-4 border border-slate-100 dark:border-slate-800">
-            <p className="text-xs font-semibold text-slate-600 dark:text-slate-300 flex items-center justify-center gap-2">
-              <Lock size={14} className="text-primary" /> Akses Aman JWT
-            </p>
-            <p className="text-xs text-slate-500 dark:text-slate-400">Gunakan PIN unit untuk autentikasi API.</p>
-          </div>
+          <p className="text-xs text-center text-slate-400 dark:text-slate-500">
+            {isDev
+              ? "Mode pengembangan — bypass Google OAuth aktif"
+              : "Hanya akun yang terdaftar oleh administrator yang dapat masuk."}
+          </p>
         </div>
       </Card>
     </div>

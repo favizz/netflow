@@ -34,8 +34,8 @@ export class PaymentsController {
   }
 
   @Get('invoice/:transactionId')
-  invoice(@Param('transactionId') transactionId: string, @Res() res: Response) {
-    const invoice = this.paymentsService.buildInvoice(transactionId);
+  async invoice(@Param('transactionId') transactionId: string, @Res() res: Response) {
+    const invoice = await this.paymentsService.buildInvoice(transactionId);
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="invoice-${transactionId}.txt"`);
     return res.send(invoice);

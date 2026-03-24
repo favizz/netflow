@@ -23,23 +23,23 @@ Two user roles:
         │  REST API
         ├──────────────────► [Dashboard (React+Vite :3000)]
         ▼
-[PostgreSQL 14 + TimescaleDB]
+[MySQL 8.0]
 ```
 
 **Why this architecture:**
 - **Single backend, not microservices** — scope is one building system; operational overhead of microservices is not justified at this scale
 - **MQTT over HTTP for IoT** — purpose-built for constrained devices; lower overhead; EMQX provides QoS guarantees and a WebSocket bridge for browser clients
 - **Two separate frontends** — dashboard (admin, SSR) and mobile (SPA) have different rendering models, deploy targets, and audiences; merging them creates coupling without benefit
-- **TimescaleDB instead of InfluxDB + Redis** — one engine handles relational + time-series data; PostgreSQL-native hypertables give time-series performance without a second DB to operate or back up
+- **MySQL over InfluxDB + Redis** — one engine handles relational + time-series data; MySQL with proper indexes handles single-building telemetry volume without a second DB to operate or back up
 
 ---
 
 ## Tech Stack
 
-### Backend — NestJS 11 + TypeORM + PostgreSQL
+### Backend — NestJS 11 + TypeORM + MySQL
 - **NestJS**: TypeScript-first, decorator-based DI, modular structure maps cleanly to domain boundaries (device, auth, payment, gateway, reporting)
 - **TypeORM**: native NestJS integration; repository pattern separates service logic from query logic
-- **PostgreSQL 14 + TimescaleDB**: relational integrity for operational data + columnar compression and time partitioning for telemetry — all in one engine
+- **MySQL 8.0**: relational integrity for operational data; already running on the VPS — no extra install required; composite index on `(device_id, time DESC)` covers all telemetry query patterns at single-building scale
 
 ### Dashboard — React 19 + Vite 7 + React Router 7 + Tailwind CSS 4
 - **Vite 7**: same build tool as mobile; consistent toolchain, fast HMR, Rollup-based production output as static files served by Nginx
@@ -72,12 +72,11 @@ See `dbnotes.md` for the full schema. Key design decisions:
 
 | Decision | Rationale |
 |---|---|
-| `telemetry_logs` as a TimescaleDB hypertable on `time` | Automatic time-based chunk partitioning keeps per-chunk B-tree index sizes small; range queries on time are the dominant access pattern |
-| Compression after 7 days | TimescaleDB columnar compression gives ~90% size reduction on cold data; hot window stays row-based for write performance |
-| 1-year retention policy | Auto-drops old chunks without full-table maintenance or manual jobs |
-| `current_balance` denormalized table | Avoids aggregating all transactions on every dashboard load; updated atomically on each payment webhook; trades one extra write for fast read |
+| MySQL 8.0 instead of PostgreSQL + TimescaleDB | MySQL is already installed on the VPS; eliminates Docker and third-party DB dependencies for client handoff |
+| Composite index `(device_id, time DESC)` on `meter_readings` | Fastest path for "latest N readings for device X" — the most common query from the dashboard; covers all time-range billing queries |
+| `balance` denormalized on `units` table | Avoids aggregating all transactions on every dashboard load; updated atomically on each payment webhook; trades one extra write for fast read |
 | UUID primary keys for `users` and `transactions` | Prevents enumeration attacks; meaningful string keys (`device_id`, `unit_id`) are kept where hardware correlation matters |
-| Composite index `(device_id, time DESC)` on `telemetry_logs` | Fastest path for "latest N readings for device X" — the most common query from the dashboard |
+| MySQL Event Scheduler for data retention | Replaces TimescaleDB retention policy; `DELETE FROM meter_readings WHERE time < NOW() - INTERVAL 1 YEAR` runs daily |
 
 ---
 
@@ -88,7 +87,7 @@ TA-Flowmeter/
 ├── CLAUDE.md                          # This file — primary AI context
 ├── AGENTS.md                          # Bootstrap instruction for non-Claude AI agents
 ├── dbnotes.md                         # Full database schema with rationale
-├── init.sql                           # DB initialization script (runs in TimescaleDB container)
+├── db-init/                           # MySQL schema — auto-run by Docker on first start
 ├── docker-compose.yml                 # Orchestrates all 5 services
 ├── ai-guidance/                       # Extended guidance (see table below)
 │   ├── CLAUDE.md                      # Hard rules — read before making any change

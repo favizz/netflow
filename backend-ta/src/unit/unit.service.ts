@@ -57,6 +57,16 @@ export class UnitService {
     return unit;
   }
 
+  findByResidentEmail(email: string): Promise<Unit[]> {
+    return this.unitRepo.find({ where: { resident_email: email }, order: { unit_no: 'ASC' } });
+  }
+
+  async setResidentEmail(unitId: number, email: string | null): Promise<Unit> {
+    const unit = await this.findOne(unitId);
+    unit.resident_email = email;
+    return this.unitRepo.save(unit);
+  }
+
   async update(id: number, updateUnitDto: UpdateUnitDto) {
     const unit = await this.findOne(id);
     Object.assign(unit, updateUnitDto);

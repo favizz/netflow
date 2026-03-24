@@ -1,12 +1,29 @@
-import { Body, Controller, Get, Param, Patch, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, UseGuards } from '@nestjs/common';
 import { AdminApiKeyGuard } from '../common/guards/admin-api-key.guard';
 import { UpdateAdminAccessDto } from './dto/update-admin-access.dto';
 import { AdminService } from './admin.service';
+import { ResidentsService } from '../residents/residents.service';
+import { UnitService } from '../unit/unit.service';
+
+class CreateResidentDto {
+  email!: string;
+  name?: string;
+}
+
+class AssignUnitDto {
+  unitId!: number;
+}
 
 @Controller('admin')
 @UseGuards(AdminApiKeyGuard)
 export class AdminController {
-  constructor(private readonly adminService: AdminService) {}
+  constructor(
+    private readonly adminService: AdminService,
+    private readonly residentsService: ResidentsService,
+    private readonly unitService: UnitService,
+  ) {}
+
+  // --- Legacy admin accounts (in-memory) ---
 
   @Get('accounts')
   listAccounts() {
@@ -16,5 +33,32 @@ export class AdminController {
   @Patch('accounts/:email/access')
   updateAccess(@Param('email') email: string, @Body() payload: UpdateAdminAccessDto) {
     return this.adminService.updateAccount(email, payload);
+  }
+
+  // --- Resident management (registered Google accounts) ---
+
+  @Get('residents')
+  listResidents() {
+    return this.residentsService.findAll();
+  }
+
+  @Post('residents')
+  createResident(@Body() dto: CreateResidentDto) {
+    return this.residentsService.create(dto.email, dto.name);
+  }
+
+  @Delete('residents/:email')
+  removeResident(@Param('email') email: string) {
+    return this.residentsService.remove(email);
+  }
+
+  @Post('residents/:email/units/:unitId')
+  assignUnit(@Param('email') email: string, @Param('unitId', ParseIntPipe) unitId: number) {
+    return this.unitService.setResidentEmail(unitId, email);
+  }
+
+  @Delete('residents/:email/units/:unitId')
+  unassignUnit(@Param('email') email: string, @Param('unitId', ParseIntPipe) unitId: number) {
+    return this.unitService.setResidentEmail(unitId, null);
   }
 }

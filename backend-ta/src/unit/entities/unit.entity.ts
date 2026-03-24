@@ -35,9 +35,24 @@ export class Unit {
   })
   last_energy_reading!: number; // Posisi kWh meter terakhir
 
-  @Column('decimal', { 
-    precision: 10, scale: 2, default: 1444.70, 
-    transformer: new ColumnNumericTransformer() 
+  @Column('decimal', {
+    precision: 10, scale: 2, default: 1444.70,
+    transformer: new ColumnNumericTransformer()
   })
   energy_tariff!: number;       // Harga per kWh
+
+  @Column('decimal', {
+    precision: 15, scale: 4, default: 0,
+    transformer: new ColumnNumericTransformer()
+  })
+  last_water_reading!: number;  // Posisi m³ meter terakhir
+
+  @Column('decimal', {
+    precision: 10, scale: 2, default: 5000.00,
+    transformer: new ColumnNumericTransformer()
+  })
+  water_tariff!: number;        // Harga per m³
+
+  @Column({ type: 'varchar', nullable: true })
+  resident_email!: string | null;
 }

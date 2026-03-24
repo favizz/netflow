@@ -4,6 +4,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { UnitModule } from '../unit/unit.module';
+import { ResidentsModule } from '../residents/residents.module';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { AuthRefreshToken } from './entities/auth-refresh-token.entity';
@@ -14,6 +15,7 @@ import { JwtStrategy } from './jwt.strategy';
     ConfigModule,
     PassportModule,
     UnitModule,
+    ResidentsModule,
     TypeOrmModule.forFeature([AuthRefreshToken]),
     JwtModule.registerAsync({
       imports: [ConfigModule],

@@ -1,53 +1,132 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { createHash, randomBytes } from 'crypto';
+import { OAuth2Client } from 'google-auth-library';
 import { Repository } from 'typeorm';
+import { ResidentsService } from '../residents/residents.service';
 import { UnitService } from '../unit/unit.service';
-import { LoginDto } from './dto/login.dto';
 import { AuthRefreshToken } from './entities/auth-refresh-token.entity';
 import type { JwtPayload } from './interfaces/jwt-payload.interface';
 
 @Injectable()
 export class AuthService {
+  private readonly googleClient: OAuth2Client;
+
   constructor(
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     private readonly unitService: UnitService,
+    private readonly residentsService: ResidentsService,
     @InjectRepository(AuthRefreshToken)
     private readonly refreshTokenRepo: Repository<AuthRefreshToken>,
-  ) {}
+  ) {
+    this.googleClient = new OAuth2Client(this.configService.get<string>('GOOGLE_CLIENT_ID'));
+  }
 
-  async login(dto: LoginDto) {
-    const unit = await this.unitService.findByUnitNo(dto.unitNo);
-
-    const configuredPin = this.configService.get<string>('OWNER_LOGIN_PIN') || '123456';
-    if (!unit || dto.pin !== configuredPin) {
-      throw new UnauthorizedException('Invalid credentials');
+  async devLogin(email: string) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new UnauthorizedException('Not available in production');
     }
 
+    const resident = await this.residentsService.findByEmail(email);
+    if (!resident) {
+      throw new UnauthorizedException('Email not registered. Contact administrator.');
+    }
+
+    const units = await this.unitService.findByResidentEmail(email);
+    const selectedUnit = units.length === 1 ? units[0] : null;
+
     const payload: JwtPayload = {
-      sub: unit.id,
-      unitNo: unit.unit_no,
-      role: 'owner',
+      sub: email,
+      role: 'resident',
+      unitId: selectedUnit?.id ?? null,
+      unitNo: selectedUnit?.unit_no ?? null,
     };
 
-    return this.issueTokenPair(payload);
+    const tokenPair = await this.issueTokenPair(payload);
+    return {
+      ...tokenPair,
+      units: units.map((u) => ({ id: u.id, unitNo: u.unit_no })),
+    };
+  }
+
+  async googleLogin(credential: string) {
+    const clientId = this.configService.get<string>('GOOGLE_CLIENT_ID');
+
+    let googleSub: string;
+    let googleEmail: string;
+    let googleName: string | null = null;
+    let googlePicture: string | null = null;
+
+    try {
+      const ticket = await this.googleClient.verifyIdToken({ idToken: credential, audience: clientId });
+      const p = ticket.getPayload();
+      if (!p?.email) throw new Error('No email in token');
+      googleSub = p.sub;
+      googleEmail = p.email;
+      googleName = p.name ?? null;
+      googlePicture = p.picture ?? null;
+    } catch {
+      throw new UnauthorizedException('Invalid Google token');
+    }
+
+    const resident = await this.residentsService.findByEmail(googleEmail);
+    if (!resident) {
+      throw new UnauthorizedException('Email not registered. Contact administrator.');
+    }
+
+    if (!resident.google_id || resident.google_id !== googleSub) {
+      await this.residentsService.updateProfile(googleEmail, {
+        googleId: googleSub,
+        name: googleName,
+        picture: googlePicture,
+      });
+    }
+
+    const units = await this.unitService.findByResidentEmail(googleEmail);
+    const selectedUnit = units.length === 1 ? units[0] : null;
+
+    const payload: JwtPayload = {
+      sub: googleEmail,
+      role: 'resident',
+      unitId: selectedUnit?.id ?? null,
+      unitNo: selectedUnit?.unit_no ?? null,
+    };
+
+    const tokenPair = await this.issueTokenPair(payload);
+    return {
+      ...tokenPair,
+      units: units.map((u) => ({ id: u.id, unitNo: u.unit_no })),
+    };
+  }
+
+  async selectUnit(user: JwtPayload, unitId: number) {
+    const units = await this.unitService.findByResidentEmail(user.sub);
+    const unit = units.find((u) => u.id === unitId);
+    if (!unit) throw new ForbiddenException('Unit not found or not assigned to your account');
+
+    const payload: JwtPayload = {
+      sub: user.sub,
+      role: 'resident',
+      unitId: unit.id,
+      unitNo: unit.unit_no,
+    };
+
+    const tokenPair = await this.issueTokenPair(payload);
+    return {
+      ...tokenPair,
+      units: units.map((u) => ({ id: u.id, unitNo: u.unit_no })),
+    };
   }
 
   async refresh(refreshToken: string) {
     const key = this.hashRefreshToken(refreshToken);
     const record = await this.refreshTokenRepo.findOne({ where: { token_hash: key } });
 
-    if (!record) {
-      throw new UnauthorizedException('Invalid refresh token');
-    }
-
-    if (record.revoked_at) {
-      throw new UnauthorizedException('Refresh token already revoked');
-    }
-
+    if (!record) throw new UnauthorizedException('Invalid refresh token');
+    if (record.revoked_at) throw new UnauthorizedException('Refresh token already revoked');
     if (Date.now() > new Date(record.expires_at).getTime()) {
       record.revoked_at = new Date();
       await this.refreshTokenRepo.save(record);
@@ -59,8 +138,9 @@ export class AuthService {
 
     const payload: JwtPayload = {
       sub: record.user_sub,
+      role: 'resident',
+      unitId: record.unit_id,
       unitNo: record.unit_no,
-      role: 'owner',
     };
 
     return this.issueTokenPair(payload);
@@ -88,11 +168,14 @@ export class AuthService {
     return { loggedOut: true };
   }
 
-  me(user: JwtPayload) {
+  async me(user: JwtPayload) {
+    const units = await this.unitService.findByResidentEmail(user.sub);
     return {
-      unitNo: user.unitNo,
+      email: user.sub,
       role: user.role,
-      unitId: user.sub,
+      unitId: user.unitId,
+      unitNo: user.unitNo,
+      units: units.map((u) => ({ id: u.id, unitNo: u.unit_no })),
     };
   }
 
@@ -100,14 +183,11 @@ export class AuthService {
     const accessExpiresInSeconds = Number(
       this.configService.get<string>('JWT_EXPIRES_IN_SECONDS') || 3600,
     );
-
     const refreshExpiresInSeconds = Number(
       this.configService.get<string>('JWT_REFRESH_EXPIRES_IN_SECONDS') || 604800,
     );
 
-    const accessToken = await this.jwtService.signAsync(payload, {
-      expiresIn: accessExpiresInSeconds,
-    });
+    const accessToken = await this.jwtService.signAsync(payload, { expiresIn: accessExpiresInSeconds });
 
     const refreshToken = randomBytes(48).toString('base64url');
     const refreshKey = this.hashRefreshToken(refreshToken);
@@ -115,7 +195,8 @@ export class AuthService {
     const refreshEntity = this.refreshTokenRepo.create({
       token_hash: refreshKey,
       user_sub: payload.sub,
-      unit_no: payload.unitNo,
+      unit_no: payload.unitNo ?? null,
+      unit_id: payload.unitId ?? null,
       expires_at: new Date(Date.now() + refreshExpiresInSeconds * 1000),
       revoked_at: null,
     });

@@ -8,18 +8,21 @@ export class AuthRefreshToken {
   @Column({ type: 'varchar', unique: true })
   token_hash!: string;
 
-  @Column({ type: 'int' })
-  user_sub!: number;
-
   @Column({ type: 'varchar' })
-  unit_no!: string;
+  user_sub!: string;  // resident email
 
-  @Column({ type: 'timestamptz' })
+  @Column({ type: 'varchar', nullable: true })
+  unit_no!: string | null;
+
+  @Column({ type: 'int', nullable: true })
+  unit_id!: number | null;
+
+  @Column({ type: 'datetime' })
   expires_at!: Date;
 
-  @Column({ type: 'timestamptz', nullable: true })
+  @Column({ type: 'datetime', nullable: true })
   revoked_at!: Date | null;
 
-  @Column({ type: 'timestamptz', default: () => 'now()' })
+  @Column({ type: 'datetime', default: () => 'CURRENT_TIMESTAMP' })
   created_at!: Date;
 }

@@ -13,9 +13,9 @@ import { AuthModule } from './auth/auth.module';
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     TypeOrmModule.forRoot({
-      type: 'postgres',
+      type: 'mysql',
       host: process.env.DB_HOST || 'localhost',
-      port: Number(process.env.DB_PORT || 5432),
+      port: Number(process.env.DB_PORT || 3306),
       username: process.env.DB_USER || 'admin',
       password: process.env.DB_PASS || 'public',
       database: process.env.DB_NAME || 'iot_system',

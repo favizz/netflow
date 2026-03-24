@@ -49,7 +49,7 @@ async function refreshAccessToken() {
     throw new Error('Refresh token failed');
   }
 
-  const data = (await response.json()) as LoginResponse;
+  const data = (await response.json()) as TokenPair;
   setAccessToken(data.accessToken);
   setRefreshToken(data.refreshToken);
 }
@@ -106,6 +106,25 @@ async function request<T>(path: string, init?: RequestInit, retry = true): Promi
   return (await response.json()) as T;
 }
 
+export type UnitSummary = { id: number; unitNo: string };
+
+export type TokenPair = {
+  accessToken: string;
+  refreshToken: string;
+  tokenType: 'Bearer';
+  unitNo: string | null;
+  expiresIn: string;
+  refreshExpiresIn: string;
+};
+
+export type GoogleLoginResponse = TokenPair & {
+  units: UnitSummary[];
+};
+
+export type SelectUnitResponse = TokenPair & {
+  units: UnitSummary[];
+};
+
 export type DashboardSummary = {
   id: number;
   unitNo: string;
@@ -146,19 +165,12 @@ export type TrendPoint = {
   avgFlowLpm: number;
 };
 
-export type LoginResponse = {
-  accessToken: string;
-  refreshToken: string;
-  tokenType: 'Bearer';
-  unitNo: string;
-  expiresIn: string;
-  refreshExpiresIn: string;
-};
-
 export type MeResponse = {
-  unitNo: string;
-  role: 'owner';
-  unitId: number;
+  email: string;
+  role: 'resident';
+  unitId: number | null;
+  unitNo: string | null;
+  units: UnitSummary[];
 };
 
 export const authStore = {
@@ -175,11 +187,32 @@ export const authStore = {
 };
 
 export const api = {
-  login(unitNo: string, pin: string) {
-    return request<LoginResponse>('/auth/login', {
+  devLogin(email: string) {
+    return request<GoogleLoginResponse>('/auth/dev-login', {
       method: 'POST',
-      body: JSON.stringify({ unitNo, pin }),
+      body: JSON.stringify({ email }),
       headers: { 'Content-Type': 'application/json' },
+    }).then((res) => {
+      authStore.setTokens(res.accessToken, res.refreshToken);
+      return res;
+    });
+  },
+
+  googleLogin(credential: string) {
+    return request<GoogleLoginResponse>('/auth/google', {
+      method: 'POST',
+      body: JSON.stringify({ credential }),
+      headers: { 'Content-Type': 'application/json' },
+    }).then((res) => {
+      authStore.setTokens(res.accessToken, res.refreshToken);
+      return res;
+    });
+  },
+
+  selectUnit(unitId: number) {
+    return request<SelectUnitResponse>('/auth/select-unit', {
+      method: 'POST',
+      body: JSON.stringify({ unitId }),
     }).then((res) => {
       authStore.setTokens(res.accessToken, res.refreshToken);
       return res;
@@ -271,4 +304,3 @@ export const api = {
     );
   },
 };
-

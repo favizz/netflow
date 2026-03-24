@@ -1,27 +1,37 @@
 version: '3.8'
 
 services:
-  # 1. Database (Postgres + TimescaleDB)
-  timescaledb:
-    image: timescale/timescaledb:latest-pg14
+  # 1. Database (MySQL 8.0) — mirrors the VPS MySQL already running on the server
+  mysql:
+    image: mysql:8.0
     container_name: ta_db
     restart: always
     environment:
-      POSTGRES_USER: ${DB_USER}
-      POSTGRES_PASSWORD: ${DB_PASS}
-      POSTGRES_DB: ${DB_NAME}
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: ta_db
+      MYSQL_USER: ta_user
+      MYSQL_PASSWORD: ta_pass
     volumes:
-      - timescale_data:/var/lib/postgresql/data
+      - mysql_data:/var/lib/mysql
       - ./db-init:/docker-entrypoint-initdb.d
     ports:
-      # Bound explicitly to localhost so CloudPanel firewall is respected
-      - "127.0.0.1:5433:5432"
+      - "127.0.0.1:3306:3306"
     networks:
       - iot_net
 
-  # 2. MQTT Broker (EMQX)
+  # 2. Database visualizer
+  adminer:
+    image: adminer
+    container_name: ta_adminer
+    restart: always
+    ports:
+      - "127.0.0.1:8081:8080"
+    networks:
+      - iot_net
+
+  # 3. MQTT Broker (EMQX)
   emqx:
-    image: emqx/emqx:5.0.26
+    image: emqx/emqx:5.8
     container_name: ta_broker
     restart: always
     ports:
@@ -39,10 +49,10 @@ services:
     container_name: ta_backend
     restart: always
     depends_on:
-      - timescaledb
+      - mysql
     environment:
-      DB_HOST: timescaledb
-      DB_PORT: 5432
+      DB_HOST: mysql
+      DB_PORT: 3306
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASS}
       DB_NAME: ${DB_NAME}
@@ -51,7 +61,7 @@ services:
     networks:
       - iot_net
 
-  # 4. Dashboard (Next.js)
+  # 4. Dashboard (React+Vite)
   dashboard:
     build: ./frontend-ta/dashboard
     container_name: ta_dashboard
@@ -74,7 +84,7 @@ services:
       - iot_net
 
 volumes:
-  timescale_data:
+  mysql_data:
 
 networks:
   iot_net:

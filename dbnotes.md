@@ -1,153 +1,96 @@
-Below is a simplified relational schema using only PostgreSQL with the TimescaleDB extension. It keeps your original logic but removes unnecessary redundancy and prepares telemetry for hypertables.
+Below is the relational schema using MySQL 8.0. Migrated from PostgreSQL + TimescaleDB; TimescaleDB-specific features (hypertables, compression, retention policies) are replaced with MySQL equivalents.
 
 The design has three logical layers:
 
-Operational tables (users, properties, devices)
+Operational tables (residents, units, devices)
 
 Financial tables (transactions, tariffs, balances)
 
-Telemetry hypertable (IoT sensor logs)
+Telemetry table (IoT sensor readings)
 
-1. Enable Timescale extension
-CREATE EXTENSION IF NOT EXISTS timescaledb;
-2. Users
-CREATE TABLE users (
-    user_id UUID PRIMARY KEY,
-    username VARCHAR(50) UNIQUE NOT NULL,
-    password_hash VARCHAR(255) NOT NULL,
-    role VARCHAR(20) NOT NULL,
-    created_at TIMESTAMP DEFAULT NOW()
-);
-3. Properties (physical locations)
-CREATE TABLE properties (
-    unit_id VARCHAR(10) PRIMARY KEY,
-    user_id UUID REFERENCES users(user_id),
-    location_floor VARCHAR(20),
-    status VARCHAR(20),
-    created_at TIMESTAMP DEFAULT NOW()
+1. Residents
+CREATE TABLE residents (
+    email       VARCHAR(255) PRIMARY KEY,
+    google_id   VARCHAR(255) UNIQUE,
+    name        VARCHAR(255),
+    picture     TEXT,
+    created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-Relationship:
-
-User 1 ─── N Properties
-4. Devices
-CREATE TABLE devices (
-    device_id VARCHAR(50) PRIMARY KEY,
-    unit_id VARCHAR(10) REFERENCES properties(unit_id),
-    serial_number VARCHAR(100) UNIQUE,
-    installation_date DATE,
-    is_active BOOLEAN DEFAULT TRUE,
-    relay_status BOOLEAN,
-    valve_status BOOLEAN
+2. Units (physical locations)
+CREATE TABLE units (
+    id                  INT AUTO_INCREMENT PRIMARY KEY,
+    unit_no             VARCHAR(255) NOT NULL,
+    device_id           VARCHAR(255) NOT NULL UNIQUE,
+    balance             DECIMAL(15,2) NOT NULL DEFAULT 0,
+    relay_status        TINYINT(1) NOT NULL DEFAULT 1,
+    last_energy_reading DECIMAL(15,4) NOT NULL DEFAULT 0,
+    energy_tariff       DECIMAL(10,2) NOT NULL DEFAULT 1444.70,
+    resident_email      VARCHAR(255) NULL,
+    CONSTRAINT fk_units_resident FOREIGN KEY (resident_email) REFERENCES residents(email)
 );
 
 Relationship:
 
-Property 1 ─── N Devices
-5. Current balance (fast lookup)
+Resident 1 ─── N Units
 
-Instead of storing balance in Redis, keep it directly in PostgreSQL.
+3. Meter readings (IoT telemetry)
 
-CREATE TABLE current_balance (
-    device_id VARCHAR(50) PRIMARY KEY REFERENCES devices(device_id),
-    current_kwh NUMERIC(12,3),
-    current_m3 NUMERIC(12,3),
-    last_updated_at TIMESTAMP DEFAULT NOW()
-);
-6. Transactions (token purchases)
-CREATE TABLE transactions (
-    transaction_id UUID PRIMARY KEY,
-    user_id UUID REFERENCES users(user_id),
-    device_id VARCHAR(50) REFERENCES devices(device_id),
-    amount_rp NUMERIC(12,2),
-    amount_utility NUMERIC(12,3),
-    token_code VARCHAR(100),
-    utility_type VARCHAR(20),
-    status VARCHAR(20),
-    transaction_date TIMESTAMP DEFAULT NOW()
-);
-7. Utility tariff
-CREATE TABLE utility_tariff (
-    tariff_id SERIAL PRIMARY KEY,
-    utility_type VARCHAR(20),
-    price_per_unit NUMERIC(10,4),
-    effective_date DATE
-);
-8. IoT telemetry logs (Timescale hypertable)
+Replaces TimescaleDB hypertable. Composite primary key on (time, device_id).
 
-Instead of InfluxDB measurement.
-
-CREATE TABLE telemetry_logs (
-    time TIMESTAMPTZ NOT NULL,
-    device_id VARCHAR(50) REFERENCES devices(device_id),
-    utility_type VARCHAR(20),
-
-    energy_total_kwh DOUBLE PRECISION,
-    day_kwh DOUBLE PRECISION,
-    tegangan_v DOUBLE PRECISION,
-    arus_a DOUBLE PRECISION,
-    frekuensi_hz DOUBLE PRECISION,
-    power_factor DOUBLE PRECISION,
-
-    token_kwh DOUBLE PRECISION,
-    token_m3 DOUBLE PRECISION,
-
-    volume_total_m3 DOUBLE PRECISION,
-    debit_lpm DOUBLE PRECISION,
-
-    status_relay BOOLEAN,
-    status_valve BOOLEAN
+CREATE TABLE meter_readings (
+    time         DATETIME NOT NULL,
+    device_id    VARCHAR(255) NOT NULL,
+    voltage      DECIMAL(10,4) NULL,
+    current      DECIMAL(10,4) NULL,
+    power        DECIMAL(10,4) NULL,
+    water_flow   DECIMAL(10,4) NULL,
+    energy_total DECIMAL(10,4) NULL,
+    PRIMARY KEY (time, device_id)
 );
 
-Convert to hypertable:
+CREATE INDEX idx_meter_readings_device_time ON meter_readings (device_id, time DESC);
 
-SELECT create_hypertable('telemetry_logs','time');
-9. Add retention policy
+This index covers all dashboard queries:
+- Latest reading per device: WHERE device_id = ? ORDER BY time DESC LIMIT 1
+- Billing range query: WHERE device_id = ? AND time BETWEEN ? AND ?
 
-Automatically delete old telemetry:
-
-SELECT add_retention_policy(
-  'telemetry_logs',
-  INTERVAL '1 year'
+4. Auth refresh tokens
+CREATE TABLE auth_refresh_tokens (
+    id           INT AUTO_INCREMENT PRIMARY KEY,
+    token_hash   VARCHAR(255) NOT NULL UNIQUE,
+    user_sub     VARCHAR(255) NOT NULL,   -- resident email
+    unit_no      VARCHAR(32) NULL,
+    unit_id      INT NULL,
+    expires_at   DATETIME NOT NULL,
+    revoked_at   DATETIME NULL,
+    created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
-10. Add compression
-ALTER TABLE telemetry_logs
-SET (timescaledb.compress);
 
-SELECT add_compression_policy(
-  'telemetry_logs',
-  INTERVAL '7 days'
-);
-11. Optional indexes (important)
-CREATE INDEX idx_device_time
-ON telemetry_logs(device_id, time DESC);
+CREATE INDEX idx_auth_refresh_tokens_user_sub ON auth_refresh_tokens (user_sub);
+CREATE INDEX idx_auth_refresh_tokens_expires_at ON auth_refresh_tokens (expires_at);
 
-This keeps dashboard queries fast.
+5. Data retention (replaces TimescaleDB retention policy)
 
-12. Simplified relationship diagram
-users
-   │
-   └── properties
-           │
-           └── devices
-                   │
-                   ├── current_balance
-                   ├── transactions
-                   └── telemetry_logs (Timescale hypertable)
-13. Why this schema is good
+Run this once to enable the MySQL Event Scheduler, then create a daily cleanup job:
 
-Advantages:
+SET GLOBAL event_scheduler = ON;
 
-Single database engine
+CREATE EVENT IF NOT EXISTS cleanup_old_meter_readings
+ON SCHEDULE EVERY 1 DAY
+DO
+  DELETE FROM meter_readings WHERE time < NOW() - INTERVAL 1 YEAR;
 
-Native time-series storage
+6. Relationship diagram
+residents
+    │
+    └── units
+            │
+            └── meter_readings (via device_id)
+            └── auth_refresh_tokens (via resident_email → user_sub)
 
-No Redis needed
+7. Why this schema works at single-building scale
 
-No InfluxDB needed
-
-Simple backups
-
-Optimized for IoT telemetry
-
-This design will scale comfortably for thousands of devices sending data every 5 minutes.
+MySQL 8.0 with proper composite indexes handles millions of rows without partitioning.
+No TimescaleDB, no InfluxDB, no Redis — single engine, simpler backups, easier client handoff.
+The composite index (device_id, time DESC) is the dominant access path for all telemetry queries.

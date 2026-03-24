@@ -15,7 +15,7 @@ class NumericTransformer {
 
 @Entity('meter_readings')
 export class MeterReading {
-  @PrimaryColumn({ type: 'timestamptz' })
+  @PrimaryColumn({ type: 'datetime' })
   time!: Date;
 
   @PrimaryColumn({ type: 'varchar' })
