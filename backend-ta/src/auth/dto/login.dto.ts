@@ -1,12 +1,13 @@
-import { IsNotEmpty, IsString, MinLength } from 'class-validator';
+import { IsNotEmpty, IsString, Matches, MinLength } from 'class-validator';
 
 export class LoginDto {
   @IsString()
   @IsNotEmpty()
-  username!: string;
+  @Matches(/^[A-Z]-\d{4}$/, { message: 'unitNo must follow format A-2401' })
+  unitNo!: string;
 
   @IsString()
   @IsNotEmpty()
   @MinLength(4)
-  password!: string;
+  pin!: string;
 }

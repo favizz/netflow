@@ -1,24 +1,20 @@
-import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString, Matches, Min } from 'class-validator';
 
 export class CreateUnitDto {
   @IsString()
   @IsNotEmpty()
-  unit_id!: string;
+  @Matches(/^[A-Z]-\d{4}$/, { message: 'unit_no must follow format A-2401' })
+  unit_no!: string;
 
   @IsString()
-  @IsOptional()
-  user_id?: string;
+  @IsNotEmpty()
+  device_id!: string;
 
-  @IsString()
   @IsOptional()
-  location_floor?: string;
+  @Min(0)
+  balance?: number;
 
-  @IsString()
   @IsOptional()
-  status?: string;
-
-  // We optionally accept a device_id to assign it immediately during creation
-  @IsString()
-  @IsOptional()
-  device_id?: string;
+  @Min(0)
+  energy_tariff?: number;
 }

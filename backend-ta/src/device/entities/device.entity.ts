@@ -1,7 +1,5 @@
-import { Entity, Column, PrimaryColumn, ManyToOne, JoinColumn } from 'typeorm';
-import { Property } from '../../unit/entities/property.entity';
+import { Entity, Column, PrimaryColumn } from 'typeorm';
 
-<<<<<<< HEAD
 class NumericTransformer {
   to(data: number | null): number | null {
     return data;
@@ -21,32 +19,20 @@ export class MeterReading {
   time!: Date;
 
   @PrimaryColumn({ type: 'varchar' })
-=======
-@Entity('devices')
-export class Device {
-  @PrimaryColumn({ type: 'varchar', length: 50 })
->>>>>>> 7ae7a09e48eaba6750b960ee454a9b481f43c4d6
   device_id!: string;
 
-  @Column({ type: 'varchar', length: 10, nullable: true })
-  unit_id!: string;
+  @Column('decimal', { nullable: true, transformer: new NumericTransformer() })
+  voltage!: number | null;
 
-  @ManyToOne(() => Property)
-  @JoinColumn({ name: 'unit_id' })
-  property!: Property;
+  @Column('decimal', { nullable: true, transformer: new NumericTransformer() })
+  current!: number | null;
 
-  @Column({ type: 'varchar', length: 100, unique: true, nullable: true })
-  serial_number!: string;
+  @Column('decimal', { nullable: true, transformer: new NumericTransformer() })
+  power!: number | null;
 
-  @Column({ type: 'date', nullable: true })
-  installation_date!: Date;
+  @Column('decimal', { nullable: true, transformer: new NumericTransformer() })
+  water_flow!: number | null;
 
-  @Column({ type: 'boolean', default: true })
-  is_active!: boolean;
-
-  @Column({ type: 'boolean', nullable: true })
-  relay_status!: boolean;
-
-  @Column({ type: 'boolean', nullable: true })
-  valve_status!: boolean;
+  @Column('decimal', { nullable: true, transformer: new NumericTransformer() })
+  energy_total!: number | null;
 }

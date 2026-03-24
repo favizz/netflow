@@ -6,7 +6,7 @@ export function assertUnitAccess(user: JwtPayload, unitNo: string) {
     throw new ForbiddenException('Forbidden');
   }
 
-  if (user.username !== unitNo) {
+  if (user.unitNo !== unitNo) {
     throw new ForbiddenException('Cannot access another unit');
   }
 }
