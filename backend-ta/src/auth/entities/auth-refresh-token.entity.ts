@@ -8,8 +8,16 @@ export class AuthRefreshToken {
   @Column({ type: 'varchar', unique: true })
   token_hash!: string;
 
+<<<<<<< HEAD
   @Column({ type: 'varchar' })
   user_sub!: string;  // resident email
+=======
+  @Column({ type: 'varchar' })
+  user_sub!: string; // UUID of User
+
+  @Column({ type: 'varchar' })
+  username!: string;
+>>>>>>> 7ae7a09e48eaba6750b960ee454a9b481f43c4d6
 
   @Column({ type: 'varchar', nullable: true })
   unit_no!: string | null;

@@ -40,34 +40,34 @@ export class UnitController {
 
   @Get(':id')
   findOne(@Param('id') id: string) {
-    return this.unitService.findOne(+id);
+    return this.unitService.findOne(id);
   }
 
   @Patch(':id')
   update(@Param('id') id: string, @Body() updateUnitDto: UpdateUnitDto) {
-    return this.unitService.update(+id, updateUnitDto);
+    return this.unitService.update(id, updateUnitDto);
   }
 
   @Delete(':id')
   remove(@Param('id') id: string) {
-    return this.unitService.remove(+id);
+    return this.unitService.remove(id);
   }
 
   @Post(':id/token-engine/deduct')
   deduct(@Param('id') id: string, @Body() body: { energyDeltaKwh: number }) {
-    return this.unitService.applyTokenEngineDeduction(+id, body);
+    return this.unitService.applyTokenEngineDeduction(id, body);
   }
 
   @UseGuards(AdminApiKeyGuard)
   @Patch(':id/relay')
   relay(@Param('id') id: string, @Body() body: { relayStatus: boolean }) {
-    return this.unitService.setRelayStatus(+id, Boolean(body.relayStatus));
+    return this.unitService.setRelayStatus(id, Boolean(body.relayStatus));
   }
 
   @UseGuards(AdminApiKeyGuard)
   @Patch(':id/tariff')
   tariff(@Param('id') id: string, @Body() body: { energyTariff: number }) {
-    return this.unitService.setTariff(+id, Number(body.energyTariff));
+    return this.unitService.setTariff(id, Number(body.energyTariff));
   }
 
   @Get(':unitNo/notifications')

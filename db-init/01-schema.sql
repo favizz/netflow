@@ -2,6 +2,7 @@
 -- Auto-run by Docker on first container start.
 -- For manual VPS setup: mysql -u <user> -p <db> < db-init/01-schema.sql
 
+<<<<<<< HEAD
 -- -----------------------------------------
 -- 1. RESIDENTS
 --    Google OAuth allowlist managed by admin.
@@ -12,6 +13,15 @@ CREATE TABLE IF NOT EXISTS residents (
   name       VARCHAR(255),
   picture    TEXT,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+=======
+-- 2. Users
+CREATE TABLE users (
+    user_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    username VARCHAR(50) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    role VARCHAR(20) NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW()
+>>>>>>> 7ae7a09e48eaba6750b960ee454a9b481f43c4d6
 );
 
 -- -----------------------------------------
@@ -71,6 +81,7 @@ CREATE TABLE IF NOT EXISTS transactions (
   CONSTRAINT fk_transactions_unit FOREIGN KEY (unit_id) REFERENCES units(id)
 );
 
+<<<<<<< HEAD
 CREATE INDEX idx_transactions_unit_id ON transactions (unit_id, created_at DESC);
 CREATE INDEX idx_transactions_status  ON transactions (status);
 
@@ -83,6 +94,19 @@ CREATE TABLE IF NOT EXISTS tariffs (
   price_per_unit DECIMAL(10,4)               NOT NULL,
   effective_date DATE                        NOT NULL,
   created_at     DATETIME                    NOT NULL DEFAULT CURRENT_TIMESTAMP
+=======
+-- 6. Transactions (token purchases)
+CREATE TABLE transactions (
+    transaction_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(user_id),
+    device_id VARCHAR(50) REFERENCES devices(device_id),
+    amount_rp NUMERIC(12,2),
+    amount_utility NUMERIC(12,3),
+    token_code VARCHAR(100),
+    utility_type VARCHAR(20),
+    status VARCHAR(20),
+    transaction_date TIMESTAMP DEFAULT NOW()
+>>>>>>> 7ae7a09e48eaba6750b960ee454a9b481f43c4d6
 );
 
 CREATE INDEX idx_tariffs_type_date ON tariffs (utility_type, effective_date DESC);
@@ -115,4 +139,37 @@ CREATE EVENT IF NOT EXISTS cleanup_old_meter_readings
   STARTS CURRENT_TIMESTAMP
   DO DELETE FROM meter_readings WHERE time < NOW() - INTERVAL 1 YEAR;
 
+<<<<<<< HEAD
 -- Seed data lives in db-init/02-seed-demo.sql.
+=======
+    volume_total_m3 DOUBLE PRECISION,
+    debit_lpm DOUBLE PRECISION,
+
+    status_relay BOOLEAN,
+    status_valve BOOLEAN
+);
+
+-- Convert to hypertable:
+SELECT create_hypertable('telemetry_logs', 'time');
+
+-- 9. Add retention policy
+SELECT add_retention_policy('telemetry_logs', INTERVAL '1 year');
+
+-- 10. Add compression
+ALTER TABLE telemetry_logs SET (timescaledb.compress);
+SELECT add_compression_policy('telemetry_logs', INTERVAL '7 days');
+
+-- 11. Optional indexes (important)
+CREATE INDEX idx_device_time ON telemetry_logs(device_id, time DESC);
+
+-- 12. Auth Refresh Tokens
+CREATE TABLE auth_refresh_tokens (
+    id SERIAL PRIMARY KEY,
+    token_hash VARCHAR(255) UNIQUE NOT NULL,
+    user_sub UUID REFERENCES users(user_id) ON DELETE CASCADE,
+    username VARCHAR(50) NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
+    revoked_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+>>>>>>> 7ae7a09e48eaba6750b960ee454a9b481f43c4d6

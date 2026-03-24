@@ -2,11 +2,17 @@ import { ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/c
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
+import * as bcrypt from 'bcryptjs';
 import { createHash, randomBytes } from 'crypto';
 import { OAuth2Client } from 'google-auth-library';
 import { Repository } from 'typeorm';
+<<<<<<< HEAD
 import { ResidentsService } from '../residents/residents.service';
 import { UnitService } from '../unit/unit.service';
+=======
+import { User } from '../admin/entities/user.entity';
+import { LoginDto } from './dto/login.dto';
+>>>>>>> 7ae7a09e48eaba6750b960ee454a9b481f43c4d6
 import { AuthRefreshToken } from './entities/auth-refresh-token.entity';
 import type { JwtPayload } from './interfaces/jwt-payload.interface';
 
@@ -17,17 +23,35 @@ export class AuthService {
   constructor(
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+<<<<<<< HEAD
     private readonly unitService: UnitService,
     private readonly residentsService: ResidentsService,
+=======
+    @InjectRepository(User)
+    private readonly userRepo: Repository<User>,
+>>>>>>> 7ae7a09e48eaba6750b960ee454a9b481f43c4d6
     @InjectRepository(AuthRefreshToken)
     private readonly refreshTokenRepo: Repository<AuthRefreshToken>,
   ) {
     this.googleClient = new OAuth2Client(this.configService.get<string>('GOOGLE_CLIENT_ID'));
   }
 
+<<<<<<< HEAD
   async devLogin(email: string) {
     if (process.env.NODE_ENV === 'production') {
       throw new UnauthorizedException('Not available in production');
+=======
+  async login(dto: LoginDto) {
+    const user = await this.userRepo.findOne({ where: { username: dto.username } });
+
+    if (!user) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    const isMatch = await bcrypt.compare(dto.password, user.password_hash);
+    if (!isMatch) {
+      throw new UnauthorizedException('Invalid credentials');
+>>>>>>> 7ae7a09e48eaba6750b960ee454a9b481f43c4d6
     }
 
     const resident = await this.residentsService.findByEmail(email);
@@ -39,10 +63,16 @@ export class AuthService {
     const selectedUnit = units.length === 1 ? units[0] : null;
 
     const payload: JwtPayload = {
+<<<<<<< HEAD
       sub: email,
       role: 'resident',
       unitId: selectedUnit?.id ?? null,
       unitNo: selectedUnit?.unit_no ?? null,
+=======
+      sub: user.user_id,
+      username: user.username,
+      role: user.role,
+>>>>>>> 7ae7a09e48eaba6750b960ee454a9b481f43c4d6
     };
 
     const tokenPair = await this.issueTokenPair(payload);
@@ -136,11 +166,22 @@ export class AuthService {
     record.revoked_at = new Date();
     await this.refreshTokenRepo.save(record);
 
+    const user = await this.userRepo.findOne({ where: { user_id: record.user_sub } });
+    if (!user) {
+      throw new UnauthorizedException('User no longer exists');
+    }
+
     const payload: JwtPayload = {
+<<<<<<< HEAD
       sub: record.user_sub,
       role: 'resident',
       unitId: record.unit_id,
       unitNo: record.unit_no,
+=======
+      sub: user.user_id,
+      username: user.username,
+      role: user.role,
+>>>>>>> 7ae7a09e48eaba6750b960ee454a9b481f43c4d6
     };
 
     return this.issueTokenPair(payload);
@@ -171,11 +212,17 @@ export class AuthService {
   async me(user: JwtPayload) {
     const units = await this.unitService.findByResidentEmail(user.sub);
     return {
+<<<<<<< HEAD
       email: user.sub,
       role: user.role,
       unitId: user.unitId,
       unitNo: user.unitNo,
       units: units.map((u) => ({ id: u.id, unitNo: u.unit_no })),
+=======
+      username: user.username,
+      role: user.role,
+      userId: user.sub,
+>>>>>>> 7ae7a09e48eaba6750b960ee454a9b481f43c4d6
     };
   }
 
@@ -195,8 +242,12 @@ export class AuthService {
     const refreshEntity = this.refreshTokenRepo.create({
       token_hash: refreshKey,
       user_sub: payload.sub,
+<<<<<<< HEAD
       unit_no: payload.unitNo ?? null,
       unit_id: payload.unitId ?? null,
+=======
+      username: payload.username,
+>>>>>>> 7ae7a09e48eaba6750b960ee454a9b481f43c4d6
       expires_at: new Date(Date.now() + refreshExpiresInSeconds * 1000),
       revoked_at: null,
     });
@@ -206,7 +257,7 @@ export class AuthService {
       accessToken,
       refreshToken,
       tokenType: 'Bearer' as const,
-      unitNo: payload.unitNo,
+      username: payload.username,
       expiresIn: `${accessExpiresInSeconds}s`,
       refreshExpiresIn: `${refreshExpiresInSeconds}s`,
     };
