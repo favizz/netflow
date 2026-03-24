@@ -20,7 +20,7 @@ import { AuthModule } from './auth/auth.module';
       password: process.env.DB_PASS || 'public',
       database: process.env.DB_NAME || 'iot_system',
       autoLoadEntities: true,
-      synchronize: process.env.NODE_ENV !== 'production',
+      synchronize: false,
     }),
     UnitModule,
     DeviceModule,

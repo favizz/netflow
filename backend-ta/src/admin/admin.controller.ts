@@ -1,9 +1,6 @@
-<<<<<<< HEAD
 import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, UseGuards } from '@nestjs/common';
-=======
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards } from '@nestjs/common';
->>>>>>> 7ae7a09e48eaba6750b960ee454a9b481f43c4d6
 import { AdminApiKeyGuard } from '../common/guards/admin-api-key.guard';
+import { UpdateAdminAccessDto } from './dto/update-admin-access.dto';
 import { AdminService } from './admin.service';
 import { ResidentsService } from '../residents/residents.service';
 import { UnitService } from '../unit/unit.service';
@@ -17,7 +14,7 @@ class AssignUnitDto {
   unitId!: number;
 }
 
-@Controller('admin/users')
+@Controller('admin')
 @UseGuards(AdminApiKeyGuard)
 export class AdminController {
   constructor(
@@ -28,29 +25,14 @@ export class AdminController {
 
   // --- Legacy admin accounts (in-memory) ---
 
-  @Post()
-  create(@Body() createDto: any) {
-    return this.adminService.create(createDto);
+  @Get('accounts')
+  listAccounts() {
+    return this.adminService.listAccounts();
   }
 
-  @Get()
-  findAll() {
-    return this.adminService.findAll();
-  }
-
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.adminService.findOne(id);
-  }
-
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() updateDto: any) {
-    return this.adminService.update(id, updateDto);
-  }
-
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.adminService.remove(id);
+  @Patch('accounts/:email/access')
+  updateAccess(@Param('email') email: string, @Body() payload: UpdateAdminAccessDto) {
+    return this.adminService.updateAccount(email, payload);
   }
 
   // --- Resident management (registered Google accounts) ---
