@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { CheckCircle, Zap, ArrowLeft, Droplets, QrCode, Building2, Wallet, Copy, Check } from "lucide-react"
+import { CheckCircle, Zap, Droplets, QrCode, Building2, Wallet, Copy, Check } from "lucide-react"
 import { toast } from "sonner"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -197,21 +197,23 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
   if (step === "success") return <SuccessScreen transactionId={transactionId} amount={selectedAmount} method={selectedOption} onBuyAgain={restart} onBack={onBack} />
 
   return (
-    <div className="min-h-screen bg-background pb-28">
+    <div className="min-h-full bg-background pb-36">
       {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-3 sticky top-0 bg-background/95 backdrop-blur-sm z-10 border-b border-border">
-        <button
-          onClick={step === "amount" ? onBack : () => setStep(step === "method" ? "amount" : "method")}
-          className={interactive.ghost}
-        >
-          <ArrowLeft size={22} />
-        </button>
+      <div className="flex items-center px-5 py-3 sticky top-0 bg-background/95 backdrop-blur-sm z-10 border-b border-border">
         <div>
           <h1 className="text-lg font-bold text-foreground leading-tight">
-            {step === "amount" ? "Beli Token" : step === "method" ? "Pilih Metode" : "Instruksi Pembayaran"}
+            {step === "amount" ? "Beli Token" : step === "method" ? "Pilih Metode Pembayaran" : "Instruksi Pembayaran"}
           </h1>
           <StepIndicator current={step} />
         </div>
+        {step !== "amount" && (
+          <button
+            onClick={() => setStep(step === "method" ? "amount" : "method")}
+            className="ml-auto text-xs text-primary font-semibold py-1 px-2 rounded-lg hover:bg-primary/5 active:bg-primary/10 transition-colors"
+          >
+            ← Kembali
+          </button>
+        )}
       </div>
 
       <div className="px-5 pt-4 space-y-6">
@@ -437,7 +439,7 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
       </div>
 
       {/* Bottom CTA */}
-      <div className="fixed bottom-0 left-0 right-0 p-5 bg-background/95 backdrop-blur-sm border-t border-border space-y-2">
+      <div className="fixed bottom-16 left-0 right-0 p-4 bg-background/95 backdrop-blur-sm border-t border-border space-y-2">
         {step === "amount" && (
           <Button onClick={goToMethod} disabled={selectedAmount < 1000} className={cta.primary}>
             Pilih Metode Pembayaran

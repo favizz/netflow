@@ -239,7 +239,7 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
   }
 
   return (
-    <div className="p-5 space-y-5 max-w-xl mx-auto">
+    <div className="p-5 space-y-5 w-full">
 
       {/* Unit selector */}
       {availableUnits && availableUnits.length > 1 && (
