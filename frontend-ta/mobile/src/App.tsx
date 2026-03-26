@@ -1,52 +1,44 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Home, ShoppingCart, TrendingUp, LogOut, Building2 } from "lucide-react"
+import { useTheme } from "next-themes"
+import { Home, ShoppingCart, LogOut, Zap, Sun, Moon, Bell, AlertTriangle, AlertCircle, Info } from "lucide-react"
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import Dashboard from "@/components/dashboard"
 import TokenPurchase from "@/components/token-purchase"
-import ConsumptionHistory from "@/components/consumption-history"
 import LoginForm from "@/components/login-form"
-import AdminView from "@/components/admin-view"
-import { useAppState } from "@/hooks/use-app-state"
-import { api, authStore, type UnitSummary } from "@/lib/api"
+import { api, authStore, type NotificationItem, type UnitSummary } from "@/lib/api"
+import { interactive, type Page } from "@/lib/styles"
 
-export default function Page() {
-  const [currentPage, setCurrentPage] = useState<"login" | "home" | "purchase" | "history" | "admin">("login")
+type MainPage = Extract<Page, "home" | "purchase">
+
+export default function App() {
+  const { theme, setTheme } = useTheme()
+  const [currentPage, setCurrentPage] = useState<MainPage>("home")
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [userUnit, setUserUnit] = useState("")
   const [availableUnits, setAvailableUnits] = useState<UnitSummary[]>([])
-  const [unreadAlerts, setUnreadAlerts] = useState(0)
-  const [showTechView, setShowTechView] = useState(false)
-  const [isUnitPickerOpen, setIsUnitPickerOpen] = useState(false)
-
-  const { utility, devices } = useAppState()
+  const [notifications, setNotifications] = useState<NotificationItem[]>([])
+  const [notifOpen, setNotifOpen] = useState(false)
 
   useEffect(() => {
     let active = true
-
     const bootstrap = async () => {
       if (!authStore.getToken()) return
-
       try {
         const me = await api.me()
         if (!active) return
-
         setAvailableUnits(me.units)
-
         if (me.unitNo) {
           setUserUnit(me.unitNo)
           setIsLoggedIn(true)
-          setCurrentPage("home")
         } else if (me.units.length > 0) {
-          // Auto-select first unit
           const selected = await api.selectUnit(me.units[0].id)
           if (!active) return
           setUserUnit(selected.unitNo!)
           setAvailableUnits(selected.units)
           setIsLoggedIn(true)
-          setCurrentPage("home")
         } else {
-          // No units assigned
           authStore.clear()
         }
       } catch {
@@ -54,55 +46,40 @@ export default function Page() {
         authStore.clear()
       }
     }
-
     void bootstrap()
-
-    return () => {
-      active = false
-    }
+    return () => { active = false }
   }, [])
 
+  // Poll notifications every 30 s
   useEffect(() => {
     if (!isLoggedIn || !userUnit) return
-
     let active = true
-
-    const loadNotifications = async () => {
+    const load = async () => {
       try {
-        const notifications = await api.getNotifications(userUnit)
-        if (!active) return
-        const count = notifications.filter((n) => n.type !== "info").length
-        setUnreadAlerts(count)
+        const n = await api.getNotifications(userUnit)
+        if (active) setNotifications(n)
       } catch {
-        if (!active) return
-        setUnreadAlerts(0)
+        if (active) setNotifications([])
       }
     }
-
-    void loadNotifications()
-    const interval = setInterval(() => void loadNotifications(), 30000)
-
-    return () => {
-      active = false
-      clearInterval(interval)
-    }
+    void load()
+    const interval = setInterval(() => void load(), 30_000)
+    return () => { active = false; clearInterval(interval) }
   }, [isLoggedIn, userUnit])
 
-  const applyLoginResult = async (result: { unitNo: string | null; units: { id: number; unitNo: string }[] }) => {
+  const alertCount = notifications.filter((n) => n.type !== "info").length
+
+  const applyLoginResult = async (result: { unitNo: string | null; units: UnitSummary[] }) => {
     setAvailableUnits(result.units)
     if (result.unitNo) {
       setUserUnit(result.unitNo)
       setIsLoggedIn(true)
-      setCurrentPage("home")
     } else if (result.units.length > 0) {
-      // Auto-select first unit
       const selected = await api.selectUnit(result.units[0].id)
       setUserUnit(selected.unitNo!)
       setAvailableUnits(selected.units)
       setIsLoggedIn(true)
-      setCurrentPage("home")
     }
-    setShowTechView(false)
   }
 
   const handleGoogleLogin = async (credential: string) => {
@@ -118,154 +95,153 @@ export default function Page() {
     if (!result.unitNo) throw new Error("Unit selection failed")
     setUserUnit(result.unitNo)
     setAvailableUnits(result.units)
-    setIsLoggedIn(true)
     setCurrentPage("home")
-    setShowTechView(false)
-    setIsUnitPickerOpen(false)
   }
 
   const handleLogout = async () => {
     await api.logout()
     setIsLoggedIn(false)
-    setCurrentPage("login")
+    setCurrentPage("home")
     setUserUnit("")
     setAvailableUnits([])
-    setUnreadAlerts(0)
-    setShowTechView(false)
+    setNotifications([])
   }
 
-  const handleDeviceToggle = (deviceId: string, newStatus: "on" | "off") => {
-    console.log("Device toggle requested:", deviceId, newStatus)
-  }
-
-  if (currentPage === "login") {
+  if (!isLoggedIn) {
     return <LoginForm onGoogleLogin={handleGoogleLogin} onDevLogin={handleDevLogin} />
-  }
-
-  if (showTechView) {
-    return (
-      <div className="flex flex-col h-screen bg-background">
-        <main className="flex-1 overflow-y-auto pb-20">
-          <AdminView
-            devices={devices}
-            unitId={userUnit}
-            lastUpdated={utility.lastUpdated}
-            onDeviceToggle={handleDeviceToggle}
-          />
-        </main>
-
-        <nav className="fixed bottom-0 left-0 right-0 bg-card border-t border-border flex justify-around items-center h-16 sm:h-20">
-          <button
-            onClick={() => setShowTechView(false)}
-            className="flex flex-col items-center justify-center gap-1 flex-1 h-full transition-colors text-primary bg-muted"
-          >
-            <Home size={24} />
-            <span className="text-xs font-medium">Beranda</span>
-          </button>
-          {availableUnits.length > 1 && (
-            <button
-              onClick={() => setIsUnitPickerOpen(true)}
-              className="flex flex-col items-center justify-center gap-1 flex-1 h-full text-muted-foreground hover:text-primary transition-colors"
-            >
-              <Building2 size={24} />
-              <span className="text-xs font-medium">{userUnit}</span>
-            </button>
-          )}
-          <button
-            onClick={() => void handleLogout()}
-            className="flex flex-col items-center justify-center gap-1 flex-1 h-full text-muted-foreground hover:text-destructive transition-colors"
-          >
-            <LogOut size={24} />
-            <span className="text-xs font-medium">Keluar</span>
-          </button>
-        </nav>
-      </div>
-    )
   }
 
   return (
     <div className="flex flex-col h-screen bg-background">
+      {/* Top header */}
+      <header className="sticky top-0 z-30 bg-card border-b border-border flex items-center justify-between px-5 h-14">
+        <div className="flex items-center gap-2">
+          <div className="bg-primary text-primary-foreground p-1.5 rounded-lg">
+            <Zap size={16} />
+          </div>
+          <span className="font-bold text-base text-foreground tracking-tight">Smart Meter</span>
+        </div>
+
+        <div className="flex items-center gap-1">
+          {/* Notification bell */}
+          <button
+            onClick={() => setNotifOpen(true)}
+            className={`${interactive.ghost} relative text-muted-foreground`}
+            aria-label="Notifikasi"
+          >
+            <Bell size={20} />
+            {alertCount > 0 && (
+              <span className="absolute top-1 right-1 w-4 h-4 bg-status-critical text-white text-[9px] font-bold rounded-full flex items-center justify-center leading-none">
+                {Math.min(alertCount, 9)}
+              </span>
+            )}
+          </button>
+
+          {/* Theme toggle */}
+          <button
+            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+            className={`${interactive.ghost} text-muted-foreground`}
+            aria-label="Ganti tema"
+          >
+            {theme === "dark" ? <Sun size={20} /> : <Moon size={20} />}
+          </button>
+
+          {/* Logout */}
+          <button
+            onClick={() => void handleLogout()}
+            className={`${interactive.ghost} text-muted-foreground hover:text-destructive`}
+            aria-label="Keluar"
+          >
+            <LogOut size={20} />
+          </button>
+        </div>
+      </header>
+
+      {/* Page content */}
       <main className="flex-1 overflow-y-auto pb-20">
         {currentPage === "home" && (
           <Dashboard
             unitId={userUnit}
-            onUnitChange={setUserUnit}
-            showTechView={showTechView}
-            onShowTechView={setShowTechView}
+            availableUnits={availableUnits}
+            onSelectUnit={handleSelectUnit}
           />
         )}
-        {currentPage === "purchase" && <TokenPurchase unitId={userUnit} onBack={() => setCurrentPage("home")} />}
-        {currentPage === "history" && <ConsumptionHistory unitId={userUnit} />}
+        {currentPage === "purchase" && (
+          <TokenPurchase unitId={userUnit} onBack={() => setCurrentPage("home")} />
+        )}
       </main>
 
-      <nav className="fixed bottom-0 left-0 right-0 bg-card border-t border-border flex justify-around items-center h-16 sm:h-20">
+      {/* Bottom nav */}
+      <nav className="fixed bottom-0 left-0 right-0 bg-card/95 backdrop-blur-sm border-t border-border flex z-20 h-16 sm:h-20">
         <button
           onClick={() => setCurrentPage("home")}
-          className={`flex flex-col items-center justify-center gap-1 flex-1 h-full transition-colors relative ${currentPage === "home" ? "text-primary bg-muted" : "text-muted-foreground hover:text-primary"}`}
+          className={`${interactive.navItem} ${currentPage === "home" ? interactive.navActive : interactive.navInactive}`}
         >
-          <Home size={24} />
+          <Home size={22} />
           <span className="text-xs font-medium">Beranda</span>
         </button>
         <button
           onClick={() => setCurrentPage("purchase")}
-          className={`flex flex-col items-center justify-center gap-1 flex-1 h-full transition-colors relative ${currentPage === "purchase" ? "text-primary bg-muted" : "text-muted-foreground hover:text-primary"}`}
+          className={`${interactive.navItem} ${currentPage === "purchase" ? interactive.navActive : interactive.navInactive}`}
         >
-          <ShoppingCart size={24} />
+          <ShoppingCart size={22} />
           <span className="text-xs font-medium">Beli Token</span>
-        </button>
-        <button
-          onClick={() => setCurrentPage("history")}
-          className={`flex flex-col items-center justify-center gap-1 flex-1 h-full transition-colors relative ${currentPage === "history" ? "text-primary bg-muted" : "text-muted-foreground hover:text-primary"}`}
-        >
-          <TrendingUp size={24} />
-          <span className="text-xs font-medium">Riwayat</span>
-        </button>
-        {availableUnits.length > 1 && (
-          <button
-            onClick={() => setIsUnitPickerOpen(true)}
-            className={`flex flex-col items-center justify-center gap-1 flex-1 h-full transition-colors relative ${isUnitPickerOpen ? "text-primary bg-muted" : "text-muted-foreground hover:text-primary"}`}
-          >
-            <Building2 size={24} />
-            <span className="text-xs font-medium">{userUnit}</span>
-          </button>
-        )}
-        <button
-          onClick={() => void handleLogout()}
-          className="flex flex-col items-center justify-center gap-1 flex-1 h-full text-muted-foreground hover:text-destructive transition-colors relative"
-        >
-          <div className="relative">
-            <LogOut size={24} />
-            {unreadAlerts > 0 && (
-              <div className="absolute -top-1 -right-1 bg-destructive text-xs text-destructive-foreground rounded-full w-5 h-5 flex items-center justify-center font-bold">
-                {Math.min(unreadAlerts, 9)}
-              </div>
-            )}
-          </div>
-          <span className="text-xs font-medium">Keluar</span>
         </button>
       </nav>
 
-      {isUnitPickerOpen && (
-        <div className="fixed inset-0 z-50 flex items-end">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setIsUnitPickerOpen(false)} />
-          <div className="relative w-full bg-card rounded-t-2xl p-6 space-y-3 border-t border-border">
-            <h3 className="text-base font-semibold text-center mb-4">Pilih Unit</h3>
-            {availableUnits.map((unit) => (
-              <button
-                key={unit.id}
-                onClick={() => void handleSelectUnit(unit.id)}
-                className={`w-full h-12 rounded-lg border text-sm font-medium transition-colors ${
-                  unit.unitNo === userUnit
-                    ? "bg-primary text-primary-foreground border-primary"
-                    : "bg-background text-foreground border-border hover:bg-muted"
-                }`}
-              >
-                {unit.unitNo}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+      {/* Notification sheet */}
+      <Sheet open={notifOpen} onOpenChange={setNotifOpen}>
+        <SheetContent side="bottom" className="rounded-t-3xl px-6 pb-10 pt-4 max-h-[70vh] overflow-y-auto">
+          <div className="mx-auto w-10 h-1 bg-muted-foreground/20 rounded-full mb-5" />
+          <SheetHeader className="text-left mb-4">
+            <SheetTitle className="text-lg font-bold flex items-center gap-2">
+              <Bell size={18} className="text-primary" />
+              Notifikasi
+              {alertCount > 0 && (
+                <span className="text-xs font-bold bg-status-critical/10 text-status-critical px-2 py-0.5 rounded-full">
+                  {alertCount} peringatan
+                </span>
+              )}
+            </SheetTitle>
+          </SheetHeader>
+
+          {notifications.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-8">Tidak ada notifikasi</p>
+          ) : (
+            <div className="space-y-3">
+              {notifications.map((n, idx) => {
+                const Icon = n.type === "warning" ? AlertTriangle : n.type === "error" ? AlertCircle : Info
+                const styles = {
+                  warning: { wrap: "bg-status-warn/10 border-status-warn/20",   icon: "text-status-warn",     text: "text-status-warn" },
+                  error:   { wrap: "bg-status-critical/10 border-status-critical/20", icon: "text-status-critical", text: "text-status-critical" },
+                  info:    { wrap: "bg-primary/5 border-primary/10",             icon: "text-primary",         text: "text-foreground" },
+                }
+                const s = styles[n.type]
+                const timeAgo = formatTimeAgo(n.timestamp)
+                return (
+                  <div key={idx} className={`flex gap-3 p-3 rounded-xl border ${s.wrap}`}>
+                    <Icon size={18} className={`flex-shrink-0 mt-0.5 ${s.icon}`} />
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-sm ${s.text}`}>{n.message}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{timeAgo}</p>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   )
+}
+
+function formatTimeAgo(timestamp: string): string {
+  const diff = Date.now() - new Date(timestamp).getTime()
+  const mins = Math.floor(diff / 60_000)
+  if (mins < 1)  return "Baru saja"
+  if (mins < 60) return `${mins} menit lalu`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24)  return `${hrs} jam lalu`
+  return `${Math.floor(hrs / 24)} hari lalu`
 }

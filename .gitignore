@@ -19,7 +19,8 @@ npm-debug.log*
 
 # local / AI context files
 .claude/
-ai-guidance/
+ai_guidance/
+ui_idea/
 CLAUDE.md
 AGENTS.md
 temp.md

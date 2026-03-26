@@ -9,7 +9,8 @@
       "Bash(rm -f pnpm-lock.yaml)",
       "Bash(pnpm run:*)",
       "Bash(npm install:*)",
-      "Bash(npm uninstall:*)"
+      "Bash(npm uninstall:*)",
+      "Bash(xargs grep:*)"
     ]
   }
 }

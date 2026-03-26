@@ -1,13 +1,6 @@
 "use client"
 
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts"
-
-interface ChartData {
-  date: string
-  kwh: number
-  water: number
-  fullDate: string
-}
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart } from "recharts"
 
 interface ConsumptionChartProps {
   data: any[]
@@ -17,49 +10,50 @@ interface ConsumptionChartProps {
   color: string
 }
 
-export default function ConsumptionChart({ data, dataKey, unit, period, color }: ConsumptionChartProps) {
-  const isDaily = period === "daily"
-
+export default function ConsumptionChart({ data, dataKey, unit, color }: ConsumptionChartProps) {
   return (
-    <ResponsiveContainer width="100%" height={300}>
-      {isDaily ? (
-        <LineChart data={data} margin={{ top: 5, right: 30, left: 0, bottom: 5 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-          <XAxis dataKey="date" tick={{ fontSize: 12 }} stroke="var(--muted-foreground)" />
-          <YAxis tick={{ fontSize: 12 }} stroke="var(--muted-foreground)" />
-          <Tooltip
-            contentStyle={{
-              backgroundColor: "var(--card)",
-              border: `1px solid var(--border)`,
-              borderRadius: "6px",
-            }}
-            formatter={(value: number) => [`${value} ${unit}`, "Nilai"]}
-          />
-          <Line
-            type="monotone"
-            dataKey={dataKey}
-            stroke={color}
-            dot={{ fill: color, r: 3 }}
-            activeDot={{ r: 5 }}
-            strokeWidth={2}
-          />
-        </LineChart>
-      ) : (
-        <BarChart data={data} margin={{ top: 5, right: 30, left: 0, bottom: 5 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-          <XAxis dataKey="date" tick={{ fontSize: 12 }} stroke="var(--muted-foreground)" />
-          <YAxis tick={{ fontSize: 12 }} stroke="var(--muted-foreground)" />
-          <Tooltip
-            contentStyle={{
-              backgroundColor: "var(--card)",
-              border: `1px solid var(--border)`,
-              borderRadius: "6px",
-            }}
-            formatter={(value: number) => [`${value} ${unit}`, "Nilai"]}
-          />
-          <Bar dataKey={dataKey} fill={color} radius={[8, 8, 0, 0]} />
-        </BarChart>
-      )}
+    <ResponsiveContainer width="100%" height={200}>
+      <AreaChart data={data} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+        <defs>
+          <linearGradient id={`fill-${dataKey}`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="10%" stopColor={color} stopOpacity={0.2} />
+            <stop offset="95%" stopColor={color} stopOpacity={0} />
+          </linearGradient>
+        </defs>
+        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+        <XAxis
+          dataKey="date"
+          tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
+          tickLine={false}
+          axisLine={false}
+          interval="preserveStartEnd"
+        />
+        <YAxis
+          tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
+          tickLine={false}
+          axisLine={false}
+          width={40}
+        />
+        <Tooltip
+          contentStyle={{
+            backgroundColor: "var(--card)",
+            border: "1px solid var(--border)",
+            borderRadius: "10px",
+            fontSize: 12,
+          }}
+          formatter={(value: number) => [`${value} ${unit}`, "Nilai"]}
+          labelStyle={{ color: "var(--muted-foreground)", marginBottom: 2 }}
+        />
+        <Area
+          type="monotone"
+          dataKey={dataKey}
+          stroke={color}
+          strokeWidth={2}
+          fill={`url(#fill-${dataKey})`}
+          dot={false}
+          activeDot={{ r: 4, fill: color, strokeWidth: 0 }}
+        />
+      </AreaChart>
     </ResponsiveContainer>
   )
 }

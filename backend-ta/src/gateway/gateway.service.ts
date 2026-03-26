@@ -1,4 +1,5 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
+import { ClientProxy } from '@nestjs/microservices';
 import { PaymentsService } from '../payments/payments.service';
 import { ReportingService } from '../reporting/reporting.service';
 import { UnitService } from '../unit/unit.service';
@@ -9,6 +10,7 @@ export class GatewayService {
     private readonly unitService: UnitService,
     private readonly reportingService: ReportingService,
     private readonly paymentsService: PaymentsService,
+    @Inject('MQTT_CLIENT') private readonly mqttClient: ClientProxy,
   ) {}
 
   async getMobileDashboard(unitNo: string) {
@@ -32,5 +34,22 @@ export class GatewayService {
 
   getTransactions(unitNo: string) {
     return this.paymentsService.listTransactionsForUnit(unitNo);
+  }
+
+  async setRelayByUnitNo(unitNo: string, on: boolean) {
+    const unit = await this.unitService.findByUnitNo(unitNo);
+    await this.unitService.setRelayStatus(unit.id, on);
+    this.mqttClient.emit(`device/${unit.device_id}/relay/set`, {
+      relay: on ? 'ON' : 'OFF',
+    });
+    return { relayStatus: on };
+  }
+
+  async setValveByUnitNo(unitNo: string, open: boolean) {
+    const unit = await this.unitService.findByUnitNo(unitNo);
+    this.mqttClient.emit(`device/${unit.device_id}/valve/set`, {
+      valve: open ? 'OPEN' : 'CLOSE',
+    });
+    return { valveStatus: open };
   }
 }

@@ -4,7 +4,8 @@ import {
   Get,
   Param,
   Post,
-  Query,  Res,
+  Query,
+  Res,
   UseGuards,
 } from '@nestjs/common';
 import type { Response } from 'express';
@@ -90,6 +91,24 @@ export class GatewayController {
     assertUnitAccess(user, unitNo);
     return this.paymentsService.autoConfirm(transactionId);
   }
+
+  @Post('mobile/:unitNo/relay')
+  setRelay(
+    @Param('unitNo') unitNo: string,
+    @Body() body: { status: boolean },
+    @CurrentUser() user: JwtPayload,
+  ) {
+    assertUnitAccess(user, unitNo);
+    return this.gatewayService.setRelayByUnitNo(unitNo, Boolean(body.status));
+  }
+
+  @Post('mobile/:unitNo/valve')
+  setValve(
+    @Param('unitNo') unitNo: string,
+    @Body() body: { status: boolean },
+    @CurrentUser() user: JwtPayload,
+  ) {
+    assertUnitAccess(user, unitNo);
+    return this.gatewayService.setValveByUnitNo(unitNo, Boolean(body.status));
+  }
 }
-
-

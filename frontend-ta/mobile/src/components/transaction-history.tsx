@@ -2,6 +2,7 @@
 
 import { Card } from "@/components/ui/card"
 import { CheckCircle2, Clock, AlertCircle, ArrowUp, ArrowDown, Download } from "lucide-react"
+import { interactive } from "@/lib/styles"
 
 export interface HistoryTransaction {
   id: string
@@ -107,7 +108,7 @@ export default function TransactionHistory({ transactions, onDownloadInvoice }: 
                 <span className="text-muted-foreground">Invoice</span>
                 {onDownloadInvoice ? (
                   <button
-                    className="mt-1 inline-flex items-center gap-1 text-primary hover:underline"
+                    className={`mt-1 ${interactive.textLink}`}
                     onClick={() => onDownloadInvoice(transaction.id)}
                   >
                     <Download size={12} />

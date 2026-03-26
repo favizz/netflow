@@ -303,4 +303,24 @@ export const api = {
       },
     );
   },
+
+  setRelay(unitNo: string, on: boolean) {
+    return request<{ relayStatus: boolean }>(
+      `/gateway/mobile/${encodeURIComponent(unitNo)}/relay`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ status: on }),
+      },
+    );
+  },
+
+  setValve(unitNo: string, open: boolean) {
+    return request<{ valveStatus: boolean }>(
+      `/gateway/mobile/${encodeURIComponent(unitNo)}/valve`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ status: open }),
+      },
+    );
+  },
 };

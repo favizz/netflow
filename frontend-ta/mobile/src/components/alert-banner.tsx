@@ -6,34 +6,31 @@ interface AlertBannerProps {
 }
 
 export default function AlertBanner({ type, message }: AlertBannerProps) {
-  const colors = {
+  const styles = {
     warning: {
-      bg: "bg-yellow-50 dark:bg-yellow-950",
-      border: "border-yellow-200 dark:border-yellow-800",
-      icon: "text-yellow-600 dark:text-yellow-400",
-      text: "text-yellow-800 dark:text-yellow-100",
+      wrap: "bg-status-warn/10 border-status-warn/30",
+      icon: "text-status-warn",
+      text: "text-status-warn",
     },
     error: {
-      bg: "bg-destructive/5",
-      border: "border-destructive/30",
-      icon: "text-destructive",
-      text: "text-destructive",
+      wrap: "bg-status-critical/10 border-status-critical/30",
+      icon: "text-status-critical",
+      text: "text-status-critical",
     },
     info: {
-      bg: "bg-primary/5",
-      border: "border-primary/30",
+      wrap: "bg-primary/5 border-primary/20",
       icon: "text-primary",
       text: "text-primary",
     },
   }
 
-  const color = colors[type]
+  const s = styles[type]
   const Icon = type === "warning" ? AlertTriangle : type === "error" ? AlertCircle : Info
 
   return (
-    <div className={`border rounded-lg p-3 flex gap-3 ${color.bg} ${color.border}`}>
-      <Icon size={18} className={`flex-shrink-0 mt-0.5 ${color.icon}`} />
-      <p className={`text-sm ${color.text}`}>{message}</p>
+    <div className={`border rounded-xl p-3 flex gap-3 ${s.wrap}`}>
+      <Icon size={18} className={`flex-shrink-0 mt-0.5 ${s.icon}`} />
+      <p className={`text-sm ${s.text}`}>{message}</p>
     </div>
   )
 }

@@ -1,3 +1,5 @@
+import { DEFAULT_TARIFF } from "@/lib/styles"
+
 interface TableData {
   date: string
   kwh: number
@@ -10,9 +12,10 @@ interface TableData {
 interface DetailedTableProps {
   data: TableData[]
   utility: "kwh" | "water"
+  tariff?: { kwh: number; water: number }
 }
 
-export default function DetailedTable({ data, utility }: DetailedTableProps) {
+export default function DetailedTable({ data, utility, tariff = DEFAULT_TARIFF }: DetailedTableProps) {
   const displayData = data.slice(-10).reverse()
 
   return (
@@ -22,7 +25,7 @@ export default function DetailedTable({ data, utility }: DetailedTableProps) {
           <tr className="border-b border-border">
             <th className="text-left py-3 px-2 font-semibold text-foreground">Tanggal / Waktu</th>
             <th className="text-right py-3 px-2 font-semibold text-foreground">
-              {utility === "kwh" ? "Pemakaian (KWh)" : "Volume (M³)"}
+              {utility === "kwh" ? "Pemakaian (KWh)" : "Volume (m³)"}
             </th>
             <th className="text-right py-3 px-2 font-semibold text-foreground">
               {utility === "kwh" ? "Intensitas (Watt)" : "Debit (L/min)"}
@@ -33,9 +36,8 @@ export default function DetailedTable({ data, utility }: DetailedTableProps) {
         <tbody>
           {displayData.map((row, idx) => {
             const usage = row[utility]
-            // For rate, check utility type. Note: watts/flowRate might be undefined if mock data doesn't have it yet for weeks/months
-            const rate = utility === "kwh" ? (row.watts || 0) : (row.flowRate || 0)
-            const cost = utility === "kwh" ? usage * 1800 : usage * 4800
+            const rate = utility === "kwh" ? (row.watts ?? 0) : (row.flowRate ?? 0)
+            const cost = utility === "kwh" ? usage * tariff.kwh : usage * tariff.water
 
             return (
               <tr key={idx} className="border-b border-border/50 hover:bg-muted/50 transition-colors">
