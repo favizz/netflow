@@ -153,7 +153,12 @@ export type AnomalyType =
   | 'device_offline'
   | 'mcb_trip'
   | 'low_balance'
-  | 'voltage_anomaly';
+  | 'voltage_anomaly'
+  | 'sensor_malfunction'
+  | 'low_power_factor'
+  | 'zero_flow'
+  | 'usage_spike'
+  | 'backflow';
 
 export type AnomalySeverity = 'critical' | 'warning';
 

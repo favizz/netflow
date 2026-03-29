@@ -88,8 +88,10 @@ export class DeviceService {
       void this.anomalyService
         .checkOnTelemetry(
           deviceId,
+          savedUnit.unit_no,
           power,
           waterFlow,
+          voltage,
           Number(savedUnit.balance),
           savedUnit.relay_status,
         )

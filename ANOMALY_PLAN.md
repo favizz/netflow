@@ -2,7 +2,13 @@
 
 ## Overview
 
-This document covers the full anomaly detection and notification system for the TA-Flowmeter mobile app. Anomalies are computed on-demand from live sensor data and unit state. No separate database table is required — detection queries the existing `meter_readings` and `units` tables.
+This document covers the full anomaly detection and notification system for TA-Flowmeter.
+
+**How detection works:**
+- **Device commands** (relay OFF for Jailbreak, MCB Trip, Overvoltage): fire immediately on every MQTT telemetry via `checkOnTelemetry` — work even when the app is closed.
+- **Notification cache**: `AnomalyService` runs a background job every **2 minutes** (`OnModuleInit` + `setInterval`) refreshing anomaly state for all units. Cache is also updated per-unit every 30 s when telemetry arrives (throttled). Mobile app polls `GET /anomalies` every 30 s and gets the pre-computed cache instantly.
+- **On app open**: resident sees the last computed state (at most 2 min stale).
+- **No DB table required**: detection queries the existing `meter_readings` and `units` tables — one query of 60 rows per unit per check cycle.
 
 ---
 
@@ -12,24 +18,24 @@ This document covers the full anomaly detection and notification system for the 
 |--------|--------|
 | `meter_readings` | `time`, `device_id`, `voltage`, `current`, `power`, `water_flow`, `energy_total` |
 | `units` | `balance`, `relay_status`, `last_energy_reading`, `energy_tariff`, `last_water_reading`, `water_tariff` |
-| MQTT topics | `device/{id}/telemetry` (live), `device/{id}/relay/set` (command out) |
+| MQTT publish | `device/{id}/relay/set` — backend → device command |
 
 ---
 
-## Anomaly Catalog
+## Anomaly Catalog (11 Total)
 
 ### Anomali 1 — Jailbreak (Bypass Sistem)
 
 | Field | Detail |
 |-------|--------|
-| **Precondition** | Saldo habis (balance ≤ 0), relay sudah dimatikan oleh sistem, tapi sensor masih melaporkan konsumsi |
+| **Precondition** | Saldo habis (balance ≤ 0), relay sudah dimatikan sistem, tapi sensor masih melaporkan konsumsi |
 | **Detection** | `balance ≤ 0` AND `relay_status = false` AND (`power > 5 W` OR `water_flow > 0.1 L/min`) |
-| **Trigger** | Setiap kali data telemetri masuk (real-time via `DeviceService.saveSensorData`) |
-| **Warning** | Notifikasi dikirim ke Admin saja (tidak tampil di aplikasi penghuni) |
-| **Mitigation** | Sistem otomatis mengirim ulang perintah `relay: OFF` ke perangkat via MQTT (`device/{id}/relay/set`) |
-| **Handling** | Admin memverifikasi kondisi fisik relay di unit, laporkan ke teknisi |
-| **Prevention** | Pastikan relay fisik bekerja dengan baik; pertimbangkan sensor arus independen sebagai verifikasi ganda |
-| **Device Response** | **YA** — MQTT publish `device/{id}/relay/set` → `{ relay: 'OFF', reason: 'JAILBREAK_DETECTED' }` |
+| **Trigger** | Per-telemetry (`checkOnTelemetry`) + background cache refresh |
+| **Warning** | Admin only (tidak tampil di aplikasi penghuni) |
+| **Mitigation** | Backend emit `relay: OFF, reason: JAILBREAK_DETECTED` via MQTT |
+| **Handling** | Admin verifikasi kondisi fisik relay, laporkan ke teknisi |
+| **Prevention** | Pastikan relay fisik bekerja; pertimbangkan sensor arus independen |
+| **Device Response** | **YA** — `device/{id}/relay/set` → `{ relay: 'OFF', reason: 'JAILBREAK_DETECTED' }` |
 | **Target** | Admin only |
 
 ---
@@ -38,16 +44,16 @@ This document covers the full anomaly detection and notification system for the 
 
 | Field | Detail |
 |-------|--------|
-| **Precondition** | Saldo ada, debit air mengalir secara konstan tanpa pernah berhenti dalam rentang waktu panjang |
-| **Detection** | Ambil 60 pembacaan `water_flow` terakhir. Jika ≥90% bernilai > 0, rata-rata ≥ 0.3 L/menit, dan Koefisien Variasi (CoV = stddev/mean) < 0.20 → kebocoran |
-| **Statistical Test** | CoV < 0.20 berarti debit sangat konstan (tidak berfluktuasi seperti pemakaian normal). CoV normal pemakaian manusia ≈ 0.5–1.5 |
-| **Trigger** | Setiap GET `/anomalies` request (on-demand) — tidak real-time per telemetri karena membutuhkan query agregat |
-| **Warning** | Notifikasi tampil di aplikasi penghuni dan Admin |
-| **Mitigation** | Sistem tidak menutup valve secara otomatis (false positive terlalu berisiko). Penghuni diinformasikan untuk memeriksa |
-| **Handling** | Penghuni segera memeriksa kondisi pipa, kran, dan toilet. Jika tidak ditemukan penyebab, hubungi teknisi |
-| **Prevention** | Pasang pelampung / pressure sensor tambahan di pipa utama unit; inspeksi berkala instalasi air |
-| **Device Response** | **TIDAK** — tidak ada perintah otomatis dikirim ke perangkat |
-| **Target** | Admin + Penghuni |
+| **Precondition** | Debit air mengalir konstan tanpa henti dalam waktu panjang |
+| **Detection** | 60 readings terakhir: ≥90% non-zero, mean ≥ 0.3 L/min, CoV = stddev/mean < 0.20 |
+| **Statistical Basis** | CoV pemakaian normal ≈ 0.5–1.5 (berfluktuasi). CoV kebocoran < 0.20 (konstan) |
+| **Trigger** | Background cache + per-GET request |
+| **Warning** | Admin + Penghuni |
+| **Mitigation** | Tidak ada aksi otomatis (false positive terlalu berisiko) |
+| **Handling** | Penghuni periksa pipa, kran, toilet. Jika tidak ditemukan → hubungi teknisi |
+| **Prevention** | Pasang pelampung/pressure sensor tambahan; inspeksi berkala instalasi |
+| **Device Response** | **TIDAK** |
+| **Target** | Both |
 
 ---
 
@@ -55,15 +61,14 @@ This document covers the full anomaly detection and notification system for the 
 
 | Field | Detail |
 |-------|--------|
-| **Precondition** | Perangkat IoT di unit tidak mengirimkan data melebihi batas waktu |
-| **Detection** | `(NOW - last meter_reading.time) > 10 menit` |
-| **Threshold** | 10 menit (bukan 5 menit untuk mengurangi false positive akibat delay jaringan) |
-| **Trigger** | Setiap GET `/anomalies` request (on-demand) |
-| **Warning** | Notifikasi ke Admin saja (penghuni tidak perlu mengetahui detail teknis ini) |
-| **Mitigation** | Tidak ada aksi otomatis — perangkat tidak dapat dijangkau jika offline |
-| **Handling** | Admin mengecek koneksi jaringan unit, cek power supply perangkat, restart perangkat secara manual jika perlu |
-| **Prevention** | Gunakan koneksi jaringan yang redundant (WiFi + GSM backup); pasang watchdog timer di firmware |
-| **Device Response** | **TIDAK** — perangkat tidak dapat dijangkau saat offline |
+| **Precondition** | Tidak ada data masuk dari perangkat |
+| **Detection** | `(NOW - last reading.time) > 10 menit` |
+| **Trigger** | Background cache refresh |
+| **Warning** | Admin only |
+| **Mitigation** | Tidak ada (tidak dapat dijangkau) |
+| **Handling** | Admin cek koneksi jaringan unit, power supply, restart perangkat |
+| **Prevention** | Koneksi redundant (WiFi + GSM backup); watchdog timer di firmware |
+| **Device Response** | **TIDAK** — tidak dapat dijangkau |
 | **Target** | Admin only |
 
 ---
@@ -72,15 +77,15 @@ This document covers the full anomaly detection and notification system for the 
 
 | Field | Detail |
 |-------|--------|
-| **Precondition** | Daya aktif melebihi kapasitas MCB standar 1300 Watt |
+| **Precondition** | Daya aktif melebihi kapasitas MCB standar |
 | **Detection** | `latest.power > 1300 W` |
-| **Trigger** | Setiap kali data telemetri masuk (real-time via `DeviceService.saveSensorData`) |
-| **Warning** | Notifikasi tampil di aplikasi penghuni dan Admin |
-| **Mitigation** | Sistem otomatis mengirim perintah `relay: OFF` ke perangkat via MQTT untuk mencegah kerusakan saat MCB reset |
-| **Handling** | Penghuni mengurangi beban listrik (cabut peralatan daya tinggi), lalu nyalakan kembali relay dari aplikasi |
-| **Prevention** | Hindari menghidupkan beberapa peralatan daya tinggi bersamaan (AC + water heater + microwave dll) |
-| **Device Response** | **YA** — MQTT publish `device/{id}/relay/set` → `{ relay: 'OFF', reason: 'MCB_TRIP' }` |
-| **Target** | Admin + Penghuni |
+| **Trigger** | Per-telemetry (`checkOnTelemetry`) + background cache |
+| **Warning** | Admin + Penghuni |
+| **Mitigation** | Backend emit relay OFF → mencegah kerusakan saat MCB reset |
+| **Handling** | Kurangi beban listrik, lalu nyalakan ulang relay dari aplikasi |
+| **Prevention** | Hindari menghidupkan beberapa peralatan daya tinggi bersamaan |
+| **Device Response** | **YA** — `device/{id}/relay/set` → `{ relay: 'OFF', reason: 'MCB_TRIP' }` |
+| **Target** | Both |
 
 ---
 
@@ -88,15 +93,15 @@ This document covers the full anomaly detection and notification system for the 
 
 | Field | Detail |
 |-------|--------|
-| **Precondition** | Saldo ada namun mendekati batas minimum sebelum pemutusan |
+| **Precondition** | Saldo mendekati batas minimum sebelum pemutusan |
 | **Detection** | `unit.balance > 0` AND `unit.balance < Rp 20.000` |
-| **Trigger** | Setiap GET `/anomalies` request (on-demand) |
-| **Warning** | Notifikasi tampil di aplikasi penghuni (reminder top-up) |
-| **Mitigation** | Tidak ada aksi otomatis — hanya peringatan dini |
-| **Handling** | Penghuni segera melakukan top-up token melalui menu "Beli Token" |
-| **Prevention** | Aktifkan notifikasi secara rutin; pertimbangkan fitur auto top-up di masa mendatang |
+| **Trigger** | Background cache |
+| **Warning** | Penghuni (reminder top-up) |
+| **Mitigation** | Tidak ada aksi otomatis |
+| **Handling** | Top-up via menu Beli Token |
+| **Prevention** | Notifikasi rutin; pertimbangkan auto top-up |
 | **Device Response** | **TIDAK** |
-| **Target** | Penghuni (resident) |
+| **Target** | Resident only |
 
 ---
 
@@ -104,86 +109,177 @@ This document covers the full anomaly detection and notification system for the 
 
 | Field | Detail |
 |-------|--------|
-| **Precondition** | Tegangan listrik di luar rentang aman standar PLN Indonesia |
-| **Detection** | `voltage < 198 V` (undervoltage) OR `voltage > 242 V` (overvoltage). Standar ±10% dari 220 V |
-| **Severity** | `critical` jika `voltage < 180 V` atau `voltage > 250 V`; `warning` untuk range 180–198 atau 242–250 |
-| **Trigger** | Setiap GET `/anomalies` request, berdasarkan pembacaan terbaru |
-| **Warning** | Notifikasi tampil di aplikasi penghuni dan Admin |
-| **Mitigation** | Tidak ada perintah relay otomatis untuk warning biasa. Untuk kondisi kritis (> 250V), relay OFF dikirim |
-| **Handling** | Penghuni hentikan pemakaian perangkat sensitif (TV, laptop, kulkas). Laporkan ke PLN/teknisi |
-| **Prevention** | Pasang stabilizer tegangan (AVR) untuk perangkat sensitif; pertimbangkan UPS untuk backup |
-| **Device Response** | **TIDAK** (untuk warning); **YA** untuk critical overvoltage > 250V — MQTT `relay: OFF, reason: 'OVERVOLTAGE'` |
-| **Target** | Admin + Penghuni |
+| **Precondition** | Tegangan di luar rentang aman standar PLN (220V ±10%) |
+| **Detection** | `voltage < 198 V` (undervoltage) OR `voltage > 242 V` (overvoltage) |
+| **Severity** | `critical` jika `< 180 V` atau `> 250 V`; `warning` untuk 180–198 V atau 242–250 V |
+| **Trigger** | Per-telemetry (critical overvoltage → relay OFF); background cache |
+| **Warning** | Admin + Penghuni |
+| **Mitigation** | Critical overvoltage (>250V): backend emit relay OFF untuk lindungi peralatan |
+| **Handling** | Hentikan pemakaian perangkat sensitif; laporkan ke PLN/teknisi |
+| **Prevention** | Pasang AVR/stabilizer; UPS untuk perangkat kritikal |
+| **Device Response** | **YA** hanya untuk critical overvoltage `> 250V` — `{ relay: 'OFF', reason: 'OVERVOLTAGE' }` |
+| **Target** | Both |
 
 ---
 
-## Anomali Yang Belum Dicakup (Identified Gaps)
+### Anomali 7 — Sensor Tidak Berfungsi (Sensor Malfunction)
 
-| Anomali | Alasan Belum Diimplementasi |
-|---------|----------------------------|
-| **Sensor Malfunction** | Semua readings NULL atau stuck di nilai sama selama N waktu — indikasi kerusakan sensor hardware. Perlu data historis lebih kompleks. |
-| **Power Factor Rendah** | Rasio `power / (voltage × current)` jauh di bawah 0.8 — beban induktif/kapasitif tidak efisien. Data ada tapi threshold perlu kalibrasi. |
-| **Valve Open + Zero Flow** | Valve dibuka tapi water_flow = 0 — pipa tersumbat atau tidak ada suplai. Butuh valve_status di DB yang saat ini belum ada. |
-| **Token Usage Spike** | Konsumsi kWh per jam tiba-tiba melonjak 3× rata-rata — kemungkinan alat rusak atau aksi tidak normal. Butuh baseline historis per unit. |
-| **Backflow / Negative Flow** | water_flow bernilai negatif — kemungkinan meter terpasang terbalik atau backflow. Butuh validasi nilai sensor. |
+| Field | Detail |
+|-------|--------|
+| **Precondition** | Perangkat online tapi semua nilai sensor null |
+| **Detection** | 5+ readings terakhir: `power = null` AND `voltage = null` AND `water_flow = null` semua |
+| **Trigger** | Background cache |
+| **Warning** | Admin + Penghuni |
+| **Mitigation** | Jika sensor malfunction terdeteksi, skip semua anomaly check lain (data tidak dapat dipercaya) |
+| **Handling** | Hubungi teknisi untuk inspeksi sensor dan koneksi kabel |
+| **Prevention** | Gunakan sensor dengan self-diagnostic; cek konektor secara berkala |
+| **Device Response** | **TIDAK** |
+| **Target** | Both |
+
+---
+
+### Anomali 8 — Faktor Daya Rendah (Low Power Factor)
+
+| Field | Detail |
+|-------|--------|
+| **Precondition** | Beban induktif berlebih pada instalasi listrik unit |
+| **Detection** | `PF = power / (voltage × current) < 0.60` dan `power > 50 W` dan `current > 0.1 A` |
+| **Trigger** | Background cache |
+| **Warning** | Admin + Penghuni |
+| **Mitigation** | Tidak ada aksi otomatis |
+| **Handling** | Kurangi beban induktif (motor, AC lama); pasang kapasitor koreksi |
+| **Prevention** | Gunakan peralatan dengan PF tinggi (label energy star); jangan overload |
+| **Device Response** | **TIDAK** |
+| **Target** | Both |
+
+---
+
+### Anomali 9 — Tidak Ada Aliran Air (Extended Zero Flow)
+
+| Field | Detail |
+|-------|--------|
+| **Precondition** | Relay ON, saldo ada, tapi tidak ada aliran air dalam waktu lama |
+| **Detection** | 20 readings terakhir: semua `water_flow ≤ 0.05 L/min` (15+ readings valid), relay ON, balance > 0 |
+| **Trigger** | Background cache |
+| **Warning** | Admin + Penghuni |
+| **Mitigation** | Tidak ada aksi otomatis |
+| **Handling** | Periksa katup, pipa, dan suplai air dari pengelola gedung |
+| **Prevention** | Pastikan instalasi katup/valve dalam kondisi baik; cek supply air gedung |
+| **Device Response** | **TIDAK** |
+| **Target** | Both |
+
+---
+
+### Anomali 10 — Lonjakan Konsumsi (Usage Spike)
+
+| Field | Detail |
+|-------|--------|
+| **Precondition** | Tiba-tiba ada lonjakan daya yang jauh di atas baseline unit itu sendiri |
+| **Detection** | `current_power > 3× avg(prev 20–60 readings)` AND `avg > 100 W` AND `current > 500 W` |
+| **Trigger** | Background cache |
+| **Warning** | Admin + Penghuni |
+| **Mitigation** | Tidak ada aksi otomatis |
+| **Handling** | Periksa perangkat yang baru dinyalakan; matikan yang tidak diperlukan |
+| **Prevention** | Hindari menghidupkan banyak peralatan daya tinggi sekaligus |
+| **Device Response** | **TIDAK** |
+| **Target** | Both |
+
+---
+
+### Anomali 11 — Aliran Air Balik (Backflow)
+
+| Field | Detail |
+|-------|--------|
+| **Precondition** | Nilai debit air negatif terdeteksi dari sensor |
+| **Detection** | `latest.water_flow < -0.1 L/min` |
+| **Trigger** | Background cache |
+| **Warning** | Admin + Penghuni |
+| **Mitigation** | Tidak ada aksi otomatis |
+| **Handling** | Laporkan ke pengelola — kemungkinan masalah instalasi pipa atau pemasangan meter terbalik |
+| **Prevention** | Pasang check valve (katup satu arah) di instalasi pipa unit |
+| **Device Response** | **TIDAK** |
+| **Target** | Both |
 
 ---
 
 ## Device Response Summary
 
-| Anomali | MQTT Command | Topic | Payload |
-|---------|-------------|-------|---------|
-| Jailbreak | relay OFF | `device/{id}/relay/set` | `{ relay: 'OFF', reason: 'JAILBREAK_DETECTED' }` |
-| MCB Trip | relay OFF | `device/{id}/relay/set` | `{ relay: 'OFF', reason: 'MCB_TRIP' }` |
-| Voltage Critical (>250V) | relay OFF | `device/{id}/relay/set` | `{ relay: 'OFF', reason: 'OVERVOLTAGE' }` |
-| Water Leak | none | — | — |
-| Device Offline | none | — | — |
-| Low Balance | none | — | — |
-| Voltage Warning | none | — | — |
+| Anomali | Trigger | MQTT Topic | Payload |
+|---------|---------|-----------|---------|
+| Jailbreak | Per-telemetry | `device/{id}/relay/set` | `{ relay:'OFF', reason:'JAILBREAK_DETECTED' }` |
+| MCB Trip | Per-telemetry | `device/{id}/relay/set` | `{ relay:'OFF', reason:'MCB_TRIP' }` |
+| Overvoltage >250V | Per-telemetry | `device/{id}/relay/set` | `{ relay:'OFF', reason:'OVERVOLTAGE' }` |
+| Water Leak | — | — | — |
+| Device Offline | — | — | — |
+| Low Balance | — | — | — |
+| Voltage Warning | — | — | — |
+| Sensor Malfunction | — | — | — |
+| Low Power Factor | — | — | — |
+| Zero Flow | — | — | — |
+| Usage Spike | — | — | — |
+| Backflow | — | — | — |
 
 ---
 
-## Architecture
+## Visibility by Role
+
+| Anomali | Resident | Admin |
+|---------|----------|-------|
+| 1 Jailbreak | ✗ | ✓ |
+| 2 Water Leak | ✓ | ✓ |
+| 3 Device Offline | ✗ | ✓ |
+| 4 MCB Trip | ✓ | ✓ |
+| 5 Low Balance | ✓ | ✗ |
+| 6 Voltage Anomaly | ✓ | ✓ |
+| 7 Sensor Malfunction | ✓ | ✓ |
+| 8 Low Power Factor | ✓ | ✓ |
+| 9 Zero Flow | ✓ | ✓ |
+| 10 Usage Spike | ✓ | ✓ |
+| 11 Backflow | ✓ | ✓ |
+
+---
+
+## Detection Timing
 
 ```
-[IoT Sensor] ──MQTT telemetry──► [DeviceService.saveSensorData()]
+[IoT Device] ──MQTT telemetry──► [DeviceService.saveSensorData()]
                                           │
-                                          ▼
+                                          ▼ (immediately, non-blocking)
                                [AnomalyService.checkOnTelemetry()]
-                                  ├── Jailbreak check → MQTT relay OFF
-                                  └── MCB trip check → MQTT relay OFF
+                                  ├── Anomali 1: Jailbreak → relay OFF
+                                  ├── Anomali 4: MCB Trip → relay OFF
+                                  ├── Anomali 6: Overvoltage → relay OFF
+                                  └── Throttled cache refresh (max 1/30s per unit)
 
-[Mobile App] ──GET /anomalies──► [GatewayController]
-                                         │
-                                         ▼
-                              [AnomalyService.getAnomaliesForUnit()]
-                                 ├── Low Balance (from units table)
-                                 ├── MCB Trip (latest power reading)
-                                 ├── Voltage Anomaly (latest voltage)
-                                 └── Water Leak (last 60 readings, CoV test)
-                                 (Jailbreak + Offline excluded from resident view)
+[Background job] ──every 2 min──► [AnomalyService.refreshAllUnitsCache()]
+                                  └── computeAll() for every unit → update cache
+
+[Mobile App] ──GET /anomalies every 30s──► Returns cached AnomalyItem[]
+                                           (pre-computed, sub-millisecond response)
 ```
-
-**Why on-demand (no DB table):**
-- Avoids schema migration at this phase
-- Anomaly state is always fresh — no stale cached records
-- Single-building scale: query of 60 rows is sub-millisecond
-- Tradeoff: no anomaly history log — acceptable for current scope
 
 ---
 
-## Execution Steps
+## Simulation Tool
 
-| Step | File | Action |
-|------|------|--------|
-| 1 | `src/anomaly/anomaly.types.ts` | Define `AnomalyItem`, `AnomalyType`, `AnomalySeverity` |
-| 2 | `src/anomaly/anomaly.service.ts` | Detection logic, CoV test, MQTT commands |
-| 3 | `src/anomaly/anomaly.module.ts` | NestJS module wiring |
-| 4 | `src/device/device.service.ts` | Inject AnomalyService, call checkOnTelemetry post-commit |
-| 5 | `src/device/device.module.ts` | Import AnomalyModule |
-| 6 | `src/gateway/gateway.service.ts` | Add getMobileAnomalies(), update getMobileDashboard |
-| 7 | `src/gateway/gateway.controller.ts` | Add GET /anomalies endpoint |
-| 8 | `src/gateway/gateway.module.ts` | Import AnomalyModule |
-| 9 | `src/app.module.ts` | Import AnomalyModule |
-| 10 | `mobile/src/lib/api.ts` | Add AnomalyItem type + getAnomalies() |
-| 11 | `mobile/src/App.tsx` | Update polling + NotificationsPage UI |
+**File:** `simulation/simulate.html`
+- Open directly in browser (no server needed)
+- Connects to EMQX WebSocket (`ws://localhost:8083/mqtt`)
+- Buttons for all 11 anomaly scenarios
+- Shows real-time log, sent count, and energy/water counters
+- For scenarios requiring multiple readings (water leak, zero flow, sensor malfunction, usage spike): progress bar + auto-sends N readings with 200–300ms interval
+
+**Prerequisites for specific scenarios:**
+- Anomali 1 (Jailbreak): `UPDATE units SET balance = 0 WHERE unit_no = 'A-01';`
+- Anomali 5 (Low Balance): `UPDATE units SET balance = 15000 WHERE unit_no = 'A-01';`
+
+---
+
+## Identified Gaps (Not Yet Implemented)
+
+| Anomali | Reason Not Implemented |
+|---------|----------------------|
+| Valve Open + Zero Flow | No `valve_status` column in `units` table — can't distinguish closed valve from broken pipe |
+| Token Fraud Double-spend | Would require transaction-level integrity check outside normal ingestion flow |
+| Phase Imbalance (3-phase) | Single-phase meter only — no per-phase current data |
+| Surge Protection Trip | Would need dedicated surge sensor or digital input from hardware |

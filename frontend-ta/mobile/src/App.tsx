@@ -4,7 +4,8 @@ import { useEffect, useState } from "react"
 import { useTheme } from "next-themes"
 import {
   Home, ShoppingCart, LogOut, Zap, Sun, Moon,
-  Bell, ShieldAlert, Droplets, WifiOff, BatteryWarning, AlertTriangle, CheckCircle,
+  Bell, ShieldAlert, Droplets, WifiOff, BatteryWarning, AlertTriangle,
+  CheckCircle, Activity, TrendingUp, Gauge, RotateCcw, Cpu,
 } from "lucide-react"
 import Dashboard from "@/components/dashboard"
 import TokenPurchase from "@/components/token-purchase"
@@ -17,12 +18,17 @@ const ANOMALY_META: Record<
   AnomalyType,
   { label: string; Icon: React.ElementType; action: string }
 > = {
-  low_balance:     { label: "Saldo Hampir Habis",   Icon: BatteryWarning,  action: "Segera beli token di menu Beli Token." },
-  mcb_trip:        { label: "MCB Trip",              Icon: Zap,             action: "Kurangi beban listrik, lalu nyalakan ulang relay dari Beranda." },
-  water_leak:      { label: "Kebocoran Air",         Icon: Droplets,        action: "Periksa seluruh kran dan pipa. Hubungi teknisi jika tidak ditemukan." },
-  voltage_anomaly: { label: "Tegangan Tidak Normal", Icon: AlertTriangle,   action: "Hentikan pemakaian perangkat sensitif dan laporkan ke pengelola." },
-  jailbreak:       { label: "Bypass Sistem",         Icon: ShieldAlert,     action: "Hubungi pengelola gedung segera." },
-  device_offline:  { label: "Perangkat Offline",     Icon: WifiOff,         action: "Hubungi pengelola untuk pemeriksaan perangkat." },
+  low_balance:        { label: "Saldo Hampir Habis",      Icon: BatteryWarning, action: "Segera beli token di menu Beli Token." },
+  mcb_trip:           { label: "MCB Trip / Overload",     Icon: Zap,            action: "Kurangi beban listrik, lalu nyalakan ulang relay dari Beranda." },
+  water_leak:         { label: "Kebocoran Air",           Icon: Droplets,       action: "Periksa seluruh kran dan pipa. Hubungi teknisi jika tidak ditemukan." },
+  voltage_anomaly:    { label: "Tegangan Tidak Normal",   Icon: AlertTriangle,  action: "Hentikan pemakaian perangkat sensitif dan laporkan ke pengelola." },
+  sensor_malfunction: { label: "Sensor Tidak Berfungsi",  Icon: Cpu,            action: "Hubungi teknisi untuk pemeriksaan sensor dan kabel." },
+  low_power_factor:   { label: "Faktor Daya Rendah",      Icon: Gauge,          action: "Kurangi beban induktif atau hubungi teknisi listrik." },
+  zero_flow:          { label: "Tidak Ada Aliran Air",    Icon: RotateCcw,      action: "Periksa kondisi pipa, katup, dan suplai air dari pengelola." },
+  usage_spike:        { label: "Lonjakan Konsumsi",       Icon: TrendingUp,     action: "Periksa perangkat yang baru dinyalakan. Matikan yang tidak diperlukan." },
+  backflow:           { label: "Aliran Air Balik",        Icon: Activity,       action: "Laporkan ke pengelola — kemungkinan masalah instalasi pipa." },
+  jailbreak:          { label: "Bypass Sistem",           Icon: ShieldAlert,    action: "Hubungi pengelola gedung segera." },
+  device_offline:     { label: "Perangkat Offline",       Icon: WifiOff,        action: "Hubungi pengelola untuk pemeriksaan perangkat." },
 }
 
 // ── App ───────────────────────────────────────────────────────────────────────

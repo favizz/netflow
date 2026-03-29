@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>TA-Flowmeter — Anomaly Simulator</title>
+<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #0d0f14; --card: #161920; --card2: #1c1f2b; --border: #252836;
+  --text: #e2e8f0; --muted: #4e5570; --muted2: #6b7280;
+  --primary: #22c55e; --primary-dim: rgba(34,197,94,0.12);
+  --critical: #ef4444; --critical-dim: rgba(239,68,68,0.10);
+  --warn: #f59e0b; --warn-dim: rgba(245,158,11,0.10);
+  --info: #3b82f6; --info-dim: rgba(59,130,246,0.10);
+  --stream-on: #22c55e; --stream-off: #475569;
+}
+body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; font-size: 13px; height: 100vh; overflow: hidden; }
+
+/* Layout */
+.layout { display: grid; grid-template-columns: 300px 1fr; height: 100vh; }
+.sidebar { background: var(--card); border-right: 1px solid var(--border); overflow-y: auto; display: flex; flex-direction: column; gap: 0; }
+.main { display: flex; flex-direction: column; overflow: hidden; }
+
+/* Sidebar sections */
+.s-section { padding: 12px 14px; border-bottom: 1px solid var(--border); }
+.s-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted2); margin-bottom: 8px; }
+
+/* Top header */
+.top-bar { padding: 10px 14px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; }
+.logo { background: var(--primary); color: #000; width: 26px; height: 26px; border-radius: 5px; display: flex; align-items: center; justify-content: center; font-size: 13px; flex-shrink: 0; }
+.top-title { font-size: 13px; font-weight: 700; }
+.top-sub { font-size: 10px; color: var(--muted2); margin-top: 1px; }
+
+/* Connection fields */
+.field { margin-bottom: 7px; }
+.field label { display: block; font-size: 10px; font-weight: 600; color: var(--muted2); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 3px; }
+.field input { width: 100%; background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: 5px; padding: 5px 8px; font-size: 12px; outline: none; }
+.field input:focus { border-color: var(--primary); }
+.field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+
+/* Buttons */
+.btn { display: block; width: 100%; padding: 6px 10px; border-radius: 6px; border: none; cursor: pointer; font-size: 12px; font-weight: 500; text-align: left; transition: all 0.1s; line-height: 1.3; }
+.btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.btn:not(:disabled):hover { filter: brightness(1.18); transform: translateY(-1px); }
+.btn:not(:disabled):active { transform: translateY(0); }
+
+.btn-conn    { background: var(--primary); color: #000; font-weight: 700; }
+.btn-disc    { background: transparent; border: 1px solid var(--border); color: var(--muted2); }
+.btn-normal  { background: var(--primary-dim); color: var(--primary); border: 1px solid rgba(34,197,94,0.2); }
+.btn-warn    { background: var(--warn-dim);    color: var(--warn);     border: 1px solid rgba(245,158,11,0.2); }
+.btn-critical{ background: var(--critical-dim);color: var(--critical); border: 1px solid rgba(239,68,68,0.2); }
+.btn-info    { background: var(--info-dim);    color: var(--info);     border: 1px solid rgba(59,130,246,0.2); }
+
+.btn-sub { display: block; font-size: 10px; opacity: 0.6; font-weight: 400; margin-top: 1px; }
+.btn-tag { float: right; font-size: 9px; background: rgba(255,255,255,0.07); padding: 1px 5px; border-radius: 3px; margin-top: 1px; }
+
+/* Stream panel */
+.stream-panel { padding: 12px 14px; border-bottom: 1px solid var(--border); }
+.stream-toggle { display: flex; align-items: center; gap: 8px; background: var(--card2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; cursor: pointer; transition: all 0.15s; }
+.stream-toggle:hover { border-color: var(--primary); }
+.stream-toggle.active { border-color: var(--primary); background: rgba(34,197,94,0.07); }
+.stream-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--stream-off); transition: all 0.3s; flex-shrink: 0; }
+.stream-dot.on { background: var(--stream-on); box-shadow: 0 0 8px var(--stream-on); animation: pulse 1.5s infinite; }
+@keyframes pulse { 0%,100% { box-shadow: 0 0 4px var(--stream-on); } 50% { box-shadow: 0 0 12px var(--stream-on); } }
+.stream-info { flex: 1; }
+.stream-label { font-size: 12px; font-weight: 600; }
+.stream-meta { font-size: 10px; color: var(--muted2); margin-top: 1px; }
+.stream-action { font-size: 11px; color: var(--muted2); font-weight: 500; }
+
+.stream-status-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-top: 8px; }
+.stat-box { background: var(--bg); border: 1px solid var(--border); border-radius: 5px; padding: 5px 8px; text-align: center; }
+.stat-val { font-size: 14px; font-weight: 700; color: var(--primary); display: block; }
+.stat-key { font-size: 9px; color: var(--muted2); text-transform: uppercase; letter-spacing: 0.05em; }
+
+/* Queue display */
+.queue-row { display: flex; align-items: center; gap: 6px; margin-top: 8px; min-height: 22px; }
+.queue-badge { background: var(--warn); color: #000; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; }
+.queue-items { font-size: 11px; color: var(--muted2); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Scenario list */
+.scenario-list { display: flex; flex-direction: column; gap: 4px; flex: 1; padding: 0 14px 14px; }
+.group-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin: 10px 0 5px; }
+
+/* Status bar */
+.status-bar { padding: 5px 14px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 6px; }
+.sdot { width: 7px; height: 7px; border-radius: 50%; background: var(--critical); flex-shrink: 0; }
+.sdot.on { background: var(--primary); box-shadow: 0 0 5px var(--primary); }
+.sdot.pending { background: var(--warn); }
+.status-txt { font-size: 11px; color: var(--muted2); }
+
+/* Main log area */
+.main-header { padding: 10px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+.main-header-left h1 { font-size: 13px; font-weight: 700; }
+.main-header-left .sub { font-size: 10px; color: var(--muted2); margin-top: 2px; }
+.counters { display: flex; gap: 8px; align-items: center; }
+.counter { background: var(--card); border: 1px solid var(--border); border-radius: 5px; padding: 3px 8px; font-size: 11px; }
+.counter span { color: var(--primary); font-weight: 600; }
+.btn-clear { background: transparent; border: 1px solid var(--border); color: var(--muted2); padding: 3px 9px; border-radius: 4px; cursor: pointer; font-size: 10px; }
+.btn-clear:hover { border-color: var(--text); color: var(--text); }
+
+/* Log */
+.log-wrap { flex: 1; overflow-y: auto; padding: 6px 0; }
+.log-line { display: grid; grid-template-columns: 60px 100px 1fr; gap: 0; padding: 2px 16px; font-family: 'Courier New', Consolas, monospace; font-size: 11.5px; line-height: 1.7; border-bottom: 1px solid rgba(255,255,255,0.025); }
+.log-line:hover { background: rgba(255,255,255,0.02); }
+.log-time { color: var(--muted); font-size: 11px; }
+.log-tag  { font-weight: 700; font-size: 11px; }
+.log-data { color: var(--muted2); }
+.log-line.normal   .log-tag { color: var(--primary); }
+.log-line.warn     .log-tag { color: var(--warn); }
+.log-line.critical .log-tag { color: var(--critical); }
+.log-line.info     .log-tag { color: var(--info); }
+.log-line.system   .log-tag { color: var(--muted2); }
+.log-line.warn     .log-data,
+.log-line.critical .log-data { opacity: 0.9; }
+.log-line.normal   .log-data { opacity: 0.65; }
+
+/* Payload preview */
+.preview-panel { border-top: 1px solid var(--border); background: var(--card); flex-shrink: 0; }
+.preview-header { padding: 6px 16px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); }
+.preview-header span { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted2); }
+.preview-code { padding: 8px 16px; font-family: 'Courier New', monospace; font-size: 11.5px; color: #7dd3fc; white-space: pre; overflow-x: auto; line-height: 1.5; max-height: 80px; overflow-y: auto; }
+
+.note-box { margin: 0 14px 10px; background: rgba(245,158,11,0.07); border: 1px solid rgba(245,158,11,0.2); border-radius: 5px; padding: 7px 10px; font-size: 10px; color: var(--warn); line-height: 1.5; }
+</style>
+</head>
+<body>
+<div class="layout">
+
+<!-- ── Sidebar ──────────────────────────────────────────────────────────── -->
+<div class="sidebar">
+
+  <div class="top-bar">
+    <div class="logo">⚡</div>
+    <div>
+      <div class="top-title">Anomaly Simulator</div>
+      <div class="top-sub">TA-Flowmeter · MQTT WebSocket</div>
+    </div>
+  </div>
+
+  <!-- Connection -->
+  <div class="s-section">
+    <div class="s-title">Koneksi Broker</div>
+    <div class="field">
+      <label>MQTT URL (WebSocket)</label>
+      <input id="brokerUrl" value="ws://localhost:8083/mqtt" />
+    </div>
+    <div class="field">
+      <label>Device ID</label>
+      <input id="deviceId" value="ESP32-SIM-001" />
+    </div>
+    <div class="field field-row">
+      <div>
+        <label>Username</label>
+        <input id="mqttUser" placeholder="optional" />
+      </div>
+      <div>
+        <label>Password</label>
+        <input id="mqttPass" type="password" placeholder="optional" />
+      </div>
+    </div>
+    <button id="connBtn" class="btn btn-conn" onclick="toggleConn()">Connect</button>
+  </div>
+
+  <div class="status-bar">
+    <div id="sdot" class="sdot"></div>
+    <span id="stxt" class="status-txt">Disconnected</span>
+  </div>
+
+  <!-- Stream control -->
+  <div class="stream-panel">
+    <div id="streamToggle" class="stream-toggle" onclick="toggleStream()">
+      <div id="streamDot" class="stream-dot"></div>
+      <div class="stream-info">
+        <div id="streamLabel" class="stream-label">Stream OFF</div>
+        <div id="streamMeta" class="stream-meta">Klik untuk mulai kirim data setiap 5 detik</div>
+      </div>
+      <div id="streamAction" class="stream-action">▶ Mulai</div>
+    </div>
+
+    <div class="stream-status-row">
+      <div class="stat-box">
+        <span id="cntSent" class="stat-val">0</span>
+        <span class="stat-key">Terkirim</span>
+      </div>
+      <div class="stat-box">
+        <span id="cntNext" class="stat-val">—</span>
+        <span class="stat-key">Berikutnya</span>
+      </div>
+      <div class="stat-box">
+        <span id="cntQueue" class="stat-val">0</span>
+        <span class="stat-key">Antrian</span>
+      </div>
+    </div>
+
+    <div class="queue-row">
+      <div id="queueBadge" style="display:none" class="queue-badge">ANOMALY</div>
+      <div id="queueItems" class="queue-items" style="color:var(--muted)">Tidak ada anomali antri</div>
+    </div>
+  </div>
+
+  <div class="note-box">
+    ⚠ Jailbreak: set <code>balance=0</code> di DB dulu.<br>
+    Low Balance: set <code>balance=15000</code> di DB dulu.
+  </div>
+
+  <!-- Scenarios -->
+  <div class="scenario-list">
+
+    <div class="group-label">Normal</div>
+    <button class="btn btn-normal" onclick="inject('normal', 1)">
+      ▶ Kirim 1× Normal
+      <span class="btn-sub">v=220V p=440W wf=1.5 — satu reading</span>
+    </button>
+
+    <div class="group-label">Anomali Kritis ↯</div>
+
+    <button class="btn btn-critical" onclick="inject('jailbreak', 3)">
+      Anomali 1 · Jailbreak
+      <span class="btn-tag">Admin · 3×</span>
+      <span class="btn-sub">p=500W wf=1.2 saat balance=0 → relay OFF</span>
+    </button>
+
+    <button class="btn btn-critical" onclick="inject('mcb_trip', 3)">
+      Anomali 4 · MCB Trip
+      <span class="btn-tag">3×</span>
+      <span class="btn-sub">p=1500W &gt;1300W → relay OFF otomatis</span>
+    </button>
+
+    <button class="btn btn-critical" onclick="inject('overvoltage', 3)">
+      Anomali 6a · Overvoltage Kritis
+      <span class="btn-tag">3×</span>
+      <span class="btn-sub">v=265V &gt;250V → relay OFF otomatis</span>
+    </button>
+
+    <button class="btn btn-critical" onclick="inject('undervoltage', 3)">
+      Anomali 6b · Undervoltage Kritis
+      <span class="btn-tag">3×</span>
+      <span class="btn-sub">v=175V &lt;180V kritis</span>
+    </button>
+
+    <div class="group-label">Anomali Peringatan ⚠</div>
+
+    <button class="btn btn-warn" onclick="burst('water_leak', 60)">
+      Anomali 2 · Kebocoran Air
+      <span class="btn-tag">Burst 60×</span>
+      <span class="btn-sub">wf=2.0 konstan CoV&lt;0.20 — burst cepat lalu lanjut stream</span>
+    </button>
+
+    <button class="btn btn-warn" onclick="inject('voltage_warn', 3)">
+      Anomali 6c · Voltage Warning
+      <span class="btn-tag">3×</span>
+      <span class="btn-sub">v=193V — di bawah 198V, peringatan</span>
+    </button>
+
+    <button class="btn btn-warn" onclick="burst('sensor_malfunction', 10)">
+      Anomali 7 · Sensor Malfunction
+      <span class="btn-tag">Burst 10×</span>
+      <span class="btn-sub">Semua field null — sensor mati</span>
+    </button>
+
+    <button class="btn btn-warn" onclick="inject('low_pf', 3)">
+      Anomali 8 · Low Power Factor
+      <span class="btn-tag">3×</span>
+      <span class="btn-sub">v=220 i=4A p=300W → PF=0.34</span>
+    </button>
+
+    <button class="btn btn-warn" onclick="burst('zero_flow', 22)">
+      Anomali 9 · Zero Flow
+      <span class="btn-tag">Burst 22×</span>
+      <span class="btn-sub">wf=0 selama 22 readings — relay ON balance OK</span>
+    </button>
+
+    <button class="btn btn-warn" onclick="burstSpike()">
+      Anomali 10 · Usage Spike
+      <span class="btn-tag">Burst 12×</span>
+      <span class="btn-sub">10 normal (p≈300W) lalu 2× spike (p=1250W)</span>
+    </button>
+
+    <button class="btn btn-warn" onclick="inject('backflow', 3)">
+      Anomali 11 · Backflow
+      <span class="btn-tag">3×</span>
+      <span class="btn-sub">wf=−0.8 L/min — aliran balik</span>
+    </button>
+
+    <div class="group-label">Lainnya</div>
+
+    <button class="btn btn-info" onclick="inject('low_balance_note', 1)">
+      Anomali 5 · Saldo Rendah (Prasyarat)
+      <span class="btn-sub">Kirim normal — set balance=15000 di DB dulu</span>
+    </button>
+
+    <button class="btn btn-normal" onclick="clearQueue()">
+      ✕ Bersihkan Antrian Anomali
+      <span class="btn-sub">Kembali ke mode normal secepatnya</span>
+    </button>
+
+  </div>
+</div>
+
+<!-- ── Main ──────────────────────────────────────────────────────────────── -->
+<div class="main">
+  <div class="main-header">
+    <div class="main-header-left">
+      <h1>Event Log</h1>
+      <div class="sub">Topic: <span id="topicLbl" style="color:var(--primary)">—</span> · Setiap baris = satu MQTT publish</div>
+    </div>
+    <div class="counters">
+      <div class="counter">ET: <span id="etVal">100.00</span> kWh</div>
+      <div class="counter">WT: <span id="wtVal">50.000</span> m³</div>
+      <button class="btn-clear" onclick="clearLog()">Bersihkan Log</button>
+    </div>
+  </div>
+
+  <!-- Column headers -->
+  <div style="display:grid;grid-template-columns:60px 100px 1fr;gap:0;padding:4px 16px;border-bottom:1px solid var(--border);background:var(--card)">
+    <span style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">Waktu</span>
+    <span style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">Tipe</span>
+    <span style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">V · P · WF · I · ET · (catatan)</span>
+  </div>
+
+  <div class="log-wrap" id="logWrap"></div>
+
+  <div class="preview-panel">
+    <div class="preview-header">
+      <span>Last JSON Payload</span>
+      <span id="previewTopic" style="color:var(--primary)">—</span>
+    </div>
+    <div class="preview-code" id="previewCode">{ menunggu koneksi... }</div>
+  </div>
+</div>
+
+</div><!-- /layout -->
+
+<script>
+// ── State ───────────────────────────────────────────────────────────────────
+let mqttClient   = null;
+let connected    = false;
+let streamTimer  = null;   // setInterval handle for 5s tick
+let cdTimer      = null;   // setInterval handle for 1s countdown
+let nextIn       = 0;      // seconds until next send
+let sentTotal    = 0;
+let energyTotal  = 100.00;
+let waterTotal   = 50.000;
+let burstRunning = false;
+
+// Injection queue — each entry: { overrides, tag, level, note }
+let queue = [];
+
+// ── Normal random-walk state ─────────────────────────────────────────────────
+// Values drift slowly each tick — simulates real sensor behaviour under varying load
+let rwV  = 220.5;  // voltage   V    (walks ±0.8 per tick, clamped 217–224)
+let rwP  = 430.0;  // power     W    (walks ±30 per tick,  clamped 200–620)
+let rwWF = 1.40;   // water     L/m  (walks ±0.15 per tick, clamped 0.3–2.2)
+
+function drift(val, step, lo, hi) {
+  // Gaussian-ish drift: average of two randoms centres the walk near current value
+  const d = (Math.random() + Math.random() - 1) * step;
+  return Math.min(hi, Math.max(lo, parseFloat((val + d).toFixed(3))));
+}
+
+function advanceNormal() {
+  rwV  = drift(rwV,  0.8,  217.0, 224.0);
+  rwP  = drift(rwP,  30.0, 200.0, 620.0);
+  rwWF = drift(rwWF, 0.15,  0.30,  2.20);
+}
+
+/** Returns the current drifted normal base (does NOT advance the walk). */
+function normalBase() {
+  const i = parseFloat((rwP / rwV).toFixed(2));
+  return { v: rwV, i, p: rwP, wf: rwWF };
+}
+
+// ── MQTT ────────────────────────────────────────────────────────────────────
+function toggleConn() {
+  connected ? doDisconnect() : doConnect();
+}
+
+function doConnect() {
+  const url  = id('brokerUrl').value.trim();
+  const user = id('mqttUser').value.trim();
+  const pass = id('mqttPass').value.trim();
+
+  setStatus('pending', 'Connecting…');
+  id('connBtn').disabled = true;
+
+  const opts = { reconnectPeriod: 0, connectTimeout: 6000 };
+  if (user) opts.username = user;
+  if (pass) opts.password = pass;
+
+  mqttClient = mqtt.connect(url, opts);
+
+  mqttClient.on('connect', () => {
+    connected = true;
+    const dev = id('deviceId').value.trim();
+    id('topicLbl').textContent = `device/${dev}/telemetry`;
+    id('previewTopic').textContent = `device/${dev}/telemetry`;
+    setStatus('on', `Connected — ${url}`);
+    id('connBtn').textContent = 'Disconnect';
+    id('connBtn').className   = 'btn btn-disc';
+    id('connBtn').disabled    = false;
+    sysLog(`✓ Terhubung ke ${url}`);
+  });
+
+  mqttClient.on('error', (e) => {
+    sysLog(`✗ Error: ${e.message}`);
+    doDisconnect();
+  });
+
+  mqttClient.on('close', () => {
+    if (connected) {
+      connected = false;
+      stopStream();
+      setStatus('off', 'Disconnected');
+      id('connBtn').textContent = 'Connect';
+      id('connBtn').className   = 'btn btn-conn';
+      id('connBtn').disabled    = false;
+      sysLog('— Koneksi terputus');
+    }
+  });
+}
+
+function doDisconnect() {
+  stopStream();
+  if (mqttClient) { mqttClient.end(true); mqttClient = null; }
+  connected = false;
+  setStatus('off', 'Disconnected');
+  id('connBtn').textContent = 'Connect';
+  id('connBtn').className   = 'btn btn-conn';
+  id('connBtn').disabled    = false;
+}
+
+function setStatus(state, txt) {
+  const d = id('sdot');
+  d.className = 'sdot' + (state === 'on' ? ' on' : state === 'pending' ? ' pending' : '');
+  id('stxt').textContent = txt;
+}
+
+// ── Stream ──────────────────────────────────────────────────────────────────
+function toggleStream() {
+  if (!connected) { sysLog('✗ Connect ke broker terlebih dahulu'); return; }
+  streamTimer ? stopStream() : startStream();
+}
+
+function startStream() {
+  nextIn = 0; // fire immediately
+  streamTimer = setInterval(tick, 5000);
+  cdTimer     = setInterval(countdownTick, 1000);
+  tick(); // immediate first send
+  updateStreamUI(true);
+  sysLog('▶ Stream dimulai — interval 5 detik');
+}
+
+function stopStream() {
+  clearInterval(streamTimer); streamTimer = null;
+  clearInterval(cdTimer);     cdTimer     = null;
+  updateStreamUI(false);
+  if (connected) sysLog('⏹ Stream dihentikan');
+}
+
+function countdownTick() {
+  nextIn = Math.max(0, nextIn - 1);
+  id('cntNext').textContent = nextIn + 's';
+}
+
+function tick() {
+  nextIn = 5;
+  id('cntNext').textContent = '5s';
+  if (burstRunning) return; // burst has control
+
+  if (queue.length > 0) {
+    const item = queue.shift();
+    doPublish(item.overrides, item.tag, item.level, item.note);
+    updateQueueUI();
+  } else {
+    doPublish({}, 'STREAM', 'normal', '');
+  }
+}
+
+// ── Queue / Injection ───────────────────────────────────────────────────────
+const SCENARIOS = {
+  normal:            { overrides: {},                                          tag: 'STREAM',     level: 'normal',   note: '' },
+  jailbreak:         { overrides: { p: 500.0,  wf: 1.2,  v: 220.0, i: 2.3 }, tag: 'JAILBREAK',  level: 'critical', note: 'balance=0 relay=OFF → MQTT relay OFF' },
+  mcb_trip:          { overrides: { p: 1500.0, v: 218.0, i: 6.9,   wf: 1.4 },tag: 'MCB TRIP',   level: 'critical', note: 'p>1300W → MQTT relay OFF' },
+  overvoltage:       { overrides: { v: 265.0,  i: 2.0,   p: 440.0, wf: 1.5 },tag: 'OVERVOLT',   level: 'critical', note: 'v>250V → MQTT relay OFF' },
+  undervoltage:      { overrides: { v: 175.0,  i: 2.3,   p: 390.0, wf: 1.3 },tag: 'UNDERVOLT',  level: 'critical', note: 'v<180V kritis' },
+  voltage_warn:      { overrides: { v: 193.0,  i: 2.1,   p: 415.0, wf: 1.5 },tag: 'V-WARN',     level: 'warn',     note: 'v<198V peringatan' },
+  low_pf:            { overrides: { v: 220.0,  i: 4.0,   p: 300.0, wf: 0.9 },tag: 'LOW-PF',     level: 'warn',     note: 'PF=300/(220×4)=0.34 <0.60' },
+  backflow:          { overrides: { wf: -0.8,  v: 220.5, i: 1.9,   p: 420.0},tag: 'BACKFLOW',   level: 'warn',     note: 'wf<0 aliran balik' },
+  low_balance_note:  { overrides: {},                                          tag: 'LOW-BAL',    level: 'warn',     note: 'lihat note: set balance=15000 di DB' },
+  // burst scenarios handled separately
+};
+
+function inject(scenario, count) {
+  if (!connected) { sysLog('✗ Connect ke broker terlebih dahulu'); return; }
+  const s = SCENARIOS[scenario];
+  if (!s) return;
+  for (let i = 0; i < count; i++) queue.push({ ...s });
+  const tip = streamTimer ? 'tick berikutnya' : 'nyalakan stream untuk mengirim';
+  sysLog(`✚ Antrian +${count}× [${s.tag}] — ${tip}`, 'info');
+  updateQueueUI();
+}
+
+async function burst(scenario, n) {
+  if (!connected) { sysLog('✗ Connect ke broker terlebih dahulu'); return; }
+  if (burstRunning) { sysLog('⚠ Burst lain sedang berjalan', 'warn'); return; }
+
+  const configs = {
+    water_leak: {
+      fn: (i) => ({ wf: 2.0 + (Math.random() * 0.06 - 0.03), p: 350.0, v: 220.3, i: 1.6 }),
+      tag: 'LEAK', level: 'warn', note: 'wf=2.0 konstan CoV<0.20'
+    },
+    sensor_malfunction: {
+      fn: () => ({}), // no sensor fields → all null in backend
+      tag: 'SENSOR-ERR', level: 'warn', note: 'semua field null → sensor malfunction',
+      nullMode: true,
+    },
+    zero_flow: {
+      fn: () => ({ wf: 0.0, p: 350.0, v: 220.5, i: 1.6 }),
+      tag: 'ZERO-FLOW', level: 'warn', note: 'wf=0 selama 20+ reading → zero flow detected'
+    },
+  };
+
+  const c = configs[scenario];
+  if (!c) return;
+
+  burstRunning = true;
+  sysLog(`▶ BURST [${c.tag}]: mengirim ${n} readings cepat (150ms)…`, 'info');
+
+  for (let i = 0; i < n; i++) {
+    if (!connected) break;
+    const overrides = c.nullMode ? null : c.fn(i);
+    if (overrides === null) {
+      // null mode: send only dev_id + et (no sensor fields)
+      const dev = id('deviceId').value.trim();
+      energyTotal = parseFloat((energyTotal + 0.001).toFixed(3));
+      const payload = { dev_id: dev, et: energyTotal };
+      publishRaw(payload, c.tag, c.level, `${c.note} [${i+1}/${n}]`);
+    } else {
+      doPublish(overrides, c.tag, c.level, `${c.note} [${i+1}/${n}]`);
+    }
+    await sleep(150);
+  }
+
+  burstRunning = false;
+  sysLog(`✓ Burst [${c.tag}] selesai (${n} readings) — stream dilanjutkan`, 'normal');
+}
+
+async function burstSpike() {
+  if (!connected) { sysLog('✗ Connect ke broker terlebih dahulu'); return; }
+  if (burstRunning) { sysLog('⚠ Burst lain sedang berjalan', 'warn'); return; }
+
+  burstRunning = true;
+  sysLog('▶ BURST [SPIKE]: 10 baseline p≈300W, lalu 2× spike p=1250W…', 'info');
+
+  for (let i = 0; i < 10; i++) {
+    if (!connected) break;
+    doPublish(
+      { p: 290 + Math.random() * 20, v: 220.0, i: 1.4, wf: 1.1 },
+      'BASELINE', 'normal', `baseline ${i+1}/10`
+    );
+    await sleep(150);
+  }
+  for (let i = 0; i < 2; i++) {
+    if (!connected) break;
+    doPublish(
+      { p: 1250.0, v: 217.0, i: 5.7, wf: 1.1 },
+      'SPIKE', 'critical', `1250W / ~300W = 4× avg → usage spike [${i+1}/2]`
+    );
+    await sleep(150);
+  }
+
+  burstRunning = false;
+  sysLog('✓ Burst [SPIKE] selesai — stream dilanjutkan', 'normal');
+}
+
+function clearQueue() {
+  queue = [];
+  updateQueueUI();
+  sysLog('✕ Antrian dibersihkan — stream kembali normal', 'info');
+}
+
+// ── Publish ─────────────────────────────────────────────────────────────────
+function doPublish(overrides, tag, level, note) {
+  const dev = id('deviceId').value.trim();
+
+  // Advance the random walk only on normal ticks (not when an anomaly locks values)
+  const isAnomaly = Object.keys(overrides).length > 0;
+  if (!isAnomaly) advanceNormal();
+
+  energyTotal = parseFloat((energyTotal + 0.01).toFixed(3));
+  waterTotal  = parseFloat((waterTotal  + 0.001).toFixed(4));
+
+  const payload = {
+    dev_id: dev,
+    ...normalBase(),   // drifting normal values as base
+    et: energyTotal,
+    wt: waterTotal,
+    ...overrides,      // anomaly overrides win over the normal base
+  };
+
+  publishRaw(payload, tag, level, note);
+}
+
+function publishRaw(payload, tag, level, note) {
+  if (!connected || !mqttClient) return;
+  const dev   = id('deviceId').value.trim();
+  const topic = `device/${dev}/telemetry`;
+  const json  = JSON.stringify(payload);
+
+  mqttClient.publish(topic, json, { qos: 1 });
+  sentTotal++;
+
+  id('cntSent').textContent = sentTotal;
+  id('etVal').textContent   = energyTotal.toFixed(2);
+  id('wtVal').textContent   = waterTotal.toFixed(3);
+  id('previewCode').textContent = JSON.stringify(payload, null, 2);
+
+  logPayload(payload, tag, level, note);
+}
+
+// ── Log ──────────────────────────────────────────────────────────────────────
+function logPayload(payload, tag, level, note) {
+  const v  = payload.v  != null ? `V:${(+payload.v).toFixed(1)}` : 'V:null';
+  const p  = payload.p  != null ? `P:${(+payload.p).toFixed(0)}W` : 'P:null';
+  const wf = payload.wf != null ? `WF:${(+payload.wf).toFixed(2)}` : 'WF:null';
+  const i  = payload.i  != null ? `I:${(+payload.i).toFixed(1)}A` : '';
+  const et = `ET:${(+(payload.et||0)).toFixed(2)}`;
+
+  const fields = [v, p, wf, i, et].filter(Boolean).join('  ');
+  const dataStr = fields + (note ? `  ← ${note}` : '');
+
+  addLogLine(level, tag, dataStr);
+}
+
+function sysLog(msg, level = 'system') {
+  addLogLine(level, 'SYS', msg);
+}
+
+function addLogLine(level, tag, data) {
+  const wrap = id('logWrap');
+  const t    = new Date().toLocaleTimeString('id-ID', { hour12: false });
+  const div  = document.createElement('div');
+  div.className = `log-line ${level}`;
+  div.innerHTML =
+    `<span class="log-time">${t}</span>` +
+    `<span class="log-tag">[${esc(tag.padEnd(10))}]</span>` +
+    `<span class="log-data">${esc(data)}</span>`;
+  wrap.appendChild(div);
+  wrap.scrollTop = wrap.scrollHeight;
+}
+
+function clearLog() {
+  id('logWrap').innerHTML = '';
+  sysLog('Log dibersihkan');
+}
+
+// ── UI helpers ───────────────────────────────────────────────────────────────
+function updateStreamUI(on) {
+  const dot    = id('streamDot');
+  const toggle = id('streamToggle');
+  const label  = id('streamLabel');
+  const meta   = id('streamMeta');
+  const action = id('streamAction');
+
+  if (on) {
+    dot.classList.add('on');
+    toggle.classList.add('active');
+    label.textContent  = 'Stream ON';
+    label.style.color  = 'var(--primary)';
+    meta.textContent   = 'Mengirim data setiap 5 detik';
+    action.textContent = '⏹ Hentikan';
+    id('cntNext').textContent = '5s';
+  } else {
+    dot.classList.remove('on');
+    toggle.classList.remove('active');
+    label.textContent  = 'Stream OFF';
+    label.style.color  = '';
+    meta.textContent   = 'Klik untuk mulai kirim data setiap 5 detik';
+    action.textContent = '▶ Mulai';
+    id('cntNext').textContent = '—';
+  }
+}
+
+function updateQueueUI() {
+  const n     = queue.length;
+  const badge = id('queueBadge');
+  const items = id('queueItems');
+  const cnt   = id('cntQueue');
+
+  cnt.textContent = n;
+  cnt.style.color = n > 0 ? 'var(--warn)' : 'var(--primary)';
+
+  if (n === 0) {
+    badge.style.display = 'none';
+    items.textContent   = 'Tidak ada anomali antri';
+    items.style.color   = 'var(--muted)';
+  } else {
+    badge.style.display = '';
+    const preview = queue.slice(0, 3).map(q => q.tag).join(', ');
+    items.textContent = `${n} pending: ${preview}${n > 3 ? '…' : ''}`;
+    items.style.color = 'var(--warn)';
+  }
+}
+
+// ── Utils ─────────────────────────────────────────────────────────────────────
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const id = s => document.getElementById(s);
+const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+// Init
+updateStreamUI(false);
+updateQueueUI();
+sysLog('Simulator siap. Konfigurasi MQTT lalu klik Connect.');
+</script>
+</body>
+</html>
