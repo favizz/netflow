@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { CheckCircle, Zap, Droplets, QrCode, Building2, Wallet, Copy, Check } from "lucide-react"
+import { CheckCircle, Zap, Droplets, QrCode, Building2, Copy, Check, ArrowLeft, Info, Clock } from "lucide-react"
 import { toast } from "sonner"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -35,62 +35,88 @@ const PAYMENT_OPTIONS: PaymentOption[] = [
     method: "transfer",
     icon: <Building2 size={22} />,
   },
-  {
-    id: "va-bni",
-    label: "BNI Virtual Account",
-    sublabel: "Transfer via BNI Mobile / ATM BNI",
-    method: "transfer",
-    icon: <Building2 size={22} />,
-  },
-  {
-    id: "va-bri",
-    label: "BRI Virtual Account",
-    sublabel: "Transfer via BRImo / ATM BRI",
-    method: "transfer",
-    icon: <Building2 size={22} />,
-  },
-  {
-    id: "va-mandiri",
-    label: "Mandiri Virtual Account",
-    sublabel: "Transfer via Livin' / ATM Mandiri",
-    method: "transfer",
-    icon: <Building2 size={22} />,
-  },
-  {
-    id: "gopay",
-    label: "GoPay",
-    sublabel: "Bayar langsung via aplikasi Gojek",
-    method: "ewallet",
-    icon: <Wallet size={22} />,
-  },
-  {
-    id: "ovo",
-    label: "OVO",
-    sublabel: "Bayar langsung via aplikasi OVO",
-    method: "ewallet",
-    icon: <Wallet size={22} />,
-  },
-  {
-    id: "dana",
-    label: "Dana",
-    sublabel: "Bayar langsung via aplikasi Dana",
-    method: "ewallet",
-    icon: <Wallet size={22} />,
-  },
-  {
-    id: "shopeepay",
-    label: "ShopeePay",
-    sublabel: "Bayar langsung via aplikasi Shopee",
-    method: "ewallet",
-    icon: <Wallet size={22} />,
-  },
+  // {
+  //   id: "va-bni",
+  //   label: "BNI Virtual Account",
+  //   sublabel: "Transfer via BNI Mobile / ATM BNI",
+  //   method: "transfer",
+  //   icon: <Building2 size={22} />,
+  // },
+  // {
+  //   id: "va-bri",
+  //   label: "BRI Virtual Account",
+  //   sublabel: "Transfer via BRImo / ATM BRI",
+  //   method: "transfer",
+  //   icon: <Building2 size={22} />,
+  // },
+  // {
+  //   id: "va-mandiri",
+  //   label: "Mandiri Virtual Account",
+  //   sublabel: "Transfer via Livin' / ATM Mandiri",
+  //   method: "transfer",
+  //   icon: <Building2 size={22} />,
+  // },
+  // {
+  //   id: "gopay",
+  //   label: "GoPay",
+  //   sublabel: "Bayar langsung via aplikasi Gojek",
+  //   method: "ewallet",
+  //   icon: <Wallet size={22} />,
+  // },
+  // {
+  //   id: "ovo",
+  //   label: "OVO",
+  //   sublabel: "Bayar langsung via aplikasi OVO",
+  //   method: "ewallet",
+  //   icon: <Wallet size={22} />,
+  // },
+  // {
+  //   id: "dana",
+  //   label: "Dana",
+  //   sublabel: "Bayar langsung via aplikasi Dana",
+  //   method: "ewallet",
+  //   icon: <Wallet size={22} />,
+  // },
+  // {
+  //   id: "shopeepay",
+  //   label: "ShopeePay",
+  //   sublabel: "Bayar langsung via aplikasi Shopee",
+  //   method: "ewallet",
+  //   icon: <Wallet size={22} />,
+  // },
 ]
 
-const VA_STEPS: Record<string, string[]> = {
-  "va-bca":     ["Buka aplikasi m-BCA atau m-Banking BCA", "Pilih Transfer → BCA Virtual Account", "Masukkan nomor Virtual Account di bawah", "Masukkan nominal yang tertera, lalu konfirmasi"],
-  "va-bni":     ["Buka aplikasi BNI Mobile Banking", "Pilih Transfer → Virtual Account Billing", "Masukkan nomor Virtual Account di bawah", "Konfirmasi pembayaran sesuai nominal"],
-  "va-bri":     ["Buka aplikasi BRImo", "Pilih BRIVA", "Masukkan nomor Virtual Account di bawah", "Cek nominal lalu konfirmasi"],
-  "va-mandiri": ["Buka Livin' by Mandiri", "Pilih Bayar → Multi Payment", "Masukkan kode perusahaan dan nomor VA", "Konfirmasi sesuai nominal yang tertera"],
+const BCA_STEPS = {
+  mbca: {
+    label: "m-BCA (BCA Mobile)",
+    steps: [
+      "Lakukan log in pada aplikasi BCA Mobile",
+      "Pilih menu m-BCA, masukkan kode akses m-BCA",
+      "Pilih m-Transfer → BCA Virtual Account",
+      "Masukkan nomor Virtual Account di atas",
+      "Masukkan pin m-BCA dan konfirmasi",
+      "Pembayaran selesai — simpan notifikasi sebagai bukti",
+    ],
+  },
+  internet: {
+    label: "Internet Banking BCA",
+    steps: [
+      "Login di klikbca.com",
+      "Pilih menu Pembayaran Tagihan → BCA Virtual Account",
+      "Masukkan nomor Virtual Account di atas",
+      "Pastikan detail pembayaran sesuai, lalu konfirmasi",
+      "Masukkan password dan mToken",
+    ],
+  },
+  atm: {
+    label: "ATM BCA",
+    steps: [
+      "Masukkan kartu ATM dan PIN BCA",
+      "Pilih Transaksi Lainnya → Transfer → ke Rek BCA Virtual Account",
+      "Masukkan nomor Virtual Account di atas",
+      "Periksa nominal lalu tekan Benar",
+    ],
+  },
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -114,6 +140,17 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
   const [initResult, setInitResult] = useState<{ transactionId: string; gatewayReference: string } | null>(null)
   const [transactionId, setTransactionId] = useState("")
   const [copied, setCopied] = useState(false)
+  const [timeLeft, setTimeLeft] = useState(0)
+  const [bcaExpandedSection, setBcaExpandedSection] = useState<string | null>("mbca")
+
+  // Countdown timer when instruction screen is shown
+  useEffect(() => {
+    if (step !== "instruction") return
+    const limit = selectedOption?.method === "qris" ? 15 * 60 : 24 * 60 * 60
+    setTimeLeft(limit)
+    const id = setInterval(() => setTimeLeft((t) => Math.max(0, t - 1)), 1000)
+    return () => clearInterval(id)
+  }, [step, selectedOption?.method])
 
   useEffect(() => {
     let active = true
@@ -190,6 +227,13 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
     setTransactionId("")
   }
 
+  const formatCountdown = (s: number) => {
+    const h   = Math.floor(s / 3600)
+    const m   = Math.floor((s % 3600) / 60)
+    const sec = s % 60
+    return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${sec.toString().padStart(2, "0")}`
+  }
+
   // ── Virtual Account number derived from reference ─────────────────────────
   const vaNumber = initResult ? `8808 ${initResult.gatewayReference.slice(0, 4)} ${initResult.gatewayReference.slice(4, 8) || "0000"} ${initResult.gatewayReference.slice(8, 12) || "0000"}` : ""
 
@@ -197,23 +241,26 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
   if (step === "success") return <SuccessScreen transactionId={transactionId} amount={selectedAmount} method={selectedOption} onBuyAgain={restart} onBack={onBack} />
 
   return (
-    <div className="min-h-full bg-background pb-36">
+    <div className="bg-background pb-36">
       {/* Header */}
-      <div className="flex items-center px-5 py-3 sticky top-0 bg-background/95 backdrop-blur-sm z-10 border-b border-border">
+      <div className="flex items-center gap-2 px-3 py-3 sticky top-0 bg-background/95 backdrop-blur-sm z-10 border-b border-border">
+        {step !== "amount" ? (
+          <button
+            onClick={() => setStep(step === "method" ? "amount" : "method")}
+            className="p-2 rounded-xl hover:bg-muted active:bg-muted/70 transition-colors flex-shrink-0"
+            aria-label="Kembali"
+          >
+            <ArrowLeft size={20} className="text-foreground" />
+          </button>
+        ) : (
+          <div className="w-10" />
+        )}
         <div>
-          <h1 className="text-lg font-bold text-foreground leading-tight">
+          <h1 className="text-base font-bold text-foreground leading-tight">
             {step === "amount" ? "Beli Token" : step === "method" ? "Pilih Metode Pembayaran" : "Instruksi Pembayaran"}
           </h1>
           <StepIndicator current={step} />
         </div>
-        {step !== "amount" && (
-          <button
-            onClick={() => setStep(step === "method" ? "amount" : "method")}
-            className="ml-auto text-xs text-primary font-semibold py-1 px-2 rounded-lg hover:bg-primary/5 active:bg-primary/10 transition-colors"
-          >
-            ← Kembali
-          </button>
-        )}
       </div>
 
       <div className="px-5 pt-4 space-y-6">
@@ -307,18 +354,10 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
               ))}
             </div>
 
-            {/* Virtual Account */}
+            {/* BCA Virtual Account */}
             <div className="space-y-2">
-              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Transfer Virtual Account</p>
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Transfer Bank</p>
               {PAYMENT_OPTIONS.filter((o) => o.method === "transfer").map((opt) => (
-                <MethodRow key={opt.id} option={opt} selected={selectedOption?.id === opt.id} onSelect={setSelectedOption} />
-              ))}
-            </div>
-
-            {/* E-Wallet */}
-            <div className="space-y-2">
-              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Dompet Digital</p>
-              {PAYMENT_OPTIONS.filter((o) => o.method === "ewallet").map((opt) => (
                 <MethodRow key={opt.id} option={opt} selected={selectedOption?.id === opt.id} onSelect={setSelectedOption} />
               ))}
             </div>
@@ -351,43 +390,89 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
               </Card>
             )}
 
-            {/* Virtual Account instruction */}
+            {/* BCA Virtual Account instruction */}
             {selectedOption.method === "transfer" && (
-              <Card className="p-5 space-y-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2.5 bg-primary/10 rounded-xl">
-                    <Building2 size={20} className="text-primary" />
+              <Card className="overflow-hidden">
+                {/* Bank header + countdown */}
+                <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-blue-50 dark:bg-blue-950/60 rounded-xl">
+                      <Building2 size={18} className="text-blue-600 dark:text-blue-400" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-sm text-foreground">BCA Virtual Account</p>
+                      <p className="text-xs text-muted-foreground">Berlaku 24 jam</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="font-semibold text-foreground">{selectedOption.label}</p>
-                    <p className="text-xs text-muted-foreground">Berlaku 24 jam</p>
-                  </div>
-                </div>
-
-                <div className="bg-muted/40 rounded-xl p-4 space-y-1">
-                  <p className="text-xs text-muted-foreground">Nomor Virtual Account</p>
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-xl font-mono font-bold text-foreground tracking-widest">{vaNumber}</p>
-                    <button
-                      onClick={() => copyVA(vaNumber)}
-                      className={`flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg transition-all ${
-                        copied ? "bg-status-good/10 text-status-good" : "bg-primary/10 text-primary hover:bg-primary/20"
-                      }`}
-                    >
-                      {copied ? <Check size={14} /> : <Copy size={14} />}
-                      {copied ? "Tersalin" : "Salin"}
-                    </button>
+                  <div className="flex items-center gap-1.5 bg-muted/60 rounded-xl px-3 py-1.5">
+                    <Clock size={12} className={timeLeft < 3600 ? "text-status-critical" : "text-muted-foreground"} />
+                    <span className={`font-mono text-sm font-bold tabular-nums ${timeLeft < 3600 ? "text-status-critical" : "text-foreground"}`}>
+                      {formatCountdown(timeLeft)}
+                    </span>
                   </div>
                 </div>
 
-                <ol className="space-y-2">
-                  {(VA_STEPS[selectedOption.id] ?? VA_STEPS["va-bca"]).map((step, i) => (
-                    <li key={i} className="flex items-start gap-3 text-sm text-muted-foreground">
-                      <span className="flex-shrink-0 w-5 h-5 rounded-full bg-primary/10 text-primary text-xs font-bold flex items-center justify-center mt-0.5">{i + 1}</span>
-                      {step}
-                    </li>
+                <div className="p-5 space-y-4">
+                  {/* VA Number */}
+                  <div className="bg-muted/40 rounded-xl p-4">
+                    <p className="text-xs text-muted-foreground mb-2">Nomor Virtual Account</p>
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-lg font-mono font-bold text-foreground tracking-widest leading-none">{vaNumber}</p>
+                      <button
+                        onClick={() => copyVA(vaNumber)}
+                        className={`p-2 rounded-lg transition-all flex-shrink-0 ${
+                          copied ? "bg-green-500/10 text-green-600" : "bg-primary/10 text-primary hover:bg-primary/20 active:scale-95"
+                        }`}
+                        aria-label={copied ? "Tersalin" : "Salin nomor VA"}
+                      >
+                        {copied ? <Check size={16} /> : <Copy size={16} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Total */}
+                  <div className="flex items-center justify-between px-1">
+                    <div>
+                      <p className="text-xs text-muted-foreground">Total Pembayaran</p>
+                      <p className="text-xl font-bold text-foreground">Rp {selectedAmount.toLocaleString("id-ID")}</p>
+                    </div>
+                    <p className="text-xs text-muted-foreground">Ref: {initResult.transactionId.slice(-8)}</p>
+                  </div>
+
+                  {/* Important info box */}
+                  <div className="flex gap-2.5 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 rounded-xl p-3">
+                    <Info size={14} className="text-blue-500 flex-shrink-0 mt-0.5" />
+                    <p className="text-xs text-blue-700 dark:text-blue-300 leading-relaxed">
+                      Transfer Virtual Account hanya bisa dilakukan dari{" "}
+                      <span className="font-semibold">rekening BCA</span>. Transfer dari bank lain akan gagal diproses.
+                    </p>
+                  </div>
+
+                  {/* Accordion-style step sections */}
+                  {Object.entries(BCA_STEPS).map(([key, section]) => (
+                    <div key={key} className="border border-border rounded-xl overflow-hidden">
+                      <button
+                        onClick={() => setBcaExpandedSection(bcaExpandedSection === key ? null : key)}
+                        className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-muted/40 transition-colors"
+                      >
+                        <span className="text-sm font-semibold text-foreground">{section.label}</span>
+                        <span className="text-muted-foreground text-xs">{bcaExpandedSection === key ? "▲" : "▼"}</span>
+                      </button>
+                      {bcaExpandedSection === key && (
+                        <ol className="px-4 pb-4 space-y-2 border-t border-border pt-3">
+                          {section.steps.map((s, i) => (
+                            <li key={i} className="flex items-start gap-3 text-sm text-muted-foreground">
+                              <span className="flex-shrink-0 w-5 h-5 rounded-full bg-primary/10 text-primary text-xs font-bold flex items-center justify-center mt-0.5">
+                                {i + 1}
+                              </span>
+                              {s}
+                            </li>
+                          ))}
+                        </ol>
+                      )}
+                    </div>
                   ))}
-                </ol>
+                </div>
               </Card>
             )}
 
@@ -510,7 +595,7 @@ function SuccessScreen({ transactionId, amount, method, onBuyAgain, onBack }: {
   onBack?: () => void
 }) {
   return (
-    <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 space-y-6">
+    <div className="min-h-full bg-background flex flex-col items-center justify-center px-5 py-10 space-y-6">
       <div className="bg-status-good/10 p-6 rounded-full">
         <CheckCircle size={64} className="text-status-good" />
       </div>
@@ -520,7 +605,7 @@ function SuccessScreen({ transactionId, amount, method, onBuyAgain, onBack }: {
         <p className="text-muted-foreground text-sm mt-1">Token telah dikreditkan ke unit Anda</p>
       </div>
 
-      <Card className="w-full max-w-sm bg-muted/30 p-5 space-y-3">
+      <Card className="w-full bg-muted/30 p-5 space-y-3">
         <div className="flex justify-between items-center pb-3 border-b border-border">
           <span className="text-muted-foreground text-sm">ID Transaksi</span>
           <span className="font-mono text-xs font-medium text-foreground">{transactionId.slice(-12)}</span>
@@ -535,7 +620,7 @@ function SuccessScreen({ transactionId, amount, method, onBuyAgain, onBack }: {
         </div>
       </Card>
 
-      <div className="w-full max-w-sm space-y-3 pt-4">
+      <div className="w-full space-y-3 pt-4">
         <Button className={cta.primary} onClick={onBuyAgain}>Beli Lagi</Button>
         <Button variant="outline" className={`${cta.secondary} border-primary text-primary`} onClick={onBack}>
           Kembali ke Beranda

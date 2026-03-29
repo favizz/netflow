@@ -332,21 +332,24 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
 
         {/* Live current metrics */}
         {isLive && (
-          <div className="grid grid-cols-2 gap-2">
-            <div className="bg-muted/40 rounded-xl p-3">
-              <p className="text-xs text-muted-foreground mb-0.5">Daya Saat Ini</p>
-              <p className="text-xl font-bold text-foreground leading-none">
-                {currentWatts.toFixed(0)}
-                <span className="text-xs font-normal text-muted-foreground ml-1">W</span>
-              </p>
-            </div>
-            <div className="bg-muted/40 rounded-xl p-3">
-              <p className="text-xs text-muted-foreground mb-0.5">Debit Air</p>
-              <p className="text-xl font-bold text-foreground leading-none">
-                {currentFlow.toFixed(1)}
-                <span className="text-xs font-normal text-muted-foreground ml-1">L/min</span>
-              </p>
-            </div>
+          <div className="bg-muted/40 rounded-xl p-3">
+            {chartUtility === "electricity" ? (
+              <>
+                <p className="text-xs text-muted-foreground mb-0.5">Daya Saat Ini</p>
+                <p className="text-xl font-bold text-foreground leading-none">
+                  {currentWatts.toFixed(0)}
+                  <span className="text-xs font-normal text-muted-foreground ml-1">W</span>
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-xs text-muted-foreground mb-0.5">Debit Air</p>
+                <p className="text-xl font-bold text-foreground leading-none">
+                  {currentFlow.toFixed(1)}
+                  <span className="text-xs font-normal text-muted-foreground ml-1">L/min</span>
+                </p>
+              </>
+            )}
           </div>
         )}
 
