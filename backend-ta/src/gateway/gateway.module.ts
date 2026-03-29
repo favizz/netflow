@@ -4,6 +4,7 @@ import { ClientsModule, Transport } from '@nestjs/microservices';
 import { PaymentsModule } from '../payments/payments.module';
 import { ReportingModule } from '../reporting/reporting.module';
 import { UnitModule } from '../unit/unit.module';
+import { AnomalyModule } from '../anomaly/anomaly.module';
 import { GatewayController } from './gateway.controller';
 import { GatewayService } from './gateway.service';
 
@@ -12,6 +13,7 @@ import { GatewayService } from './gateway.service';
     UnitModule,
     ReportingModule,
     PaymentsModule,
+    AnomalyModule,
     ClientsModule.registerAsync([
       {
         name: 'MQTT_CLIENT',

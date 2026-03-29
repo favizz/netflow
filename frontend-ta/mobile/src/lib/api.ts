@@ -147,6 +147,24 @@ export type NotificationItem = {
   timestamp: string;
 };
 
+export type AnomalyType =
+  | 'jailbreak'
+  | 'water_leak'
+  | 'device_offline'
+  | 'mcb_trip'
+  | 'low_balance'
+  | 'voltage_anomaly';
+
+export type AnomalySeverity = 'critical' | 'warning';
+
+export type AnomalyItem = {
+  anomalyType: AnomalyType;
+  severity: AnomalySeverity;
+  message: string;
+  metadata: Record<string, unknown>;
+  detectedAt: string;
+};
+
 export type PaymentTransaction = {
   id: string;
   unitNo: string;
@@ -265,6 +283,10 @@ export const api = {
 
   getNotifications(unitNo: string) {
     return request<NotificationItem[]>(`/gateway/mobile/${encodeURIComponent(unitNo)}/notifications`);
+  },
+
+  getAnomalies(unitNo: string) {
+    return request<AnomalyItem[]>(`/gateway/mobile/${encodeURIComponent(unitNo)}/anomalies`);
   },
 
   getTowerConnectivity(tower?: string) {

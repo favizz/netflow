@@ -55,7 +55,13 @@ export class GatewayController {
   @Get('mobile/:unitNo/notifications')
   notifications(@Param('unitNo') unitNo: string, @CurrentUser() user: JwtPayload) {
     assertUnitAccess(user, unitNo);
-    return this.gatewayService.getMobileDashboard(unitNo).then((r) => r.notifications);
+    return this.gatewayService.getMobileAnomalies(unitNo);
+  }
+
+  @Get('mobile/:unitNo/anomalies')
+  anomalies(@Param('unitNo') unitNo: string, @CurrentUser() user: JwtPayload) {
+    assertUnitAccess(user, unitNo);
+    return this.gatewayService.getMobileAnomalies(unitNo);
   }
 
   @Get('mobile/:unitNo/invoice/:transactionId')

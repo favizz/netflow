@@ -4,6 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { Unit } from '../unit/entities/unit.entity';
 import { MeterReading } from './entities/device.entity';
+import { AnomalyService } from '../anomaly/anomaly.service';
 
 @Injectable()
 export class DeviceService {
@@ -12,6 +13,7 @@ export class DeviceService {
     private readonly meterRepo: Repository<MeterReading>,
     private readonly dataSource: DataSource,
     @Inject('MQTT_CLIENT') private readonly mqttClient: ClientProxy,
+    private readonly anomalyService: AnomalyService,
   ) {}
 
   async saveSensorData(payload: any) {
@@ -29,6 +31,8 @@ export class DeviceService {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
+
+    let savedUnit: Unit | null = null;
 
     try {
       const unit = await queryRunner.manager.findOne(Unit, {
@@ -56,6 +60,8 @@ export class DeviceService {
 
           await queryRunner.manager.save(unit);
         }
+
+        savedUnit = unit;
       }
 
       const row = queryRunner.manager.create(MeterReading, {
@@ -75,6 +81,21 @@ export class DeviceService {
       throw error;
     } finally {
       await queryRunner.release();
+    }
+
+    // Run anomaly checks after transaction commits — non-blocking
+    if (savedUnit) {
+      void this.anomalyService
+        .checkOnTelemetry(
+          deviceId,
+          power,
+          waterFlow,
+          Number(savedUnit.balance),
+          savedUnit.relay_status,
+        )
+        .catch(() => {
+          // Anomaly check failures must not affect telemetry ingestion
+        });
     }
   }
 

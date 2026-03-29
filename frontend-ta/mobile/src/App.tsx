@@ -4,21 +4,35 @@ import { useEffect, useState } from "react"
 import { useTheme } from "next-themes"
 import {
   Home, ShoppingCart, LogOut, Zap, Sun, Moon,
-  Bell, AlertTriangle, AlertCircle, Info,
+  Bell, ShieldAlert, Droplets, WifiOff, BatteryWarning, AlertTriangle, CheckCircle,
 } from "lucide-react"
 import Dashboard from "@/components/dashboard"
 import TokenPurchase from "@/components/token-purchase"
 import LoginForm from "@/components/login-form"
-import { api, authStore, type NotificationItem, type UnitSummary } from "@/lib/api"
+import { api, authStore, type AnomalyItem, type AnomalyType, type UnitSummary } from "@/lib/api"
 import { interactive, type Page } from "@/lib/styles"
 
+// ── Anomaly metadata ──────────────────────────────────────────────────────────
+const ANOMALY_META: Record<
+  AnomalyType,
+  { label: string; Icon: React.ElementType; action: string }
+> = {
+  low_balance:     { label: "Saldo Hampir Habis",   Icon: BatteryWarning,  action: "Segera beli token di menu Beli Token." },
+  mcb_trip:        { label: "MCB Trip",              Icon: Zap,             action: "Kurangi beban listrik, lalu nyalakan ulang relay dari Beranda." },
+  water_leak:      { label: "Kebocoran Air",         Icon: Droplets,        action: "Periksa seluruh kran dan pipa. Hubungi teknisi jika tidak ditemukan." },
+  voltage_anomaly: { label: "Tegangan Tidak Normal", Icon: AlertTriangle,   action: "Hentikan pemakaian perangkat sensitif dan laporkan ke pengelola." },
+  jailbreak:       { label: "Bypass Sistem",         Icon: ShieldAlert,     action: "Hubungi pengelola gedung segera." },
+  device_offline:  { label: "Perangkat Offline",     Icon: WifiOff,         action: "Hubungi pengelola untuk pemeriksaan perangkat." },
+}
+
+// ── App ───────────────────────────────────────────────────────────────────────
 export default function App() {
   const { theme, setTheme } = useTheme()
-  const [currentPage, setCurrentPage] = useState<Page>("home")
-  const [isLoggedIn, setIsLoggedIn]   = useState(false)
-  const [userUnit, setUserUnit]       = useState("")
+  const [currentPage, setCurrentPage]         = useState<Page>("home")
+  const [isLoggedIn, setIsLoggedIn]           = useState(false)
+  const [userUnit, setUserUnit]               = useState("")
   const [availableUnits, setAvailableUnits]   = useState<UnitSummary[]>([])
-  const [notifications, setNotifications]     = useState<NotificationItem[]>([])
+  const [anomalies, setAnomalies]             = useState<AnomalyItem[]>([])
 
   // ── Bootstrap ─────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -44,20 +58,21 @@ export default function App() {
     return () => { active = false }
   }, [])
 
-  // ── Poll notifications every 30 s ─────────────────────────────────────────
+  // ── Poll anomalies every 30 s ──────────────────────────────────────────────
   useEffect(() => {
     if (!isLoggedIn || !userUnit) return
     let active = true
     const load = async () => {
-      try { const n = await api.getNotifications(userUnit); if (active) setNotifications(n) }
-      catch { if (active) setNotifications([]) }
+      try { const a = await api.getAnomalies(userUnit); if (active) setAnomalies(a) }
+      catch { if (active) setAnomalies([]) }
     }
     void load()
     const id = setInterval(() => void load(), 30_000)
     return () => { active = false; clearInterval(id) }
   }, [isLoggedIn, userUnit])
 
-  const alertCount = notifications.filter((n) => n.type !== "info").length
+  const criticalCount = anomalies.filter((a) => a.severity === "critical").length
+  const alertCount    = anomalies.length
 
   // ── Auth helpers ──────────────────────────────────────────────────────────
   const applyLoginResult = async (result: { unitNo: string | null; units: UnitSummary[] }) => {
@@ -70,9 +85,9 @@ export default function App() {
     }
   }
 
-  const handleGoogleLogin  = async (c: string) => { await applyLoginResult(await api.googleLogin(c)) }
-  const handleDevLogin     = async (e: string) => { await applyLoginResult(await api.devLogin(e)) }
-  const handleSelectUnit   = async (unitId: number) => {
+  const handleGoogleLogin = async (c: string) => { await applyLoginResult(await api.googleLogin(c)) }
+  const handleDevLogin    = async (e: string) => { await applyLoginResult(await api.devLogin(e)) }
+  const handleSelectUnit  = async (unitId: number) => {
     const r = await api.selectUnit(unitId)
     if (!r.unitNo) throw new Error("Unit selection failed")
     setUserUnit(r.unitNo); setAvailableUnits(r.units); setCurrentPage("home")
@@ -80,7 +95,7 @@ export default function App() {
   const handleLogout = async () => {
     await api.logout()
     setIsLoggedIn(false); setCurrentPage("home")
-    setUserUnit(""); setAvailableUnits([]); setNotifications([])
+    setUserUnit(""); setAvailableUnits([]); setAnomalies([])
   }
 
   if (!isLoggedIn) {
@@ -126,7 +141,7 @@ export default function App() {
           <TokenPurchase unitId={userUnit} onBack={() => setCurrentPage("home")} />
         )}
         {currentPage === "notifications" && (
-          <NotificationsPage notifications={notifications} />
+          <NotificationsPage anomalies={anomalies} />
         )}
       </main>
 
@@ -157,7 +172,11 @@ export default function App() {
             <div className="relative">
               <Bell size={22} />
               {alertCount > 0 && (
-                <span className="absolute -top-1 -right-1 w-4 h-4 bg-status-critical text-white text-[9px] font-bold rounded-full flex items-center justify-center leading-none">
+                <span
+                  className={`absolute -top-1 -right-1 w-4 h-4 text-white text-[9px] font-bold rounded-full flex items-center justify-center leading-none ${
+                    criticalCount > 0 ? "bg-status-critical" : "bg-status-warn"
+                  }`}
+                >
                   {Math.min(alertCount, 9)}
                 </span>
               )}
@@ -190,49 +209,94 @@ export default function App() {
 }
 
 // ── Full-screen notifications page ────────────────────────────────────────────
-function NotificationsPage({ notifications }: { notifications: NotificationItem[] }) {
-  const alertCount = notifications.filter((n) => n.type !== "info").length
+function NotificationsPage({ anomalies }: { anomalies: AnomalyItem[] }) {
+  const criticalCount = anomalies.filter((a) => a.severity === "critical").length
+  const warningCount  = anomalies.filter((a) => a.severity === "warning").length
 
   return (
     <div className="p-5 space-y-4">
+
       {/* Heading */}
       <div className="flex items-center gap-2 pt-1">
         <Bell size={20} className="text-primary" />
         <h1 className="text-xl font-bold text-foreground">Notifikasi</h1>
-        {alertCount > 0 && (
+        {criticalCount > 0 && (
           <span className="text-xs font-bold bg-status-critical/10 text-status-critical px-2 py-0.5 rounded-full">
-            {alertCount} peringatan
+            {criticalCount} kritis
+          </span>
+        )}
+        {warningCount > 0 && (
+          <span className="text-xs font-bold bg-status-warn/10 text-status-warn px-2 py-0.5 rounded-full">
+            {warningCount} peringatan
           </span>
         )}
       </div>
 
-      {/* List */}
-      {notifications.length === 0 ? (
+      {/* Empty state */}
+      {anomalies.length === 0 && (
         <div className="flex flex-col items-center justify-center py-20 gap-3 text-muted-foreground">
-          <Bell size={40} className="opacity-20" />
-          <p className="text-sm">Tidak ada notifikasi</p>
+          <CheckCircle size={40} className="text-primary opacity-40" />
+          <p className="text-sm font-medium">Semua normal</p>
+          <p className="text-xs text-center max-w-xs">
+            Tidak ada anomali terdeteksi. Sistem berjalan normal.
+          </p>
         </div>
-      ) : (
+      )}
+
+      {/* Anomaly cards */}
+      {anomalies.length > 0 && (
         <div className="space-y-3">
-          {notifications.map((n, idx) => {
-            const Icon = n.type === "warning" ? AlertTriangle : n.type === "error" ? AlertCircle : Info
-            const s = {
-              warning: { wrap: "bg-status-warn/10 border-status-warn/20",         icon: "text-status-warn",     text: "text-status-warn"     },
-              error:   { wrap: "bg-status-critical/10 border-status-critical/20", icon: "text-status-critical", text: "text-status-critical" },
-              info:    { wrap: "bg-primary/5 border-primary/10",                  icon: "text-primary",         text: "text-foreground"       },
-            }[n.type]
+          {anomalies.map((a, idx) => {
+            const meta = ANOMALY_META[a.anomalyType] ?? {
+              label: a.anomalyType,
+              Icon: AlertTriangle,
+              action: "",
+            }
+            const isCritical = a.severity === "critical"
+            const colorWrap  = isCritical
+              ? "bg-status-critical/8 border-status-critical/25"
+              : "bg-status-warn/8 border-status-warn/25"
+            const colorIcon  = isCritical ? "text-status-critical" : "text-status-warn"
+            const colorBadge = isCritical
+              ? "bg-status-critical text-white"
+              : "bg-status-warn/15 text-status-warn"
+
             return (
-              <div key={idx} className={`flex gap-3 p-4 rounded-2xl border ${s.wrap}`}>
-                <Icon size={18} className={`flex-shrink-0 mt-0.5 ${s.icon}`} />
-                <div className="flex-1 min-w-0">
-                  <p className={`text-sm leading-snug ${s.text}`}>{n.message}</p>
-                  <p className="text-xs text-muted-foreground mt-1">{formatTimeAgo(n.timestamp)}</p>
+              <div key={idx} className={`rounded-2xl border p-4 space-y-2 ${colorWrap}`}>
+                {/* Top row: icon + label + badge */}
+                <div className="flex items-center gap-2">
+                  <meta.Icon size={18} className={`flex-shrink-0 ${colorIcon}`} />
+                  <span className={`text-sm font-semibold ${colorIcon}`}>{meta.label}</span>
+                  <span className={`ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${colorBadge}`}>
+                    {isCritical ? "Kritis" : "Peringatan"}
+                  </span>
                 </div>
+
+                {/* Message */}
+                <p className="text-sm text-foreground leading-snug">{a.message}</p>
+
+                {/* Action hint */}
+                {meta.action && (
+                  <div className="flex gap-1.5 items-start pt-0.5">
+                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide shrink-0 mt-0.5">
+                      Tindakan:
+                    </span>
+                    <p className="text-xs text-muted-foreground leading-snug">{meta.action}</p>
+                  </div>
+                )}
+
+                {/* Timestamp */}
+                <p className="text-[11px] text-muted-foreground/60">{formatTimeAgo(a.detectedAt)}</p>
               </div>
             )
           })}
         </div>
       )}
+
+      {/* Footer note */}
+      <p className="text-xs text-muted-foreground/50 text-center pb-4">
+        Data diperbarui setiap 30 detik
+      </p>
     </div>
   )
 }

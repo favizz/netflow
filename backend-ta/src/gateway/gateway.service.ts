@@ -3,6 +3,7 @@ import { ClientProxy } from '@nestjs/microservices';
 import { PaymentsService } from '../payments/payments.service';
 import { ReportingService } from '../reporting/reporting.service';
 import { UnitService } from '../unit/unit.service';
+import { AnomalyService } from '../anomaly/anomaly.service';
 
 @Injectable()
 export class GatewayService {
@@ -10,18 +11,21 @@ export class GatewayService {
     private readonly unitService: UnitService,
     private readonly reportingService: ReportingService,
     private readonly paymentsService: PaymentsService,
+    private readonly anomalyService: AnomalyService,
     @Inject('MQTT_CLIENT') private readonly mqttClient: ClientProxy,
   ) {}
 
   async getMobileDashboard(unitNo: string) {
     const summary = await this.unitService.getOwnerDashboard(unitNo);
-    const notifications = await this.unitService.getUnitNotifications(unitNo);
 
     return {
       unitNo,
       summary,
-      notifications,
     };
+  }
+
+  getMobileAnomalies(unitNo: string) {
+    return this.anomalyService.getAnomaliesForUnit(unitNo);
   }
 
   getMobileTrends(unitNo: string, period: 'daily' | 'monthly') {

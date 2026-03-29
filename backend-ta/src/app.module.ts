@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AdminModule } from './admin/admin.module';
+import { AnomalyModule } from './anomaly/anomaly.module';
 import { DeviceModule } from './device/device.module';
 import { GatewayModule } from './gateway/gateway.module';
 import { PaymentsModule } from './payments/payments.module';
@@ -27,6 +28,7 @@ import { AuthModule } from './auth/auth.module';
     ReportingModule,
     PaymentsModule,
     GatewayModule,
+    AnomalyModule,
     AdminModule,
     AuthModule,
   ],
