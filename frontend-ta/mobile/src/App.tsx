@@ -300,9 +300,9 @@ function NotificationsPage({ anomalies }: { anomalies: AnomalyItem[] }) {
       )}
 
       {/* Footer note */}
-      <p className="text-xs text-muted-foreground/50 text-center pb-4">
+      {/* <p className="text-xs text-muted-foreground/50 text-center pb-4">
         Data diperbarui setiap 30 detik
-      </p>
+      </p> */}
     </div>
   )
 }
