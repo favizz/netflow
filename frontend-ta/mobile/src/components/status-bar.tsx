@@ -8,6 +8,8 @@ interface StatusBarProps {
 export default function StatusBar({ percentage, status }: StatusBarProps) {
   const { barColor } = STATUS_MAP[status]
 
+  // The progress bar and percentage are commented out as the textual status pill is sufficient
+  /*
   return (
     <div className="space-y-2">
       <div className="w-full h-3 bg-muted rounded-full overflow-hidden">
@@ -19,4 +21,6 @@ export default function StatusBar({ percentage, status }: StatusBarProps) {
       <p className="text-xs text-muted-foreground text-right">{Math.min(100, Math.max(0, percentage)).toFixed(0)}%</p>
     </div>
   )
+  */
+  return null
 }

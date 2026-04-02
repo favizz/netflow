@@ -13,7 +13,7 @@ createRoot(document.getElementById('root')!).render(
     <GoogleOAuthProvider clientId={googleClientId}>
       <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
         <App />
-        <Toaster richColors closeButton position="top-center" />
+        <Toaster richColors closeButton position="top-right" offset={72} />
       </ThemeProvider>
     </GoogleOAuthProvider>
   </StrictMode>,

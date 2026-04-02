@@ -11,8 +11,8 @@ export type PaymentMethod = "qris" | "transfer" | "ewallet"
 // ── App constants ─────────────────────────────────────────────────────────────
 export const DEFAULT_TARIFF = { kwh: 1444.70, water: 5000.00 } as const
 
-export const TOKEN_AMOUNTS: readonly number[] = [50_000, 100_000, 200_000, 500_000]
-export const POPULAR_IDX = 1 // 0-indexed → 100k package
+export const TOKEN_AMOUNTS: readonly number[] = [20_000, 50_000, 100_000, 250_000, 500_000, 1_000_000]
+export const POPULAR_IDX = 2 // 0-indexed → 100k package
 
 export const PAYMENT_METHODS = [
   { id: "qris"     as PaymentMethod, label: "QRIS" },
