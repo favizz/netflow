@@ -25,13 +25,13 @@ VALUES ('18222070@std.stei.itb.ac.id', 'Demo Penghuni');
 -- -----------------------------------------
 
 INSERT IGNORE INTO units
-  (unit_no, device_id, resident_email, balance, relay_status,
+  (unit_no, device_id, resident_email, balance, relay_status, valve_status,
    last_energy_reading, last_water_reading, energy_tariff, water_tariff)
 VALUES
-  ('A-101', 'DEV-A-101', '18222070@std.stei.itb.ac.id', 150000.00, 1, 0, 0, 1444.70, 5000.00),
-  ('A-102', 'DEV-A-102', '18222070@std.stei.itb.ac.id',  12000.00, 1, 0, 0, 1444.70, 5000.00),
-  ('A-103', 'DEV-A-103', NULL,                            75000.00, 1, 0, 0, 1444.70, 5000.00),
-  ('A-201', 'DEV-A-201', NULL,                           200000.00, 1, 0, 0, 1444.70, 5000.00);
+  ('A-101', 'DEV-A-101', '18222070@std.stei.itb.ac.id', 150000.00, 1, 1, 0, 0, 1444.70, 5000.00),
+  ('A-102', 'DEV-A-102', '18222070@std.stei.itb.ac.id',  12000.00, 1, 1, 0, 0, 1444.70, 5000.00),
+  ('A-103', 'DEV-A-103', NULL,                            75000.00, 1, 1, 0, 0, 1444.70, 5000.00),
+  ('A-201', 'DEV-A-201', NULL,                           200000.00, 1, 1, 0, 0, 1444.70, 5000.00);
 
 -- -----------------------------------------
 -- 3. METER READINGS

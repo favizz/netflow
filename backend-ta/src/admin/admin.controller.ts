@@ -35,6 +35,13 @@ export class AdminController {
     return this.adminService.updateAccount(email, payload);
   }
 
+  // --- Transactions ---
+
+  @Get('transactions')
+  getTransactions() {
+    return this.adminService.getTransactions();
+  }
+
   // --- Resident management (registered Google accounts) ---
 
   @Get('residents')

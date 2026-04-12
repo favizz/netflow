@@ -1,4 +1,6 @@
+import { useState, useEffect } from "react";
 import { Activity, Droplets, Zap, AlertTriangle } from "lucide-react";
+import { fetchApi } from "@/lib/api";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { TrendChart } from "@/components/dashboard/TrendChart";
 import { RecentAlerts } from "@/components/dashboard/RecentAlerts";
@@ -7,6 +9,39 @@ import { TowerComparisonChart } from "@/components/dashboard/TowerComparisonChar
 import { TowerOccupancyChart } from "@/components/dashboard/TowerOccupancyChart";
 
 export default function DashboardPage() {
+    const [stats, setStats] = useState({
+        totalPower: 0,
+        totalWater: 0,
+        onlineDevices: 0,
+        alerts: 0,
+        loaded: false
+    });
+
+    useEffect(() => {
+        Promise.all([
+            fetchApi('/unit').catch(() => []),
+            fetchApi('/unit/connectivity').catch(() => ({}))
+        ]).then(([units, conn]) => {
+            let pPower = 0;
+            let pWater = 0;
+            let pAlerts = 0;
+            
+            (units || []).forEach((u: any) => {
+                pPower += Number(u.last_energy_reading || 0);
+                pWater += Number(u.last_water_reading || 0);
+                if (Number(u.balance) <= 20000 || !u.relay_status) pAlerts++;
+            });
+
+            setStats({
+                totalPower: pPower,
+                totalWater: pWater,
+                onlineDevices: conn.onlineUnits || 0,
+                alerts: pAlerts,
+                loaded: true
+            });
+        });
+    }, []);
+
     return (
         <div className="space-y-6">
             <div className="flex items-center justify-between">
@@ -18,43 +53,43 @@ export default function DashboardPage() {
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
                 <StatCard
                     title="Total Power Usage"
-                    value="45,231 kWh"
+                    value={stats.loaded ? `${stats.totalPower.toLocaleString(undefined, { maximumFractionDigits: 1 })} kWh` : "Loading..."}
                     icon={Zap}
-                    trend="↑ 12.5%"
-                    trendLabel="from last month"
-                    trendDirection="up"
+                    trend="Live Data"
+                    trendLabel="aggregated"
+                    trendDirection="neutral"
                     iconBgClass="bg-blue-50"
                     iconColorClass="text-primary"
                 />
                 <StatCard
                     title="Total Water Usage"
-                    value="1,205 m³"
+                    value={stats.loaded ? `${stats.totalWater.toLocaleString(undefined, { maximumFractionDigits: 1 })} m³` : "Loading..."}
                     icon={Droplets}
-                    trend="↑ 8.2%"
-                    trendLabel="from last month"
-                    trendDirection="up"
+                    trend="Live Data"
+                    trendLabel="aggregated"
+                    trendDirection="neutral"
                     iconBgClass="bg-cyan-50"
                     iconColorClass="text-cyan-600"
                 />
                 <StatCard
                     title="Online Devices"
-                    value="2,412"
+                    value={stats.loaded ? String(stats.onlineDevices) : "Loading..."}
                     icon={Activity}
-                    trend="98.7%"
-                    trendLabel="uptime"
+                    trend="System connectivity"
+                    trendLabel="status"
                     trendDirection="neutral"
                     iconBgClass="bg-green-50"
                     iconColorClass="text-green-600"
                 />
                 <StatCard
                     title="Active Alerts"
-                    value="32"
+                    value={stats.loaded ? String(stats.alerts) : "Loading..."}
                     icon={AlertTriangle}
-                    trend="Needs attention"
-                    trendDirection="down"
-                    iconBgClass="bg-red-50"
-                    iconColorClass="text-red-600"
-                    valueColorClass="text-red-600"
+                    trend={stats.alerts > 0 ? "Needs attention" : "All clear"}
+                    trendDirection={stats.alerts > 0 ? "down" : "neutral"}
+                    iconBgClass={stats.alerts > 0 ? "bg-red-50" : "bg-green-50"}
+                    iconColorClass={stats.alerts > 0 ? "text-red-600" : "text-green-600"}
+                    valueColorClass={stats.alerts > 0 ? "text-red-600" : "text-gray-900"}
                 />
             </div>
 

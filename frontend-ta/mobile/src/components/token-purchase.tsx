@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { CheckCircle, Zap, Droplets, QrCode, Building2, Copy, Check, ArrowLeft, Info, Clock } from "lucide-react"
+import { CheckCircle, Zap, Droplets, QrCode, Building2, Copy, Check, ArrowLeft, Info, Clock, Wallet } from "lucide-react"
 import { toast } from "sonner"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -134,7 +134,7 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
   const [selectedPackage, setSelectedPackage] = useState<number | null>(null)
   const [customAmount, setCustomAmount] = useState("")
   const [selectedOption, setSelectedOption] = useState<PaymentOption | null>(null)
-  const [energyTariff, setEnergyTariff] = useState(DEFAULT_TARIFF.kwh)
+  const [energyTariff, setEnergyTariff] = useState<number>(DEFAULT_TARIFF.kwh)
   const [currentBalance, setCurrentBalance] = useState("0 KWh")
   const [loading, setLoading] = useState(false)
   const [initResult, setInitResult] = useState<{ transactionId: string; gatewayReference: string } | null>(null)

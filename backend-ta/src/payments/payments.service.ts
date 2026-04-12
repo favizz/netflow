@@ -96,6 +96,13 @@ export class PaymentsService {
     return txs.map((tx) => this.toResponse(tx));
   }
 
+  async listAllTransactions() {
+    const txs = await this.txRepo.find({
+      order: { created_at: 'DESC' },
+    });
+    return txs.map((tx) => this.toResponse(tx));
+  }
+
   async getTransaction(transactionId: string): Promise<Transaction> {
     const tx = await this.txRepo.findOne({ where: { id: transactionId } });
     if (!tx) throw new NotFoundException('Transaction not found');

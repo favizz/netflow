@@ -5,12 +5,12 @@ export const MQTT_CONFIG = {
   username: (import.meta.env.VITE_MQTT_USERNAME as string | undefined) || '',
   password: (import.meta.env.VITE_MQTT_PASSWORD as string | undefined) || '',
   telemetryTopic(unitId: string) {
-    return `jarrdin/${unitId}/telemetry`;
+    return `device/DEV-${unitId}/data`;
   },
   powerCommandTopic(unitId: string) {
-    return `jarrdin/${unitId}/power/command`;
+    return `device/DEV-${unitId}/relay/set`;
   },
   waterCommandTopic(unitId: string) {
-    return `jarrdin/${unitId}/water/command`;
+    return `device/DEV-${unitId}/valve/set`;
   },
 };

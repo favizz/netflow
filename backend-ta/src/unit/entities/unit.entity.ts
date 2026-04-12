@@ -27,6 +27,9 @@ export class Unit {
   @Column({ default: true })
   relay_status!: boolean; // True = Nyala, False = Mati
 
+  @Column({ default: true })
+  valve_status!: boolean; // True = Buka, False = Tutup
+
   // --- Kolom untuk Logika Hitung Tagihan ---
 
   @Column('decimal', { 

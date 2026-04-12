@@ -1,9 +1,17 @@
 import { Download, Shield, Users, RefreshCw } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
+import { fetchApi } from "@/lib/api";
 
 export default function ManagementPage() {
     const [updating, setUpdating] = useState(false);
+    const [accounts, setAccounts] = useState<any[]>([]);
+
+    useEffect(() => {
+        fetchApi('/admin/accounts')
+            .then(data => setAccounts(data))
+            .catch(console.error);
+    }, []);
 
     const handleOTA = () => {
         setUpdating(true);
@@ -26,15 +34,22 @@ export default function ManagementPage() {
                     <p className="mb-4 text-sm text-gray-500">Manage user roles and permissions.</p>
 
                     <div className="space-y-4">
-                        {['Financial Admin', 'Field Technician', 'General Manager'].map((role) => (
-                            <div key={role} className="flex items-center justify-between rounded-md border border-gray-100 p-3">
+                        {accounts.length > 0 ? accounts.map((acc: any) => (
+                            <div key={acc.email} className="flex items-center justify-between rounded-md border border-gray-100 p-3">
                                 <div className="flex items-center space-x-3">
                                     <Users className="h-5 w-5 text-gray-400" />
-                                    <span className="font-medium text-gray-900">{role}</span>
+                                    <div>
+                                        <span className="font-medium text-gray-900 block">{acc.email}</span>
+                                        <span className="text-xs text-gray-500 uppercase">{acc.role}</span>
+                                    </div>
                                 </div>
-                                <button className="text-sm font-medium text-primary hover:text-primary/80">Edit Permissions</button>
+                                <button className="text-sm font-medium text-primary hover:text-primary/80">
+                                    {acc.enabled ? "Active" : "Disabled"}
+                                </button>
                             </div>
-                        ))}
+                        )) : (
+                            <p className="text-sm text-gray-500">Loading accounts...</p>
+                        )}
                     </div>
                 </div>
 

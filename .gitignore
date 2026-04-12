@@ -1,24 +1,92 @@
-# dependencies
+# =============================================
+# TA-Flowmeter — Root .gitignore
+# Covers: backend-ta/, frontend-ta/dashboard/, frontend-ta/mobile/
+# =============================================
+
+# ── Dependencies ───────────────────────────────
 node_modules/
+.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
 
-# env files
-.env
-frontend/.env
-backend/.env
-backend-ta/.env
-frontend-ta/mobile/.env
-frontend-ta/dashboard/.env
-
-# build files
-build/
+# ── Build output ──────────────────────────────
 dist/
+dist-ssr/
+build/
 .next/
+/out/
 
-# logs
+# ── Environment files ─────────────────────────
+# Root .env (single source of truth)
+.env
+# Sub-package .env files (vite envDir points to root)
+backend-ta/.env*
+frontend-ta/dashboard/.env*
+frontend-ta/mobile/.env*
+*.local
+
+# ── Logs ──────────────────────────────────────
+logs/
+*.log
 npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
 
-# local / AI context files
+# ── TypeScript ────────────────────────────────
+*.tsbuildinfo
+next-env.d.ts
+
+# ── Testing / Coverage ────────────────────────
+coverage/
+.nyc_output/
+
+# ── OS generated ──────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── IDEs ──────────────────────────────────────
+.idea/
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# ── Runtime / temp ────────────────────────────
+.temp/
+.tmp/
+pids/
+*.pid
+*.seed
+*.pid.lock
+*.pem
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# ── Diagnostic reports ────────────────────────
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+
+# ── Vercel ────────────────────────────────────
+.vercel
+
+# ── AI / local context files ──────────────────
 .claude/
+.antigravity/
 ai_guidance/
 ui_idea/
 CLAUDE.md
@@ -27,3 +95,4 @@ commit_history.md
 temp.md
 dbnotes.md
 backup_iot.sql
+listen.js

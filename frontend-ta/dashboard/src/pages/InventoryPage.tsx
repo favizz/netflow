@@ -1,11 +1,32 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { InventoryTable } from "@/components/inventory/InventoryTable";
 import { AddDeviceModal } from "@/components/inventory/AddDeviceModal";
-import { initialData, InventoryItem } from "@/lib/mockData";
+import type { InventoryItem } from "@/lib/mockData";
+import { fetchApi } from "@/lib/api";
 
 export default function InventoryPage() {
-    const [data, setData] = useState<InventoryItem[]>(initialData);
+    const [data, setData] = useState<InventoryItem[]>([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
+
+    useEffect(() => {
+        fetchApi('/unit')
+            .then((units: any[]) => {
+                const mapped: InventoryItem[] = units.map((u: any) => ({
+                    id: String(u.id),
+                    tenant: u.resident_email || "Unassigned",
+                    unit: u.unit_no,
+                    meterSerial: u.device_id,
+                    status: "Online", 
+                    power: !!u.relay_status,
+                    water: !!u.valve_status,
+                    lastUpdate: "Live Data"
+                }));
+                setData(mapped);
+            })
+            .catch(console.error)
+            .finally(() => setIsLoading(false));
+    }, []);
 
     const handleAddDevice = (device: InventoryItem) => {
         setData((prev) => [device, ...prev]);

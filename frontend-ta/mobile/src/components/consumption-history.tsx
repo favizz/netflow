@@ -35,7 +35,7 @@ export default function ConsumptionHistory({ unitId }: ConsumptionHistoryProps) 
   const [realtimeData, setRealtimeData] = useState<ChartData[]>([])
   const [apiTrendData, setApiTrendData] = useState<ChartData[]>([])
   const [transactions, setTransactions] = useState<HistoryTransaction[]>([])
-  const [tariff, setTariff] = useState(DEFAULT_TARIFF)
+  const [tariff, setTariff] = useState<{ kwh: number; water: number }>(DEFAULT_TARIFF)
 
   useEffect(() => {
     let active = true
@@ -279,7 +279,7 @@ export default function ConsumptionHistory({ unitId }: ConsumptionHistoryProps) 
             </div>
             <ConsumptionChart
               data={displayData}
-              period={timePeriod}
+              period={timePeriod as "daily" | "weekly" | "monthly"}
               dataKey={selectedUtility === "kwh" ? "kwh" : "water"}
               unit={selectedUtility === "kwh" ? "KWh" : "m³"}
               color={selectedUtility === "kwh" ? "var(--primary)" : "var(--chart-2)"}

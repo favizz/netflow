@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { Zap, Droplets, Wifi, WifiOff, Radio } from "lucide-react"
 import mqtt from "mqtt"
+import { decode as msgpackDecode } from "@msgpack/msgpack"
 import { toast } from "sonner"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
@@ -132,6 +133,7 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
       mqttRef.current?.end(true)
       mqttRef.current = null
       setMqttConnected(false)
+      setLiveData([])
       return
     }
 
@@ -151,12 +153,18 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
 
     client.on("message", (_t, msg) => {
       try {
-        const p = JSON.parse(msg.toString())
+        // Prefer MessagePack binary; fall back to JSON string
+        let p: Record<string, any>;
+        try {
+          p = msgpackDecode(msg) as Record<string, any>;
+        } catch {
+          p = JSON.parse(msg.toString());
+        }
         const now = new Date()
-        const watts    = Number(p?.p ?? p?.electricity?.active_power_w ?? 0)
-        const flowRate = Number(p?.wf ?? p?.water?.flow_rate_lpm ?? 0)
-        const et       = Number(p?.et ?? p?.electricity?.total_energy_kwh ?? 0)
-        const wt       = Number(p?.water?.total_volume_m3 ?? 0)
+        const watts    = Number(p?.p ?? 0)
+        const flowRate = Number(p?.wf ?? 0)
+        const et       = Number(p?.et ?? 0)
+        const wt       = Number(p?.wt ?? 0)
 
         setLiveData((prev) => {
           const last = prev[prev.length - 1]
@@ -197,7 +205,7 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
   const currentWatts  = latestLive?.watts    ?? 0
   const currentFlow   = latestLive?.flowRate ?? 0
 
-  const totalChart = displayData.reduce((s, d) => s + ((d as Record<string, number>)[chartDataKey] ?? 0), 0)
+  const totalChart = displayData.reduce((s, d) => s + ((d as any)[chartDataKey] ?? 0), 0)
   const avgChart   = displayData.length > 0 ? totalChart / displayData.length : 0
 
   // ── Control handlers ─────────────────────────────────────────────────────
@@ -388,7 +396,7 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
               <p className="text-xs text-muted-foreground">{isLive ? "Maks" : "Total"}</p>
               <p className="font-bold text-foreground">
                 {isLive
-                  ? Math.max(...displayData.map((d) => (d as Record<string, number>)[chartDataKey] ?? 0)).toFixed(1)
+                  ? Math.max(...displayData.map((d) => (d as any)[chartDataKey] ?? 0)).toFixed(1)
                   : totalChart.toFixed(2)
                 }{" "}
                 <span className="text-xs font-normal text-muted-foreground">{chartUnit}</span>

@@ -1,11 +1,36 @@
+import { useState, useEffect } from "react";
+import { fetchApi } from "@/lib/api";
+
+type Tx = {
+    id: string;
+    date: string;
+    user: string;
+    unit: string;
+    type: string;
+    amount: string;
+    status: string;
+};
+
 export default function TransactionsPage() {
-    const transactions = [
-        { id: "TX-9921", date: "2024-03-10 14:30", user: "Sarah Chen", unit: "A-1204", type: "Token Purchase", amount: "Rp 100.000", status: "Success" },
-        { id: "TX-9922", date: "2024-03-10 15:15", user: "Michael Ross", unit: "B-0805", type: "Utility Bill", amount: "Rp 350.000", status: "Pending" },
-        { id: "TX-9923", date: "2024-03-10 16:00", user: "James Wilson", unit: "A-0302", type: "Auto-Debit", amount: "Rp 150.000", status: "Success" },
-        { id: "TX-9924", date: "2024-03-10 16:45", user: "System", unit: "-", type: "Maintenance Fee", amount: "-", status: "Logged" },
-        { id: "TX-9925", date: "2024-03-11 09:00", user: "Emily Davis", unit: "C-1501", type: "Token Purchase", amount: "Rp 50.000", status: "Success" },
-    ];
+    const [transactions, setTransactions] = useState<Tx[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        fetchApi('/admin/transactions')
+            .then(data => {
+                setTransactions(data.map((tx: any) => ({
+                    id: tx.id,
+                    date: tx.date ? new Date(tx.date).toLocaleString() : 'N/A',
+                    user: tx.user,
+                    unit: tx.unitNo,
+                    type: tx.type,
+                    amount: `Rp ${tx.amount.toLocaleString('id-ID')}`,
+                    status: tx.status.charAt(0).toUpperCase() + tx.status.slice(1)
+                })));
+            })
+            .catch(console.error)
+            .finally(() => setLoading(false));
+    }, []);
 
     return (
         <div className="space-y-6">
@@ -24,6 +49,12 @@ export default function TransactionsPage() {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
+                        {loading && (
+                            <tr><td colSpan={6} className="px-6 py-4 text-center">Loading transactions...</td></tr>
+                        )}
+                        {!loading && transactions.length === 0 && (
+                            <tr><td colSpan={6} className="px-6 py-4 text-center">No transactions available.</td></tr>
+                        )}
                         {transactions.map((tx) => (
                             <tr key={tx.id} className="hover:bg-gray-50">
                                 <td className="px-6 py-4 font-mono text-xs text-gray-900">{tx.id}</td>

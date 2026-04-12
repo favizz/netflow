@@ -35,4 +35,7 @@ export class MeterReading {
 
   @Column('decimal', { nullable: true, transformer: new NumericTransformer() })
   energy_total!: number | null;
+
+  @Column('decimal', { nullable: true, transformer: new NumericTransformer() })
+  water_total!: number | null;
 }

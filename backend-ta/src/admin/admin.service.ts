@@ -1,4 +1,6 @@
 import { Injectable } from '@nestjs/common';
+import { UnitService } from '../unit/unit.service';
+import { PaymentsService } from '../payments/payments.service';
 
 export interface AdminAccount {
   email: string;
@@ -21,6 +23,11 @@ export class AdminService {
     ],
   ]);
 
+  constructor(
+    private readonly unitService: UnitService,
+    private readonly paymentsService: PaymentsService,
+  ) {}
+
   listAccounts() {
     return [...this.accounts.values()].sort((a, b) => a.email.localeCompare(b.email));
   }
@@ -41,5 +48,20 @@ export class AdminService {
 
     this.accounts.set(email, updated);
     return updated;
+  }
+
+  async getTransactions() {
+    const rawTxs = await this.paymentsService.listAllTransactions();
+    const units = await this.unitService.findAll();
+    
+    // Map unit_no to resident_email
+    const unitMap = new Map(units.map(u => [u.unit_no, u.resident_email || 'Unassigned']));
+
+    return rawTxs.map(tx => ({
+      ...tx,
+      user: unitMap.get(tx.unitNo) || 'Unassigned',
+      date: tx.createdAt,
+      type: 'Token Purchase', 
+    }));
   }
 }

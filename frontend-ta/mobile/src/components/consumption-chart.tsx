@@ -1,6 +1,15 @@
 "use client"
 
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart } from "recharts"
+import { useState, useCallback } from "react"
+import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+} from "recharts"
 
 interface ConsumptionChartProps {
   data: any[]
@@ -10,50 +19,128 @@ interface ConsumptionChartProps {
   color: string
 }
 
-export default function ConsumptionChart({ data, dataKey, unit, color }: ConsumptionChartProps) {
+// Persistent label that shows on tap/touch instead of hover
+function MobileTouchLabel({
+  active,
+  payload,
+  label,
+  unit,
+}: {
+  active?: boolean
+  payload?: any[]
+  label?: string
+  unit: string
+}) {
+  if (!active || !payload || payload.length === 0) return null
+  const val = payload[0]?.value
   return (
-    <ResponsiveContainer width="100%" height={200}>
-      <AreaChart data={data} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-        <defs>
-          <linearGradient id={`fill-${dataKey}`} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="10%" stopColor={color} stopOpacity={0.2} />
-            <stop offset="95%" stopColor={color} stopOpacity={0} />
-          </linearGradient>
-        </defs>
-        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-        <XAxis
-          dataKey="date"
-          tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
-          tickLine={false}
-          axisLine={false}
-          interval="preserveStartEnd"
-        />
-        <YAxis
-          tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
-          tickLine={false}
-          axisLine={false}
-          width={40}
-        />
-        <Tooltip
-          contentStyle={{
-            backgroundColor: "var(--card)",
-            border: "1px solid var(--border)",
-            borderRadius: "10px",
-            fontSize: 12,
-          }}
-          formatter={(value: number) => [`${value} ${unit}`, "Nilai"]}
-          labelStyle={{ color: "var(--muted-foreground)", marginBottom: 2 }}
-        />
-        <Area
-          type="monotone"
-          dataKey={dataKey}
-          stroke={color}
-          strokeWidth={2}
-          fill={`url(#fill-${dataKey})`}
-          dot={false}
-          activeDot={{ r: 4, fill: color, strokeWidth: 0 }}
-        />
-      </AreaChart>
-    </ResponsiveContainer>
+    <div
+      className="rounded-xl border px-3 py-2 text-xs shadow-md"
+      style={{
+        backgroundColor: "var(--card)",
+        borderColor: "var(--border)",
+        color: "var(--foreground)",
+        pointerEvents: "none",
+      }}
+    >
+      <p style={{ color: "var(--muted-foreground)", marginBottom: 2 }}>{label}</p>
+      <p className="font-bold">
+        {typeof val === "number" ? val.toFixed(2) : val} {unit}
+      </p>
+    </div>
+  )
+}
+
+export default function ConsumptionChart({
+  data,
+  dataKey,
+  unit,
+  color,
+}: ConsumptionChartProps) {
+  const [activePoint, setActivePoint] = useState<{ value: number; label: string } | null>(null)
+
+  const handleMouseMove = useCallback(
+    (e: any) => {
+      if (e?.activePayload?.[0]) {
+        setActivePoint({
+          value: e.activePayload[0].value,
+          label: e.activeLabel ?? "",
+        })
+      }
+    },
+    []
+  )
+
+  const handleMouseLeave = useCallback(() => {
+    // Don't clear on leave — keep last value visible for mobile
+  }, [])
+
+  // Always show latest value if no point selected
+  const latestPoint = data.length > 0 ? data[data.length - 1] : null
+  const displayValue = activePoint?.value ?? (latestPoint ? latestPoint[dataKey] : null)
+  const displayLabel = activePoint?.label ?? latestPoint?.date ?? ""
+
+  return (
+    <div className="space-y-2">
+      {/* Always-visible current value chip */}
+      {displayValue != null && (
+        <div className="flex items-baseline gap-1.5">
+          <span
+            className="text-2xl font-bold tabular-nums"
+            style={{ color }}
+          >
+            {Number(displayValue).toFixed(2)}
+          </span>
+          <span className="text-xs text-muted-foreground">{unit}</span>
+          {displayLabel && (
+            <span className="ml-auto text-xs text-muted-foreground">{displayLabel}</span>
+          )}
+        </div>
+      )}
+
+      <ResponsiveContainer width="100%" height={180}>
+        <AreaChart
+          data={data}
+          margin={{ top: 4, right: 4, left: -20, bottom: 0 }}
+          onMouseMove={handleMouseMove}
+          onMouseLeave={handleMouseLeave}
+        >
+          <defs>
+            <linearGradient id={`fill-${dataKey}`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="10%" stopColor={color} stopOpacity={0.25} />
+              <stop offset="95%" stopColor={color} stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+          <XAxis
+            dataKey="date"
+            tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
+            tickLine={false}
+            axisLine={false}
+            interval="preserveStartEnd"
+          />
+          <YAxis
+            tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
+            tickLine={false}
+            axisLine={false}
+            width={40}
+          />
+          {/* Tooltip only for tap feedback; always-visible value chip above handles display */}
+          <Tooltip
+            content={<MobileTouchLabel unit={unit} />}
+            cursor={{ stroke: color, strokeWidth: 1, strokeDasharray: "4 2" }}
+          />
+          <Area
+            type="monotone"
+            dataKey={dataKey}
+            stroke={color}
+            strokeWidth={2}
+            fill={`url(#fill-${dataKey})`}
+            dot={false}
+            activeDot={{ r: 5, fill: color, strokeWidth: 2, stroke: "var(--card)" }}
+          />
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
   )
 }

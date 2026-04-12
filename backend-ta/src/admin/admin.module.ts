@@ -4,9 +4,10 @@ import { ResidentsModule } from '../residents/residents.module';
 import { UnitModule } from '../unit/unit.module';
 import { AdminController } from './admin.controller';
 import { AdminService } from './admin.service';
+import { PaymentsModule } from '../payments/payments.module';
 
 @Module({
-  imports: [ConfigModule, ResidentsModule, UnitModule],
+  imports: [ConfigModule, ResidentsModule, UnitModule, PaymentsModule],
   controllers: [AdminController],
   providers: [AdminService],
 })

@@ -10,7 +10,19 @@
       "Bash(pnpm run:*)",
       "Bash(npm install:*)",
       "Bash(npm uninstall:*)",
-      "Bash(xargs grep:*)"
+      "Bash(xargs grep:*)",
+      "Bash(git:*)",
+      "Bash(python3:*)",
+      "Bash(py -3 -c \"import pdfplumber; print\\('pdfplumber ok'\\)\")",
+      "Bash(py -3 -c \"import pypdf; print\\('pypdf ok'\\)\")",
+      "Bash(py -3 -c \"import PyPDF2; print\\('PyPDF2 ok'\\)\")",
+      "Bash(node -e \"console.log\\('node ok'\\)\")",
+      "Bash(node -e \"require\\('pdfjs-dist'\\)\")",
+      "Bash(node -e \"require\\('pdf-parse'\\)\")",
+      "Bash(node -e:*)",
+      "Bash(mkdir -p /c/Users/Lenovo/AppData/Local/Temp/pdfwork)",
+      "Read(//c/Users/Lenovo/AppData/Local/Temp/**)",
+      "Bash(powershell -Command ':*)"
     ]
   }
 }

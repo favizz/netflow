@@ -50,30 +50,30 @@ export const interactive = {
   // Bottom nav tab
   navItem:     "flex flex-col items-center justify-center gap-1 flex-1 h-full transition-colors duration-150",
   navActive:   "text-primary",
-  navInactive: "text-muted-foreground hover:text-primary active:text-primary/70",
+  navInactive: "text-muted-foreground active:text-primary/70",
 
   // Segmented pill (utility/period toggles)
   segRoot:     "flex gap-0.5 p-1 bg-muted rounded-xl",
   segItem:     "flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-sm font-semibold transition-all duration-150 active:scale-95",
   segActive:   "bg-card text-primary shadow-sm",
-  segInactive: "text-muted-foreground hover:text-foreground hover:bg-muted-foreground/10",
+  segInactive: "text-muted-foreground active:bg-muted-foreground/10",
 
   // Selection card (package picker, payment method)
   cardSel:         "rounded-2xl border transition-all duration-150 cursor-pointer active:scale-[0.98]",
   cardSelActive:   "border-primary bg-primary/5 ring-1 ring-primary",
-  cardSelInactive: "border-border hover:border-primary/40 hover:bg-muted/30 bg-card",
+  cardSelInactive: "border-border active:border-primary/40 active:bg-muted/30 bg-card",
 
   // Icon ghost (back, settings)
-  ghost:    "p-2 rounded-full hover:bg-muted active:bg-muted/70 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+  ghost:    "p-2 rounded-full active:bg-muted/70 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
 
   // Text/inline link button
-  textLink: "inline-flex items-center gap-1 text-primary hover:text-primary/80 active:text-primary/60 transition-colors duration-150 underline-offset-2 hover:underline focus-visible:outline-none",
+  textLink: "inline-flex items-center gap-1 text-primary active:text-primary/60 transition-colors duration-150 underline-offset-2 focus-visible:outline-none",
 }
 
 // ── Full-width CTA ────────────────────────────────────────────────────────────
 export const cta = {
-  primary:   "w-full bg-primary hover:bg-primary/90 active:bg-primary/80 text-primary-foreground font-bold h-14 rounded-xl text-base shadow-sm disabled:opacity-40 disabled:pointer-events-none transition-all duration-150",
-  secondary: "w-full border border-primary text-primary hover:bg-primary/5 active:bg-primary/10 font-semibold h-12 rounded-xl text-base transition-all duration-150",
+  primary:   "w-full bg-primary active:bg-primary/80 text-primary-foreground font-bold h-14 rounded-xl text-base shadow-sm disabled:opacity-40 disabled:pointer-events-none transition-all duration-150",
+  secondary: "w-full border border-primary text-primary active:bg-primary/10 font-semibold h-12 rounded-xl text-base transition-all duration-150",
 }
 
 // ── Page shell helpers ────────────────────────────────────────────────────────

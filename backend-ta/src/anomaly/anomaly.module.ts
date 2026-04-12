@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { Anomaly } from './entities/anomaly.entity';
 import { ConfigService } from '@nestjs/config';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { UnitModule } from '../unit/unit.module';
@@ -8,6 +10,7 @@ import { AnomalyService } from './anomaly.service';
   imports: [
     // UnitModule exports UnitService + TypeOrmModule (includes MeterReading repository)
     UnitModule,
+    TypeOrmModule.forFeature([Anomaly]),
     ClientsModule.registerAsync([
       {
         name: 'MQTT_CLIENT',

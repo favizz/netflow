@@ -59,4 +59,4 @@ PAYMENT_WEBHOOK_ALLOWED_IPS=
 Notes:
 - Leave `PAYMENT_WEBHOOK_ALLOWED_IPS` empty to disable IP allowlisting in local development.
 - Backend runs on **port 5000**.
-- Backend requires a running MySQL 8.0 instance (VPS or local Docker — see `docker-compose.yml`).
+- Backend requires a running MySQL 8.0 instance (local native install recommended).

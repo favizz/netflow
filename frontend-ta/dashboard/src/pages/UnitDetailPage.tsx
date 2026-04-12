@@ -5,6 +5,7 @@ import { initialData } from "@/lib/mockData";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, AreaChart, Area } from "recharts";
 import { cn } from "@/lib/utils";
 import mqtt from "mqtt";
+import { decode as msgpackDecode } from "@msgpack/msgpack";
 
 type TimeRange = "Real-Time" | "Today" | "Custom";
 
@@ -17,43 +18,24 @@ interface LogEntry {
 }
 
 interface IoTPayload {
-    timestamp?: string;
-    device_id?: string;
-    electricity?: {
-        total_energy_kwh?: number;
-        active_power_w?: number;
-        voltage_v?: number;
-        current_a?: number;
-        frequency_hz?: number;
-        power_factor?: number;
-        remaining_token_kwh?: number;
-        relay_status?: "ON" | "OFF" | string;
-    };
-    water?: {
-        total_volume_m3?: number;
-        flow_rate_lpm?: number;
-        remaining_token_m3?: number;
-        valve_status?: "OPEN" | "CLOSE" | string;
-    };
-    action?: string;
-    commands?: {
-        relay_command?: string;
-        valve_command?: string;
-    };
+    // Lean telemetry keys (current format)
+    et?: number;   // energy_total kWh
+    p?: number;    // active power W
+    v?: number;    // voltage V
+    c?: number;    // current A
+    rs?: number;   // relay_status: 1=ON, 0=OFF
+    wt?: number;   // water_total m³
+    wf?: number;   // water flow rate L/min
+    vs?: number;   // valve_status: 1=OPEN, 0=CLOSE
 }
 
 const MQTT_CONFIG = {
-    brokerUrl: 'wss://860d79cbf30e4ed9bd13903e0dbd6db5.s1.eu.hivemq.cloud:8884/mqtt',
+    brokerUrl: import.meta.env.VITE_MQTT_BROKER_URL || 'ws://localhost:8083/mqtt',
     options: {
-        clientId: 'jarrdin-client-' + Math.random().toString(16).substring(2, 10),
-        username: 'alat_iot',
-        password: 'Flowmeter123',
-    },
-    topics: {
-        telemetry: 'jarrdin/A-1204/telemetry',
-        powerCommand: 'jarrdin/A-1204/power/command',
-        waterCommand: 'jarrdin/A-1204/water/command',
-    },
+        clientId: 'ta-dashboard-' + Math.random().toString(16).substring(2, 10),
+        username: import.meta.env.VITE_MQTT_USERNAME || '',
+        password: import.meta.env.VITE_MQTT_PASSWORD || '',
+    }
 };
 
 const generateMockData = (range: TimeRange, baseValue: number, variance: number) => {
@@ -139,66 +121,68 @@ export default function UnitDetailPage() {
 
         const client = mqtt.connect(MQTT_CONFIG.brokerUrl, MQTT_CONFIG.options);
 
+        const telemetryTopic = `device/${unitInfo.meterSerial}/data`;
+
         client.on('connect', () => {
             setIsConnected(true);
-            client.subscribe([MQTT_CONFIG.topics.telemetry], (err) => {
+            client.subscribe([telemetryTopic], (err) => {
                 if (err) console.error("Subscription error:", err);
             });
         });
 
         client.on('message', (topic, message) => {
-            const payload = message.toString();
             const now = new Date();
             const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-            let parsed: IoTPayload = {};
-
+            let parsed: IoTPayload;
             try {
-                parsed = JSON.parse(payload);
+                // Prefer MessagePack binary decode; fall back to JSON string
+                try {
+                    parsed = msgpackDecode(message) as IoTPayload;
+                } catch {
+                    parsed = JSON.parse(message.toString()) as IoTPayload;
+                }
 
-                if (topic === MQTT_CONFIG.topics.telemetry) {
-                    if (parsed.electricity) {
-                        setEnergyStats({
-                            total_kwh: parsed.electricity.total_energy_kwh ?? 0,
-                            active_power_w: parsed.electricity.active_power_w ?? 0,
-                        });
-                        if (parsed.electricity.relay_status !== undefined) {
-                            setPowerState(String(parsed.electricity.relay_status).toUpperCase() === 'ON');
-                        }
+                // Parse ultra-lightweight telemetry keys
+                if (topic === telemetryTopic) {
+                    setEnergyStats({
+                        total_kwh: parsed.et ?? 0,
+                        active_power_w: parsed.p ?? 0,
+                    });
+                    if (parsed.rs !== undefined) {
+                        setPowerState(parsed.rs === 1);
                     }
 
                     setRealTimePower(prev => [...prev.slice(-59), {
                         time: timeStr,
-                        value: parsed.electricity?.active_power_w ?? 0,
+                        value: parsed.p ?? 0,
                         timestamp: now.toISOString(),
                     }]);
 
                     setRealTimeWater(prev => [...prev.slice(-59), {
                         time: timeStr,
-                        value: parsed.water?.flow_rate_lpm ?? 0,
+                        value: parsed.wf ?? 0,
                         timestamp: now.toISOString(),
                     }]);
 
-                    if (parsed.water) {
-                        setWaterStats({
-                            total_m3: parsed.water.total_volume_m3 ?? 0,
-                            flow_rate_lpm: parsed.water.flow_rate_lpm ?? 0,
-                        });
-                        if (parsed.water.valve_status !== undefined) {
-                            setWaterState(String(parsed.water.valve_status).toUpperCase() === 'OPEN');
-                        }
+                    setWaterStats({
+                        total_m3: parsed.wt ?? 0,
+                        flow_rate_lpm: parsed.wf ?? 0,
+                    });
+                    if (parsed.vs !== undefined) {
+                        setWaterState(parsed.vs === 1);
                     }
 
                     setLiveLogs(prev => [{
                         timestamp: now.toISOString(),
-                        value: 0,
-                        unit: 'Unified',
-                        rawPayload: payload,
+                        value: parsed.p ?? 0,
+                        unit: 'W',
+                        rawPayload: `[MsgPack] et:${parsed.et} p:${parsed.p} wf:${parsed.wf} rs:${parsed.rs} vs:${parsed.vs}`,
                         details: parsed,
                     }, ...prev.slice(0, 49)]);
                 }
             } catch {
-                console.log("Failed to parse payload", payload);
+                console.log("Failed to decode telemetry payload");
             }
         });
 
@@ -214,22 +198,14 @@ export default function UnitDetailPage() {
         setPowerState(newState);
 
         if (isTargetUnit && mqttClient && isConnected) {
-            const payloadObj = {
-                timestamp: new Date().toISOString(),
-                action: "device_control",
-                commands: {
-                    relay_command: newState ? "ON" : "OFF",
-                    valve_command: waterState ? "OPEN" : "CLOSE",
-                },
-            };
-            const payload = JSON.stringify(payloadObj);
-            mqttClient.publish(MQTT_CONFIG.topics.powerCommand, payload);
+            const cmdTopic = `device/${unitInfo.meterSerial}/relay/set`;
+            const payload = newState ? "1" : "0";
+            mqttClient.publish(cmdTopic, payload);
             setLiveLogs(prev => [{
                 timestamp: new Date().toISOString(),
                 value: newState ? 1 : 0,
                 unit: 'CMD',
-                rawPayload: `OUTGOING: ${payload}`,
-                details: payloadObj,
+                rawPayload: `OUTGOING To ${cmdTopic}: ${payload}`,
             }, ...prev.slice(0, 49)]);
         }
     };
@@ -239,22 +215,14 @@ export default function UnitDetailPage() {
         setWaterState(newState);
 
         if (isTargetUnit && mqttClient && isConnected) {
-            const payloadObj = {
-                timestamp: new Date().toISOString(),
-                action: "device_control",
-                commands: {
-                    relay_command: powerState ? "ON" : "OFF",
-                    valve_command: newState ? "OPEN" : "CLOSE",
-                },
-            };
-            const payload = JSON.stringify(payloadObj);
-            mqttClient.publish(MQTT_CONFIG.topics.waterCommand, payload);
+            const cmdTopic = `device/${unitInfo.meterSerial}/valve/set`;
+            const payload = newState ? "1" : "0";
+            mqttClient.publish(cmdTopic, payload);
             setLiveLogs(prev => [{
                 timestamp: new Date().toISOString(),
                 value: newState ? 1 : 0,
                 unit: 'CMD',
-                rawPayload: `OUTGOING: ${payload}`,
-                details: payloadObj,
+                rawPayload: `OUTGOING To ${cmdTopic}: ${payload}`,
             }, ...prev.slice(0, 49)]);
         }
     };

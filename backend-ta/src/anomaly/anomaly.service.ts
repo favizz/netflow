@@ -1,10 +1,11 @@
 import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ClientProxy } from '@nestjs/microservices';
-import { Repository } from 'typeorm';
+import { Repository, IsNull } from 'typeorm';
 import { MeterReading } from '../device/entities/device.entity';
 import { UnitService } from '../unit/unit.service';
 import type { AnomalyItem } from './anomaly.types';
+import { Anomaly } from './entities/anomaly.entity';
 
 // ── Detection thresholds ────────────────────────────────────────────────────
 const MCB_WATT_LIMIT          = 1300;
@@ -36,6 +37,8 @@ export class AnomalyService implements OnModuleInit {
     private readonly unitService: UnitService,
     @InjectRepository(MeterReading)
     private readonly meterRepo: Repository<MeterReading>,
+    @InjectRepository(Anomaly)
+    private readonly anomalyRepo: Repository<Anomaly>,
     @Inject('MQTT_CLIENT') private readonly mqttClient: ClientProxy,
   ) {}
 
@@ -110,7 +113,10 @@ export class AnomalyService implements OnModuleInit {
       if (Date.now() - last > TELEMETRY_REFRESH_THROTTLE_MS) {
         this.lastTelemetryRefresh.set(unitNo, Date.now());
         void this.computeAll(unitNo)
-          .then((a) => this.anomalyCache.set(unitNo, a))
+          .then(async (a) => {
+             await this.syncAnomaliesToDb(unitNo, a);
+             this.anomalyCache.set(unitNo, a);
+          })
           .catch(() => {});
       }
     } catch {
@@ -127,6 +133,7 @@ export class AnomalyService implements OnModuleInit {
         units.map(async (unit) => {
           try {
             const anomalies = await this.computeAll(unit.unit_no);
+            await this.syncAnomaliesToDb(unit.unit_no, anomalies);
             this.anomalyCache.set(unit.unit_no, anomalies);
           } catch {
             // Keep stale cache — better than showing nothing
@@ -135,6 +142,41 @@ export class AnomalyService implements OnModuleInit {
       );
     } catch {
       // DB not ready or other transient error — will retry on next interval
+    }
+  }
+  
+  private async syncAnomaliesToDb(unitNo: string, computed: AnomalyItem[]): Promise<void> {
+    try {
+      const unit = await this.unitService.findByUnitNo(unitNo);
+      if (!unit) return;
+
+      const activeAnomalies = await this.anomalyRepo.find({
+        where: { device_id: unit.device_id, resolved_at: IsNull() },
+      });
+
+      const computedTypes = computed.map((c) => c.anomalyType);
+      const activeTypes = activeAnomalies.map((a) => a.type);
+
+      for (const active of activeAnomalies) {
+        if (!computedTypes.includes(active.type as any)) {
+          active.resolved_at = new Date();
+          await this.anomalyRepo.save(active);
+        }
+      }
+
+      for (const comp of computed) {
+        if (!activeTypes.includes(comp.anomalyType)) {
+          await this.anomalyRepo.save({
+            device_id: unit.device_id,
+            type: comp.anomalyType,
+            severity: comp.severity,
+            description: comp.message,
+            action_taken: JSON.stringify(comp.metadata),
+          });
+        }
+      }
+    } catch {
+      // Best effort sync
     }
   }
 

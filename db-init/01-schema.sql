@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS units (
   resident_email       VARCHAR(255)   NULL,
   balance              DECIMAL(15,2)  NOT NULL DEFAULT 0,
   relay_status         TINYINT(1)     NOT NULL DEFAULT 1,
+  valve_status         TINYINT(1)     NOT NULL DEFAULT 1,
   last_energy_reading  DECIMAL(15,4)  NOT NULL DEFAULT 0,
   last_water_reading   DECIMAL(15,4)  NOT NULL DEFAULT 0,
   energy_tariff        DECIMAL(10,2)  NOT NULL DEFAULT 1444.70,
@@ -49,7 +50,8 @@ CREATE TABLE IF NOT EXISTS meter_readings (
   energy_total DECIMAL(15,4) NULL,
   water_flow   DECIMAL(10,4) NULL,
   water_total  DECIMAL(15,4) NULL,
-  PRIMARY KEY (time, device_id)
+  PRIMARY KEY (time, device_id),
+  CONSTRAINT fk_meter_readings_device FOREIGN KEY (device_id) REFERENCES units(device_id) ON DELETE CASCADE
 );
 
 CREATE INDEX idx_meter_readings_device_time ON meter_readings (device_id, time DESC);
@@ -98,7 +100,9 @@ CREATE TABLE IF NOT EXISTS auth_refresh_tokens (
   unit_id    INT          NULL,
   expires_at DATETIME     NOT NULL,
   revoked_at DATETIME     NULL,
-  created_at DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP
+  created_at DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_refresh_tokens_user FOREIGN KEY (user_sub) REFERENCES residents(email) ON DELETE CASCADE,
+  CONSTRAINT fk_refresh_tokens_unit FOREIGN KEY (unit_id) REFERENCES units(id) ON DELETE CASCADE
 );
 
 CREATE INDEX idx_refresh_tokens_user_sub   ON auth_refresh_tokens (user_sub);
@@ -116,3 +120,87 @@ CREATE EVENT IF NOT EXISTS cleanup_old_meter_readings
   DO DELETE FROM meter_readings WHERE time < NOW() - INTERVAL 1 YEAR;
 
 -- Seed data lives in db-init/02-seed-demo.sql.
+
+-- -----------------------------------------
+-- 8. ANOMALIES
+-- -----------------------------------------
+CREATE TABLE IF NOT EXISTS anomalies (
+  id           INT AUTO_INCREMENT PRIMARY KEY,
+  device_id    VARCHAR(100) NOT NULL,
+  type         VARCHAR(50)  NOT NULL,
+  severity     VARCHAR(20)  NOT NULL,
+  description  TEXT         NOT NULL,
+  action_taken TEXT         NULL,
+  created_at   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  resolved_at  DATETIME     NULL,
+  CONSTRAINT fk_anomalies_device FOREIGN KEY (device_id) REFERENCES units(device_id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_anomalies_device_time ON anomalies (device_id, created_at DESC);
+
+-- -----------------------------------------
+-- 9. LEGEND / LOOKUP TABLES
+--    Stores human-readable meanings for all
+--    coded integer / enum columns.
+-- -----------------------------------------
+
+-- 9a. relay_status & valve_status: 0=OFF/CLOSE, 1=ON/OPEN
+CREATE TABLE IF NOT EXISTS legend_switch_status (
+  code        TINYINT(1) PRIMARY KEY,
+  label       VARCHAR(20)  NOT NULL,
+  description VARCHAR(100) NOT NULL
+);
+INSERT IGNORE INTO legend_switch_status VALUES
+  (0, 'OFF/CLOSE', 'Device is powered off or valve is closed'),
+  (1, 'ON/OPEN',   'Device is powered on or valve is open');
+
+-- 9b. anomaly severity
+CREATE TABLE IF NOT EXISTS legend_anomaly_severity (
+  code        VARCHAR(20) PRIMARY KEY,
+  label       VARCHAR(40) NOT NULL,
+  description VARCHAR(150) NOT NULL
+);
+INSERT IGNORE INTO legend_anomaly_severity VALUES
+  ('critical', 'Critical', 'Immediate action required — service may be offline'),
+  ('warning',  'Warning',  'Attention recommended — early signs of a problem');
+
+-- 9c. anomaly type
+CREATE TABLE IF NOT EXISTS legend_anomaly_type (
+  code        VARCHAR(50) PRIMARY KEY,
+  label       VARCHAR(80)  NOT NULL,
+  description VARCHAR(200) NOT NULL
+);
+INSERT IGNORE INTO legend_anomaly_type VALUES
+  ('jailbreak',          'Jailbreak Detected',    'Tamper event — meter cover opened without authorisation'),
+  ('water_leak',         'Water Leak',             'Sustained flow detected while valve is commanded closed'),
+  ('device_offline',     'Device Offline',         'No telemetry received within the expected heartbeat window'),
+  ('mcb_trip',           'MCB Trip',               'Circuit breaker tripped — power cut detected'),
+  ('low_balance',        'Low Balance',            'Remaining credit is below the threshold for normal operation'),
+  ('voltage_anomaly',    'Voltage Anomaly',        'Measured voltage outside ±10 % of 220 V nominal'),
+  ('sensor_malfunction', 'Sensor Malfunction',     'Sensor returning implausible or missing readings'),
+  ('low_power_factor',   'Low Power Factor',       'Power factor below 0.7 — inefficient load detected'),
+  ('zero_flow',          'Zero Flow',              'Meter reports zero flow while valve is open'),
+  ('usage_spike',        'Usage Spike',            'Consumption jumped beyond normal variance'),
+  ('backflow',           'Backflow',               'Reverse water flow detected — possible contamination risk');
+
+-- 9d. transaction payment method
+CREATE TABLE IF NOT EXISTS legend_payment_method (
+  code        VARCHAR(20) PRIMARY KEY,
+  label       VARCHAR(40)  NOT NULL,
+  description VARCHAR(150) NOT NULL
+);
+INSERT IGNORE INTO legend_payment_method VALUES
+  ('qris',     'QRIS',          'Scan-to-pay via any QRIS-enabled e-wallet'),
+  ('transfer', 'Bank Transfer', 'Manual inter-bank transfer'),
+  ('ewallet',  'E-Wallet',      'Direct payment via e-wallet (e.g. GoPay, OVO)');
+
+-- 9e. transaction status
+CREATE TABLE IF NOT EXISTS legend_transaction_status (
+  code        VARCHAR(20) PRIMARY KEY,
+  label       VARCHAR(40)  NOT NULL,
+  description VARCHAR(150) NOT NULL
+);
+INSERT IGNORE INTO legend_transaction_status VALUES
+  ('pending', 'Pending', 'Payment initiated but not yet confirmed by gateway'),
+  ('success', 'Success', 'Payment confirmed and balance credited to unit'),
+  ('failed',  'Failed',  'Payment rejected or timed out by the payment gateway');
