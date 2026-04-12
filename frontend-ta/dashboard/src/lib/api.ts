@@ -11,7 +11,7 @@ export async function fetchApi(endpoint: string, options: RequestInit = {}) {
 
   // Add auth header
   if (token) {
-    headers.set('x-api-key', token);
+    headers.set('x-admin-key', token);
   }
 
   // Execute request

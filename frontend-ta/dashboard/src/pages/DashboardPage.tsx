@@ -4,15 +4,13 @@ import { fetchApi } from "@/lib/api";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { TrendChart } from "@/components/dashboard/TrendChart";
 import { RecentAlerts } from "@/components/dashboard/RecentAlerts";
-import { TowerCard } from "@/components/dashboard/TowerCard";
-import { TowerComparisonChart } from "@/components/dashboard/TowerComparisonChart";
-import { TowerOccupancyChart } from "@/components/dashboard/TowerOccupancyChart";
 
 export default function DashboardPage() {
     const [stats, setStats] = useState({
         totalPower: 0,
         totalWater: 0,
         onlineDevices: 0,
+        totalDevices: 0,
         alerts: 0,
         loaded: false
     });
@@ -25,7 +23,7 @@ export default function DashboardPage() {
             let pPower = 0;
             let pWater = 0;
             let pAlerts = 0;
-            
+
             (units || []).forEach((u: any) => {
                 pPower += Number(u.last_energy_reading || 0);
                 pWater += Number(u.last_water_reading || 0);
@@ -36,6 +34,7 @@ export default function DashboardPage() {
                 totalPower: pPower,
                 totalWater: pWater,
                 onlineDevices: conn.onlineUnits || 0,
+                totalDevices: conn.totalUnits || (units || []).length,
                 alerts: pAlerts,
                 loaded: true
             });
@@ -52,31 +51,28 @@ export default function DashboardPage() {
             {/* Stats Grid */}
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
                 <StatCard
-                    title="Total Power Usage"
+                    title="Total Energy (cumulative)"
                     value={stats.loaded ? `${stats.totalPower.toLocaleString(undefined, { maximumFractionDigits: 1 })} kWh` : "Loading..."}
                     icon={Zap}
-                    trend="Live Data"
-                    trendLabel="aggregated"
+                    trend="Aggregated from all units"
                     trendDirection="neutral"
                     iconBgClass="bg-blue-50"
                     iconColorClass="text-primary"
                 />
                 <StatCard
-                    title="Total Water Usage"
+                    title="Total Water (cumulative)"
                     value={stats.loaded ? `${stats.totalWater.toLocaleString(undefined, { maximumFractionDigits: 1 })} m³` : "Loading..."}
                     icon={Droplets}
-                    trend="Live Data"
-                    trendLabel="aggregated"
+                    trend="Aggregated from all units"
                     trendDirection="neutral"
                     iconBgClass="bg-cyan-50"
                     iconColorClass="text-cyan-600"
                 />
                 <StatCard
                     title="Online Devices"
-                    value={stats.loaded ? String(stats.onlineDevices) : "Loading..."}
+                    value={stats.loaded ? `${stats.onlineDevices} / ${stats.totalDevices}` : "Loading..."}
                     icon={Activity}
                     trend="System connectivity"
-                    trendLabel="status"
                     trendDirection="neutral"
                     iconBgClass="bg-green-50"
                     iconColorClass="text-green-600"
@@ -100,46 +96,6 @@ export default function DashboardPage() {
                 </div>
                 <div>
                     <RecentAlerts />
-                </div>
-            </div>
-
-            {/* Tower Distribution Analytics */}
-            <div>
-                <h2 className="mb-4 text-lg font-bold text-gray-900">Tower Distribution Analytics</h2>
-                <div className="grid gap-6 lg:grid-cols-3">
-                    {/* Tower Cards Grid */}
-                    <div className="lg:col-span-2 grid gap-6 sm:grid-cols-2">
-                        <TowerCard
-                            name="Tower A"
-                            totalDevices={620}
-                            onlineDevices={610}
-                            anomalies={2}
-                        />
-                        <TowerCard
-                            name="Tower B"
-                            totalDevices={600}
-                            onlineDevices={580}
-                            anomalies={5}
-                        />
-                        <TowerCard
-                            name="Tower C"
-                            totalDevices={650}
-                            onlineDevices={645}
-                            anomalies={0}
-                        />
-                        <TowerCard
-                            name="Tower D"
-                            totalDevices={574}
-                            onlineDevices={500}
-                            anomalies={12}
-                        />
-                    </div>
-
-                    {/* Comparison & Occupancy */}
-                    <div className="space-y-6">
-                        <TowerComparisonChart />
-                        <TowerOccupancyChart />
-                    </div>
                 </div>
             </div>
         </div>

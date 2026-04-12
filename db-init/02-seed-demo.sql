@@ -10,12 +10,7 @@
 -- 1. REFERENCE DATA
 -- -----------------------------------------
 
-INSERT IGNORE INTO tariffs (utility_type, price_per_unit, effective_date)
-VALUES
-  ('electricity', 1444.70, '2024-01-01'),
-  ('water',       5000.00, '2024-01-01');
-
-INSERT IGNORE INTO residents (email, name)
+INSERT INTO residents (email, name)
 VALUES ('18222070@std.stei.itb.ac.id', 'Demo Penghuni');
 
 -- -----------------------------------------
@@ -24,7 +19,7 @@ VALUES ('18222070@std.stei.itb.ac.id', 'Demo Penghuni');
 --    A-102: Rp  12 000 -> ~  8 kWh remaining -> status "Kurang" + warning banner
 -- -----------------------------------------
 
-INSERT IGNORE INTO units
+INSERT INTO units
   (unit_no, device_id, resident_email, balance, relay_status, valve_status,
    last_energy_reading, last_water_reading, energy_tariff, water_tariff)
 VALUES
@@ -45,7 +40,7 @@ VALUES
 -- -----------------------------------------
 
 -- DEV-A-101: 2-bedroom apartment, moderate usage
-INSERT IGNORE INTO meter_readings
+INSERT INTO meter_readings
   (time, device_id, voltage, current, power, energy_total, water_flow, water_total)
 SELECT
   DATE_SUB(NOW(), INTERVAL n HOUR),
@@ -82,7 +77,7 @@ FROM (
 ) seq;
 
 -- DEV-A-102: studio, lighter usage
-INSERT IGNORE INTO meter_readings
+INSERT INTO meter_readings
   (time, device_id, voltage, current, power, energy_total, water_flow, water_total)
 SELECT
   DATE_SUB(NOW(), INTERVAL n HOUR),
@@ -119,7 +114,7 @@ FROM (
 ) seq;
 
 -- DEV-A-103: unassigned unit, minimal usage
-INSERT IGNORE INTO meter_readings
+INSERT INTO meter_readings
   (time, device_id, voltage, current, power, energy_total, water_flow, water_total)
 SELECT
   DATE_SUB(NOW(), INTERVAL n HOUR),
@@ -162,7 +157,7 @@ FROM (
 --    A-102: 3 success + 1 pending (2 h ago).
 -- -----------------------------------------
 
-INSERT IGNORE INTO transactions
+INSERT INTO transactions
   (id, unit_id, unit_no, amount_rp, method, status, gateway_reference, created_at, confirmed_at)
 VALUES
   ('TRX-17000001-001', (SELECT id FROM units WHERE unit_no = 'A-101'),

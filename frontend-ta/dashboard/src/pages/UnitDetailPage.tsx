@@ -1,11 +1,11 @@
 import { useState, useMemo, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Power, Droplets, Zap, TrendingUp, Clock, FileText, ChevronDown, ChevronUp, Wifi, WifiOff, Activity } from "lucide-react";
-import { initialData } from "@/lib/mockData";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, AreaChart, Area } from "recharts";
 import { cn } from "@/lib/utils";
 import mqtt from "mqtt";
 import { decode as msgpackDecode } from "@msgpack/msgpack";
+import { fetchApi } from "@/lib/api";
 
 type TimeRange = "Real-Time" | "Today" | "Custom";
 
@@ -18,7 +18,6 @@ interface LogEntry {
 }
 
 interface IoTPayload {
-    // Lean telemetry keys (current format)
     et?: number;   // energy_total kWh
     p?: number;    // active power W
     v?: number;    // voltage V
@@ -38,40 +37,15 @@ const MQTT_CONFIG = {
     }
 };
 
-const generateMockData = (range: TimeRange, baseValue: number, variance: number) => {
-    const data = [];
-    const now = new Date();
-
-    if (range === "Real-Time") {
-        for (let i = 59; i >= 0; i--) {
-            const t = new Date(now.getTime() - i * 60000);
-            data.push({
-                time: t.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                value: Number((baseValue + (Math.random() * variance - variance / 2)).toFixed(2)),
-                timestamp: t.toISOString(),
-            });
-        }
-    } else {
-        for (let i = 0; i <= now.getHours(); i++) {
-            const t = new Date();
-            t.setHours(i, 0, 0, 0);
-            data.push({
-                time: t.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                value: Number((baseValue + (Math.random() * variance - variance / 2)).toFixed(2)),
-                timestamp: t.toISOString(),
-            });
-        }
-    }
-    return data;
-};
-
 export default function UnitDetailPage() {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
 
-    const initialItem = initialData.find((item) => item.id === id);
-    const [powerState, setPowerState] = useState(initialItem?.power ?? false);
-    const [waterState, setWaterState] = useState(initialItem?.water ?? false);
+    const [unitInfo, setUnitInfo] = useState<any>(null);
+    const [loadingInfo, setLoadingInfo] = useState(true);
+
+    const [powerState, setPowerState] = useState(false);
+    const [waterState, setWaterState] = useState(false);
     const [timeRange, setTimeRange] = useState<TimeRange>("Real-Time");
     const [isLogsOpen, setIsLogsOpen] = useState(false);
 
@@ -81,50 +55,69 @@ export default function UnitDetailPage() {
     const [realTimeWater, setRealTimeWater] = useState<{ time: string; value: number; timestamp: string }[]>([]);
     const [liveLogs, setLiveLogs] = useState<LogEntry[]>([]);
 
+    const [historicalTrends, setHistoricalTrends] = useState<{ time: string; powerVal: number; waterVal: number; }[]>([]);
+
     const [energyStats, setEnergyStats] = useState({ total_kwh: 0, active_power_w: 0 });
     const [waterStats, setWaterStats] = useState({ total_m3: 0, flow_rate_lpm: 0 });
 
-    const unitInfo = initialItem ?? {
-        unit: "Unknown Unit",
-        tenant: "Unknown Tenant",
-        meterSerial: "N/A",
-        status: "Offline",
-        lastUpdate: "N/A",
-    };
+    useEffect(() => {
+        if (!id) return;
+        fetchApi(`/unit/${id}`)
+            .then(data => {
+                setUnitInfo({
+                    unit: data.unit_no,
+                    tenant: data.resident_email || "Unassigned",
+                    meterSerial: data.device_id,
+                    status: "Unknown", // Will update below
+                    lastUpdate: "Wait...",
+                    energy_tariff: data.energy_tariff,
+                    water_tariff: data.water_tariff,
+                });
+                
+                // Set initial DB stats
+                setEnergyStats({ total_kwh: Number(data.last_energy_reading || 0), active_power_w: 0 });
+                setWaterStats({ total_m3: Number(data.last_water_reading || 0), flow_rate_lpm: 0 });
+                setPowerState(!!data.relay_status);
+                setWaterState(!!data.valve_status);
 
-    const isOnline = unitInfo.status === "Online";
-    const isTargetUnit = id === "101";
-
-    const mockPowerData = useMemo(() => generateMockData(timeRange, 3.5, 1.5), [timeRange]);
-    const mockWaterData = useMemo(() => generateMockData(timeRange, 0.5, 0.3), [timeRange]);
-
-    const fallbackLogs = useMemo(() => {
-        return [...mockPowerData].reverse().slice(0, 10).map(d => ({
-            timestamp: d.timestamp,
-            value: d.value,
-            unit: "kWh",
-            rawPayload: JSON.stringify({ device_id: unitInfo.meterSerial, t: new Date(d.timestamp).getTime(), v: d.value, q: "mock" }),
-        }));
-    }, [mockPowerData, unitInfo.meterSerial]);
-
-    const displayLogs = isTargetUnit ? liveLogs : fallbackLogs;
+                return fetchApi('/unit/connectivity');
+            })
+            .then(conn => {
+                setUnitInfo((prev: any) => {
+                    if (!prev) return prev;
+                    // Check if online in connectivity data
+                    const isOnline = Array.isArray(conn.onlineUnitsList) && conn.onlineUnitsList.some((u: any) => u.device_id === prev.meterSerial);
+                    return { ...prev, status: isOnline ? "Online" : "Offline", lastUpdate: "Live Data" };
+                });
+            })
+            .catch(console.error)
+            .finally(() => setLoadingInfo(false));
+    }, [id]);
 
     useEffect(() => {
-        if (isTargetUnit && realTimePower.length === 0) {
-            setRealTimePower(generateMockData("Real-Time", 3.5, 1.5));
-            setRealTimeWater(generateMockData("Real-Time", 0.5, 0.3));
-        }
-    }, [isTargetUnit, realTimePower.length]);
+        if (!unitInfo?.unit || timeRange === "Real-Time") return;
+        const period = timeRange === "Today" ? "daily" : "monthly";
+        fetchApi(`/reporting/trends/${encodeURIComponent(unitInfo.unit)}?period=${period}`)
+            .then(data => {
+                const mapped = (data || []).map((t: any) => ({
+                    time: new Date(t.bucket).toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric' }),
+                    powerVal: parseFloat(t.kwh || 0),
+                    waterVal: parseFloat(t.waterM3 || t.water_m3 || 0),
+                }));
+                setHistoricalTrends(mapped);
+            })
+            .catch(console.error);
+    }, [unitInfo?.unit, timeRange]);
 
     useEffect(() => {
-        if (!isTargetUnit) return;
+        if (!unitInfo?.meterSerial) return;
 
         const client = mqtt.connect(MQTT_CONFIG.brokerUrl, MQTT_CONFIG.options);
-
         const telemetryTopic = `device/${unitInfo.meterSerial}/data`;
 
         client.on('connect', () => {
             setIsConnected(true);
+            setUnitInfo((prev: any) => ({ ...prev, status: "Online" }));
             client.subscribe([telemetryTopic], (err) => {
                 if (err) console.error("Subscription error:", err);
             });
@@ -136,37 +129,39 @@ export default function UnitDetailPage() {
 
             let parsed: IoTPayload;
             try {
-                // Prefer MessagePack binary decode; fall back to JSON string
                 try {
                     parsed = msgpackDecode(message) as IoTPayload;
                 } catch {
                     parsed = JSON.parse(message.toString()) as IoTPayload;
                 }
 
-                // Parse ultra-lightweight telemetry keys
                 if (topic === telemetryTopic) {
                     setEnergyStats({
-                        total_kwh: parsed.et ?? 0,
+                        total_kwh: parsed.et ?? energyStats.total_kwh,
                         active_power_w: parsed.p ?? 0,
                     });
                     if (parsed.rs !== undefined) {
                         setPowerState(parsed.rs === 1);
                     }
 
-                    setRealTimePower(prev => [...prev.slice(-59), {
-                        time: timeStr,
-                        value: parsed.p ?? 0,
-                        timestamp: now.toISOString(),
-                    }]);
+                    if (parsed.p !== undefined) {
+                        setRealTimePower(prev => [...prev.slice(-59), {
+                            time: timeStr,
+                            value: parsed.p ?? 0,
+                            timestamp: now.toISOString(),
+                        }]);
+                    }
 
-                    setRealTimeWater(prev => [...prev.slice(-59), {
-                        time: timeStr,
-                        value: parsed.wf ?? 0,
-                        timestamp: now.toISOString(),
-                    }]);
+                    if (parsed.wf !== undefined) {
+                        setRealTimeWater(prev => [...prev.slice(-59), {
+                            time: timeStr,
+                            value: parsed.wf ?? 0,
+                            timestamp: now.toISOString(),
+                        }]);
+                    }
 
                     setWaterStats({
-                        total_m3: parsed.wt ?? 0,
+                        total_m3: parsed.wt ?? waterStats.total_m3,
                         flow_rate_lpm: parsed.wf ?? 0,
                     });
                     if (parsed.vs !== undefined) {
@@ -186,18 +181,21 @@ export default function UnitDetailPage() {
             }
         });
 
-        client.on('error', () => setIsConnected(false));
+        client.on('error', () => {
+            setIsConnected(false);
+            setUnitInfo((prev: any) => ({ ...prev, status: "Offline" }));
+        });
 
         setMqttClient(client);
 
         return () => { client.end(); };
-    }, [isTargetUnit]);
+    }, [unitInfo?.meterSerial]);
 
     const handlePowerToggle = (e: React.ChangeEvent<HTMLInputElement>) => {
         const newState = e.target.checked;
         setPowerState(newState);
 
-        if (isTargetUnit && mqttClient && isConnected) {
+        if (unitInfo?.meterSerial && mqttClient && isConnected) {
             const cmdTopic = `device/${unitInfo.meterSerial}/relay/set`;
             const payload = newState ? "1" : "0";
             mqttClient.publish(cmdTopic, payload);
@@ -214,7 +212,7 @@ export default function UnitDetailPage() {
         const newState = e.target.checked;
         setWaterState(newState);
 
-        if (isTargetUnit && mqttClient && isConnected) {
+        if (unitInfo?.meterSerial && mqttClient && isConnected) {
             const cmdTopic = `device/${unitInfo.meterSerial}/valve/set`;
             const payload = newState ? "1" : "0";
             mqttClient.publish(cmdTopic, payload);
@@ -227,8 +225,18 @@ export default function UnitDetailPage() {
         }
     };
 
-    const displayPowerData = (timeRange === "Real-Time" && isTargetUnit) ? realTimePower : mockPowerData;
-    const displayWaterData = (timeRange === "Real-Time" && isTargetUnit) ? realTimeWater : mockWaterData;
+    if (loadingInfo) {
+        return <div className="p-6 text-gray-500">Loading unit data...</div>;
+    }
+
+    if (!unitInfo) {
+        return <div className="p-6 text-red-500">Unit not found.</div>;
+    }
+
+    const isOnline = unitInfo.status === "Online";
+
+    const displayPowerData = timeRange === "Real-Time" ? realTimePower : historicalTrends.map(t => ({ time: t.time, value: t.powerVal }));
+    const displayWaterData = timeRange === "Real-Time" ? realTimeWater : historicalTrends.map(t => ({ time: t.time, value: t.waterVal }));
 
     return (
         <div className="space-y-6">
@@ -256,19 +264,28 @@ export default function UnitDetailPage() {
                         <p className="text-gray-500">{unitInfo.tenant} • {unitInfo.meterSerial}</p>
                     </div>
                 </div>
-                {isTargetUnit && (
-                    <div className={cn("px-3 py-1 rounded-full text-xs font-medium flex items-center gap-2 border", isConnected ? "bg-green-50 text-green-700 border-green-200" : "bg-gray-50 text-gray-500 border-gray-200")}>
-                        {isConnected ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
-                        {isConnected ? "Live Data Connected" : "Connecting..."}
-                    </div>
-                )}
+                <div className={cn("px-3 py-1 rounded-full text-xs font-medium flex items-center gap-2 border", isConnected ? "bg-green-50 text-green-700 border-green-200" : "bg-gray-50 text-gray-500 border-gray-200")}>
+                    {isConnected ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
+                    {isConnected ? "Live Data Connected" : "Connecting..."}
+                </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Control Panel */}
                 <div className="lg:col-span-1 space-y-6">
                     <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-                        <h2 className="text-lg font-semibold text-gray-900 mb-4">Utility Controls</h2>
+                        <h2 className="text-lg font-semibold text-gray-900 mb-4">Utility Controls &amp; Tariffs</h2>
+                        
+                        <div className="grid grid-cols-2 gap-4 mb-6">
+                             <div className="p-3 bg-gray-50 rounded-lg border border-gray-100">
+                                 <p className="text-xs text-gray-500 uppercase font-medium">Energy Tariff</p>
+                                 <p className="font-semibold text-gray-900 mt-1">Rp {Number(unitInfo.energy_tariff).toLocaleString('id-ID')} <span className="text-xs font-normal text-gray-500">/ kWh</span></p>
+                             </div>
+                             <div className="p-3 bg-gray-50 rounded-lg border border-gray-100">
+                                 <p className="text-xs text-gray-500 uppercase font-medium">Water Tariff</p>
+                                 <p className="font-semibold text-gray-900 mt-1">Rp {Number(unitInfo.water_tariff).toLocaleString('id-ID')} <span className="text-xs font-normal text-gray-500">/ m³</span></p>
+                             </div>
+                        </div>
 
                         {/* Power Control */}
                         <div className="mb-6 p-4 rounded-lg bg-gray-50 border border-gray-100">
@@ -373,33 +390,6 @@ export default function UnitDetailPage() {
                             </div>
                         </div>
                     </div>
-
-                    {/* Quick Stats */}
-                    <div className="grid grid-cols-1 gap-4">
-                        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex items-start gap-4">
-                            <div className="p-2 bg-amber-50 rounded-lg text-amber-600">
-                                <Zap className="w-5 h-5" />
-                            </div>
-                            <div>
-                                <p className="text-sm font-medium text-gray-500">Avg. Daily Power</p>
-                                <p className="text-lg font-bold text-gray-900">12.4 kWh</p>
-                                <div className="flex items-center text-xs text-green-600 mt-1">
-                                    <TrendingUp className="w-3 h-3 mr-1" />
-                                    <span>-5% vs last week</span>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex items-start gap-4">
-                            <div className="p-2 bg-blue-50 rounded-lg text-blue-600">
-                                <Clock className="w-5 h-5" />
-                            </div>
-                            <div>
-                                <p className="text-sm font-medium text-gray-500">Last Maintenance</p>
-                                <p className="text-lg font-bold text-gray-900">14 Days Ago</p>
-                                <p className="text-xs text-gray-400 mt-1">Next due: Mar 15, 2026</p>
-                            </div>
-                        </div>
-                    </div>
                 </div>
 
                 {/* Charts Area */}
@@ -418,8 +408,8 @@ export default function UnitDetailPage() {
                                 <option value="Custom">Custom Range</option>
                             </select>
                         </div>
-                        <div className="h-[250px] w-full">
-                            <ResponsiveContainer width="100%" height="100%">
+                        <div className="h-[250px] w-full min-w-0 min-h-0">
+                            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                                 <AreaChart data={displayPowerData}>
                                     <defs>
                                         <linearGradient id="colorPower" x1="0" y1="0" x2="0" y2="1">
@@ -430,19 +420,8 @@ export default function UnitDetailPage() {
                                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
                                     <XAxis dataKey="time" axisLine={false} tickLine={false} tick={{ fill: '#6b7280', fontSize: 12 }} />
                                     <YAxis axisLine={false} tickLine={false} tick={{ fill: '#6b7280', fontSize: 12 }} />
-                                    <RechartsTooltip
-                                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                                    />
-                                    <Area
-                                        type="stepAfter"
-                                        dataKey="value"
-                                        stroke="#3b82f6"
-                                        strokeWidth={2}
-                                        fillOpacity={1}
-                                        fill="url(#colorPower)"
-                                        dot={{ r: 3, fill: "#3b82f6", strokeWidth: 0 }}
-                                        activeDot={{ r: 5 }}
-                                    />
+                                    <RechartsTooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+                                    <Area type="stepAfter" dataKey="value" stroke="#3b82f6" strokeWidth={2} fillOpacity={1} fill="url(#colorPower)" dot={{ r: 3, fill: "#3b82f6", strokeWidth: 0 }} activeDot={{ r: 5 }} />
                                 </AreaChart>
                             </ResponsiveContainer>
                         </div>
@@ -456,23 +435,14 @@ export default function UnitDetailPage() {
                                 {timeRange} View
                             </div>
                         </div>
-                        <div className="h-[250px] w-full">
-                            <ResponsiveContainer width="100%" height="100%">
+                        <div className="h-[250px] w-full min-w-0 min-h-0">
+                            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                                 <LineChart data={displayWaterData}>
                                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
                                     <XAxis dataKey="time" axisLine={false} tickLine={false} tick={{ fill: '#6b7280', fontSize: 12 }} />
                                     <YAxis axisLine={false} tickLine={false} tick={{ fill: '#6b7280', fontSize: 12 }} />
-                                    <RechartsTooltip
-                                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                                    />
-                                    <Line
-                                        type="stepAfter"
-                                        dataKey="value"
-                                        stroke="#06b6d4"
-                                        strokeWidth={2}
-                                        dot={{ r: 3, fill: "#06b6d4", strokeWidth: 0 }}
-                                        activeDot={{ r: 5 }}
-                                    />
+                                    <RechartsTooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+                                    <Line type="stepAfter" dataKey="value" stroke="#06b6d4" strokeWidth={2} dot={{ r: 3, fill: "#06b6d4", strokeWidth: 0 }} activeDot={{ r: 5 }} />
                                 </LineChart>
                             </ResponsiveContainer>
                         </div>
@@ -503,7 +473,7 @@ export default function UnitDetailPage() {
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-100">
-                                        {displayLogs.length > 0 ? displayLogs.map((log, idx) => (
+                                        {liveLogs.length > 0 ? liveLogs.map((log, idx) => (
                                             <tr key={idx} className="hover:bg-gray-50">
                                                 <td className="px-4 py-2 text-gray-600 whitespace-nowrap">{log.timestamp}</td>
                                                 <td className="px-4 py-2 text-gray-900 font-bold">{log.value}</td>

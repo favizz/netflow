@@ -4,6 +4,7 @@ import { UpdateAdminAccessDto } from './dto/update-admin-access.dto';
 import { AdminService } from './admin.service';
 import { ResidentsService } from '../residents/residents.service';
 import { UnitService } from '../unit/unit.service';
+import { AnomalyService } from '../anomaly/anomaly.service';
 
 class CreateResidentDto {
   email!: string;
@@ -21,6 +22,7 @@ export class AdminController {
     private readonly adminService: AdminService,
     private readonly residentsService: ResidentsService,
     private readonly unitService: UnitService,
+    private readonly anomalyService: AnomalyService,
   ) {}
 
   // --- Legacy admin accounts (in-memory) ---
@@ -40,6 +42,19 @@ export class AdminController {
   @Get('transactions')
   getTransactions() {
     return this.adminService.getTransactions();
+  }
+
+  @Get('anomalies')
+  async getRecentAnomalies() {
+    const units = await this.unitService.findAll();
+    const results = await Promise.all(
+      units.map(u => this.anomalyService.getAnomaliesForUnit(u.unit_no))
+    );
+    // Flatten, sort by detectedAt desc, return latest 20
+    return results
+      .flat()
+      .sort((a, b) => new Date(b.detectedAt).getTime() - new Date(a.detectedAt).getTime())
+      .slice(0, 20);
   }
 
   // --- Resident management (registered Google accounts) ---

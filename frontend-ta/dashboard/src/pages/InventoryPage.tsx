@@ -10,18 +10,26 @@ export default function InventoryPage() {
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
-        fetchApi('/unit')
-            .then((units: any[]) => {
-                const mapped: InventoryItem[] = units.map((u: any) => ({
-                    id: String(u.id),
-                    tenant: u.resident_email || "Unassigned",
-                    unit: u.unit_no,
-                    meterSerial: u.device_id,
-                    status: "Online", 
-                    power: !!u.relay_status,
-                    water: !!u.valve_status,
-                    lastUpdate: "Live Data"
-                }));
+        Promise.all([
+            fetchApi('/unit'),
+            fetchApi('/unit/connectivity').catch(() => ({ onlineUnitsList: [], offlineUnitsList: [] }))
+        ])
+            .then(([units, conn]) => {
+                const onlineIds = new Set((conn.onlineUnitsList || []).map((u: any) => u.device_id));
+                
+                const mapped: InventoryItem[] = units.map((u: any) => {
+                    const isOnline = onlineIds.has(u.device_id);
+                    return {
+                        id: String(u.id),
+                        tenant: u.resident_email || "Unassigned",
+                        unit: u.unit_no,
+                        meterSerial: u.device_id,
+                        status: isOnline ? "Online" : "Offline", 
+                        power: !!u.relay_status,
+                        water: !!u.valve_status,
+                        lastUpdate: isOnline ? "Live Data" : "Unknown"
+                    };
+                });
                 setData(mapped);
             })
             .catch(console.error)

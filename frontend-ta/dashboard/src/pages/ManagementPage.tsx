@@ -1,22 +1,20 @@
-import { Download, Shield, Users, RefreshCw } from "lucide-react";
+import { Shield, Users, UserCheck } from "lucide-react";
 import { useState, useEffect } from "react";
-import { cn } from "@/lib/utils";
 import { fetchApi } from "@/lib/api";
 
 export default function ManagementPage() {
-    const [updating, setUpdating] = useState(false);
     const [accounts, setAccounts] = useState<any[]>([]);
+    const [residents, setResidents] = useState<any[]>([]);
 
     useEffect(() => {
         fetchApi('/admin/accounts')
             .then(data => setAccounts(data))
             .catch(console.error);
+            
+        fetchApi('/admin/residents')
+            .then(data => setResidents(data))
+            .catch(console.error);
     }, []);
-
-    const handleOTA = () => {
-        setUpdating(true);
-        setTimeout(() => setUpdating(false), 3000);
-    };
 
     return (
         <div className="space-y-6">
@@ -31,10 +29,13 @@ export default function ManagementPage() {
                         </div>
                         <h2 className="text-lg font-semibold text-gray-900">Access Control (RBAC)</h2>
                     </div>
-                    <p className="mb-4 text-sm text-gray-500">Manage user roles and permissions.</p>
+                    <p className="mb-4 text-sm text-gray-500">Admin accounts with API key access.</p>
 
                     <div className="space-y-4">
-                        {accounts.length > 0 ? accounts.map((acc: any) => (
+                        {accounts.length === 0 && (
+                            <p className="text-sm text-gray-400">Loading accounts...</p>
+                        )}
+                        {accounts.map((acc: any) => (
                             <div key={acc.email} className="flex items-center justify-between rounded-md border border-gray-100 p-3">
                                 <div className="flex items-center space-x-3">
                                     <Users className="h-5 w-5 text-gray-400" />
@@ -43,60 +44,47 @@ export default function ManagementPage() {
                                         <span className="text-xs text-gray-500 uppercase">{acc.role}</span>
                                     </div>
                                 </div>
-                                <button className="text-sm font-medium text-primary hover:text-primary/80">
+                                <span className={`text-sm font-medium ${acc.enabled ? "text-green-600" : "text-red-500"}`}>
                                     {acc.enabled ? "Active" : "Disabled"}
-                                </button>
+                                </span>
                             </div>
-                        )) : (
-                            <p className="text-sm text-gray-500">Loading accounts...</p>
-                        )}
+                        ))}
                     </div>
                 </div>
 
-                {/* OTA Update Section */}
+                {/* Residents Section */}
                 <div className="rounded-lg bg-white p-6 shadow-sm ring-1 ring-gray-900/5">
                     <div className="mb-4 flex items-center space-x-3">
-                        <div className="rounded-lg bg-purple-50 p-2">
-                            <Download className="h-6 w-6 text-purple-600" />
+                        <div className="rounded-lg bg-blue-50 p-2">
+                            <UserCheck className="h-6 w-6 text-blue-600" />
                         </div>
-                        <h2 className="text-lg font-semibold text-gray-900">Firmware Updates (OTA)</h2>
+                        <h2 className="text-lg font-semibold text-gray-900">Registered Residents</h2>
                     </div>
-                    <p className="mb-6 text-sm text-gray-500">Latest version: <span className="font-mono font-medium text-gray-900">v2.4.1 (Stable)</span></p>
+                    <p className="mb-4 text-sm text-gray-500">Residents registered via Google OAuth.</p>
 
-                    <div className="rounded-md bg-gray-50 p-4 mb-6">
-                        <div className="flex items-center justify-between text-sm">
-                            <span className="text-gray-600">Target Devices</span>
-                            <span className="font-medium text-gray-900">2,444 Smart Meters</span>
-                        </div>
-                        <div className="mt-2 h-2 w-full rounded-full bg-gray-200">
-                            <div className="h-2 w-3/4 rounded-full bg-green-500"></div>
-                        </div>
-                        <div className="mt-1 flex justify-between text-xs text-gray-500">
-                            <span>Update Coverage: 75%</span>
-                            <span>Signal Strength: Good</span>
-                        </div>
+                    <div className="space-y-4">
+                        {residents.length === 0 && (
+                            <p className="text-sm text-gray-400">No residents registered yet.</p>
+                        )}
+                        {residents.map((res: any) => (
+                            <div key={res.email} className="flex items-center justify-between rounded-md border border-gray-100 p-3">
+                                <div className="flex items-center space-x-3">
+                                    {res.picture ? (
+                                        <img src={res.picture} alt="" className="h-8 w-8 rounded-full" />
+                                    ) : (
+                                        <Users className="h-8 w-8 text-gray-400 bg-gray-100 rounded-full p-1.5" />
+                                    )}
+                                    <div>
+                                        <span className="font-medium text-gray-900 block">{res.name || "Unknown Name"}</span>
+                                        <span className="text-xs text-gray-500">{res.email}</span>
+                                    </div>
+                                </div>
+                                <span className="text-xs text-gray-500">
+                                    {new Date(res.created_at).toLocaleDateString()}
+                                </span>
+                            </div>
+                        ))}
                     </div>
-
-                    <button
-                        onClick={handleOTA}
-                        disabled={updating}
-                        className={cn(
-                            "flex w-full items-center justify-center space-x-2 rounded-md py-2.5 text-sm font-semibold text-white shadow-sm transition-all",
-                            updating ? "bg-gray-400 cursor-not-allowed" : "bg-primary hover:bg-primary/90"
-                        )}
-                    >
-                        {updating ? (
-                            <>
-                                <RefreshCw className="h-4 w-4 animate-spin" />
-                                <span>Deploying Updates...</span>
-                            </>
-                        ) : (
-                            <>
-                                <Download className="h-4 w-4" />
-                                <span>Trigger OTA Update</span>
-                            </>
-                        )}
-                    </button>
                 </div>
             </div>
         </div>
