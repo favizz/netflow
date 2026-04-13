@@ -30,7 +30,7 @@ export function DashboardLayout() {
             <div className="flex flex-1 flex-col overflow-hidden">
                 {/* Mobile Header Toggle */}
                 <div className="flex items-center justify-between border-b border-gray-200 bg-white p-4 lg:hidden">
-                    <span className="font-bold">JarrdinUMS</span>
+                    <span className="font-bold">NETFLOW</span>
                     <button onClick={() => setSidebarOpen(true)}>
                         <Menu className="h-6 w-6 text-gray-600" />
                     </button>

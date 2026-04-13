@@ -117,7 +117,7 @@ export default function App() {
           <div className="bg-primary text-primary-foreground p-1.5 rounded-lg">
             <Zap size={16} />
           </div>
-          <span className="font-bold text-base text-foreground tracking-tight">Smart Meter</span>
+          <span className="font-bold text-base text-foreground tracking-tight">NETFLOW</span>
         </div>
 
         <div className="flex items-center gap-1">

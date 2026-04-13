@@ -43,17 +43,13 @@ export class GatewayService {
   async setRelayByUnitNo(unitNo: string, on: boolean) {
     const unit = await this.unitService.findByUnitNo(unitNo);
     await this.unitService.setRelayStatus(unit.id, on);
-    this.mqttClient.emit(`device/${unit.device_id}/relay/set`, {
-      relay: on ? 'ON' : 'OFF',
-    });
+    this.mqttClient.emit(`device/${unit.device_id}/command`, { r: on ? 1 : 0 });
     return { relayStatus: on };
   }
 
   async setValveByUnitNo(unitNo: string, open: boolean) {
     const unit = await this.unitService.findByUnitNo(unitNo);
-    this.mqttClient.emit(`device/${unit.device_id}/valve/set`, {
-      valve: open ? 'OPEN' : 'CLOSE',
-    });
+    this.mqttClient.emit(`device/${unit.device_id}/command`, { v: open ? 1 : 0 });
     return { valveStatus: open };
   }
 }

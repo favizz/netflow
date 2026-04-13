@@ -86,24 +86,24 @@ export class AnomalyService implements OnModuleInit {
 
       // Anomali 1 — Jailbreak: relay OFF but sensors show active consumption
       if (balance <= 0 && !relayStatus && (pw > 5 || wf > 0.1)) {
-        this.mqttClient.emit(`device/${deviceId}/relay/set`, {
-          relay: 'OFF',
+        this.mqttClient.emit(`device/${deviceId}/command`, {
+          r: 0,
           reason: 'JAILBREAK_DETECTED',
         });
       }
 
       // Anomali 4 — MCB Trip: cut relay to protect equipment on next reset
       if (pw > MCB_WATT_LIMIT) {
-        this.mqttClient.emit(`device/${deviceId}/relay/set`, {
-          relay: 'OFF',
+        this.mqttClient.emit(`device/${deviceId}/command`, {
+          r: 0,
           reason: 'MCB_TRIP',
         });
       }
 
       // Anomali 6 — Critical overvoltage: protect appliances
       if (vv > VOLTAGE_CRITICAL_HIGH) {
-        this.mqttClient.emit(`device/${deviceId}/relay/set`, {
-          relay: 'OFF',
+        this.mqttClient.emit(`device/${deviceId}/command`, {
+          r: 0,
           reason: 'OVERVOLTAGE',
         });
       }

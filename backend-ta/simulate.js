@@ -20,10 +20,9 @@ client.on('connect', () => {
     console.log(`[Success] Connected to EMQX. Simulating telemetry for ${deviceId}`);
     console.log(`(Press Ctrl+C to stop the simulation)`);
 
-    // Subscribe to physical command channels
-    client.subscribe(`device/${deviceId}/relay/set`, { qos: 1 });
-    client.subscribe(`device/${deviceId}/valve/set`, { qos: 1 });
-    console.log(`[Listening] Emulating hardware triggers for relay & valve.`);
+    // Subscribe to unified physical command channel
+    client.subscribe(`device/${deviceId}/command`, { qos: 1 });
+    console.log(`[Listening] Emulating hardware triggers on unified command channel.`);
 
     setInterval(() => {
         // Drop power and flow to 0 when disconnected
@@ -57,34 +56,19 @@ client.on('message', (topic, message) => {
         const rawPayload = message.toString().trim();
         let actionTriggered = false;
 
-        // Strip NestJS envelope fallback conceptually, but we expect raw strings "1" or "0"
-        let cmd = rawPayload;
-        
-        // Safety try-catch if it's sent as JSON by accident
-        try {
-            const temp = JSON.parse(rawPayload);
-            if (temp.data?.relay) cmd = temp.data.relay === 'ON' ? '1' : '0';
-            if (temp.data?.valve) cmd = temp.data.valve === 'OPEN' ? '1' : '0';
-            if (temp.commands?.relay_command) cmd = temp.commands.relay_command === 'ON' ? '1' : '0';
-        } catch(e) {}
-
-        if (topic === `device/${deviceId}/relay/set`) {
-            if (cmd === '1') {
-                relayOn = true;
-                actionTriggered = true;
-            } else if (cmd === '0') {
-                relayOn = false;
-                actionTriggered = true;
-            }
-        }
-
-        if (topic === `device/${deviceId}/valve/set`) {
-            if (cmd === '1') {
-                valveOpen = true;
-                actionTriggered = true;
-            } else if (cmd === '0') {
-                valveOpen = false;
-                actionTriggered = true;
+        if (topic === `device/${deviceId}/command`) {
+            try {
+                const cmd = JSON.parse(rawPayload);
+                if (cmd.r !== undefined) {
+                    relayOn = cmd.r === 1;
+                    actionTriggered = true;
+                }
+                if (cmd.v !== undefined) {
+                    valveOpen = cmd.v === 1;
+                    actionTriggered = true;
+                }
+            } catch(e) {
+                console.error("Payload not valid JSON");
             }
         }
 

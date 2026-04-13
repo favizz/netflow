@@ -39,6 +39,7 @@ export class DeviceService {
     const current  = this.toNumber(data.c);
     const power    = this.toNumber(data.p);
     const waterFlow = this.toNumber(data.wf);
+    const incomingBalance = data.b !== undefined ? Number(data.b) : null;
 
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -74,16 +75,31 @@ export class DeviceService {
             unit.balance = 0;
             if (unit.relay_status) {
               unit.relay_status = false;
-              this.mqttClient.emit(`device/${deviceId}/relay/set`, '0');
+              this.mqttClient.emit(`device/${deviceId}/command`, { r: 0 });
             }
             if (unit.valve_status) {
               unit.valve_status = false;
-              this.mqttClient.emit(`device/${deviceId}/valve/set`, '0');
+              this.mqttClient.emit(`device/${deviceId}/command`, { v: 0 });
             }
           }
-
-          await queryRunner.manager.save(unit);
         }
+
+        // --- HYBRID EDGE SECURITY AUDIT ---
+        // If the IoT device sent its local balance, cross-check it with our secure Server balance
+        if (incomingBalance !== null) {
+          const cloudBalance = Number(unit.balance);
+          const diff = Math.abs(cloudBalance - incomingBalance);
+          
+          if (diff > 500) { 
+            // If the device balance deviates by more than Rp 500, it might be hacked or lost sync
+            console.warn(`[SECURITY] 🚨 Mismatch on ${deviceId}! Edge: Rp ${incomingBalance} | Cloud: Rp ${cloudBalance}`);
+          } else {
+            // If it's just minor float rounding differences, gently snap the server to the device's math
+            unit.balance = incomingBalance;
+          }
+        }
+
+        await queryRunner.manager.save(unit);
 
         savedUnit = unit;
 

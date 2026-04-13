@@ -22,7 +22,7 @@ export function Sidebar() {
         <div className="flex h-full w-64 flex-col bg-white border-r border-gray-200">
             <div className="flex h-16 items-center justify-center border-b border-gray-200 px-4">
                 <h1 className="text-xl font-bold text-gray-900">
-                    Jarrdin<span className="text-primary">UMS</span>
+                    NET<span className="text-primary">FLOW</span>
                 </h1>
             </div>
             <div className="flex-1 overflow-y-auto py-4">
