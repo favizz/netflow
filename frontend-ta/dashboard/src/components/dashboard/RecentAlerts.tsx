@@ -17,8 +17,8 @@ const ICON_MAP: Record<string, React.ElementType> = {
 };
 
 const COLOR_MAP: Record<string, { text: string; bg: string }> = {
-    critical: { text: "text-red-600",    bg: "bg-red-50"    },
-    warning:  { text: "text-orange-600", bg: "bg-orange-50" },
+    critical: { text: "text-red-600 dark:text-red-400",    bg: "bg-red-50 dark:bg-red-900/30"    },
+    warning:  { text: "text-orange-600 dark:text-orange-400", bg: "bg-orange-50 dark:bg-orange-900/30" },
 };
 
 export function RecentAlerts() {
@@ -26,7 +26,6 @@ export function RecentAlerts() {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        // Fetch recent anomalies across all units via admin endpoint
         fetchApi('/admin/anomalies')
             .then((data: any[]) => setAlerts(data.slice(0, 5)))
             .catch(() => setAlerts([]))
@@ -34,16 +33,16 @@ export function RecentAlerts() {
     }, []);
 
     return (
-        <div className="rounded-lg bg-white p-6 shadow-sm ring-1 ring-gray-900/5">
+        <div className="rounded-lg bg-white dark:bg-gray-800 p-6 shadow-sm ring-1 ring-gray-900/5 dark:ring-gray-700">
             <div className="mb-4 flex items-center justify-between">
-                <h3 className="text-base font-semibold text-gray-900">Recent Alerts</h3>
+                <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Recent Alerts</h3>
             </div>
             <div className="space-y-4">
                 {loading && (
-                    <p className="text-sm text-gray-400">Loading alerts...</p>
+                    <p className="text-sm text-gray-400 dark:text-gray-500">Loading alerts...</p>
                 )}
                 {!loading && alerts.length === 0 && (
-                    <p className="text-sm text-gray-400">No recent anomalies. All systems normal.</p>
+                    <p className="text-sm text-gray-400 dark:text-gray-500">No recent anomalies. All systems normal.</p>
                 )}
                 {alerts.map((alert, i) => {
                     const Icon = ICON_MAP[alert.anomalyType] ?? AlertTriangle;
@@ -57,8 +56,8 @@ export function RecentAlerts() {
                                 <Icon className={`h-4 w-4 ${colors.text}`} />
                             </div>
                             <div className="flex-1">
-                                <p className="text-sm font-medium text-gray-900">{alert.message}</p>
-                                <p className="text-xs text-gray-500">{timeAgo} · Unit {alert.deviceId ?? alert.device_id}</p>
+                                <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{alert.message}</p>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">{timeAgo} · Unit {alert.deviceId ?? alert.device_id}</p>
                             </div>
                         </div>
                     );

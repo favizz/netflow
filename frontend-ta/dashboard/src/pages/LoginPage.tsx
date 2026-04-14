@@ -13,14 +13,12 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     setError('');
-    
-    // Save to test immediately
+
     localStorage.setItem('admin-api-key', key);
     try {
-      // Testing the key by reading unit list since it's available and valid
-      await fetchApi('/unit'); 
+      await fetchApi('/unit');
       navigate('/');
-    } catch (err: unknown) {
+    } catch {
       setError('Invalid API key or network error');
       localStorage.removeItem('admin-api-key');
     } finally {
@@ -29,18 +27,20 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex h-screen items-center justify-center bg-gray-50">
-      <div className="w-full max-w-md rounded-xl bg-white p-8 shadow-lg border border-gray-200">
+    <div className="flex h-screen items-center justify-center bg-gray-50 dark:bg-gray-900">
+      <div className="w-full max-w-md rounded-xl bg-white dark:bg-gray-800 p-8 shadow-lg border border-gray-200 dark:border-gray-700">
         <div className="mb-8 flex flex-col items-center">
-          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-blue-100 text-blue-600">
+          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 dark:bg-primary/20 text-primary">
             <Lock className="h-8 w-8" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">Admin Authentication</h1>
-          <p className="mt-2 text-center text-sm text-gray-500">
-            Enter your secure administrator API Key to access the dashboard controls.
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+            NET<span className="text-primary">FLOW</span>
+          </h1>
+          <p className="mt-2 text-center text-sm text-gray-500 dark:text-gray-400">
+            Enter your administrator API key to access the dashboard.
           </p>
         </div>
-        
+
         <form onSubmit={handleLogin} className="space-y-5">
           <div>
             <input
@@ -48,17 +48,17 @@ export default function LoginPage() {
               placeholder="Enter x-api-key..."
               value={key}
               onChange={(e) => setKey(e.target.value)}
-              className="w-full rounded-md border border-gray-300 p-3 text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 p-3 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
               required
             />
           </div>
-          
-          {error && <p className="text-sm font-medium text-red-600">{error}</p>}
-          
+
+          {error && <p className="text-sm font-medium text-red-600 dark:text-red-400">{error}</p>}
+
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-md bg-blue-600 px-4 py-3 font-semibold text-white transition-colors hover:bg-blue-700 focus:outline-none disabled:opacity-50"
+            className="w-full rounded-md bg-primary px-4 py-3 font-semibold text-white transition-colors hover:bg-primary/90 focus:outline-none disabled:opacity-50"
           >
             {loading ? 'Verifying...' : 'Login to Dashboard'}
           </button>

@@ -1,61 +1,69 @@
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, Power, Droplets, MoreHorizontal, Filter, ChevronDown } from "lucide-react";
+import { Search, Power, Droplets, ChevronDown, ChevronLeft, ChevronRight, Filter } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { InventoryItem } from "@/lib/mockData";
 
+const PAGE_SIZE = 10;
+
 interface InventoryTableProps {
     data: InventoryItem[];
-    onToggleUtility?: (id: string, type: "power" | "water") => void;
+    initialFilter?: string;
 }
 
-export function InventoryTable({ data }: InventoryTableProps) {
+export function InventoryTable({ data, initialFilter = "" }: InventoryTableProps) {
     const navigate = useNavigate();
-    const [searchQuery, setSearchQuery] = useState("");
+    const [searchQuery, setSearchQuery] = useState(initialFilter);
     const [statusFilter, setStatusFilter] = useState<"All" | "Online" | "Offline">("All");
     const [isFilterOpen, setIsFilterOpen] = useState(false);
+    const [page, setPage] = useState(1);
 
     const filteredData = useMemo(() => {
+        setPage(1);
         return data.filter((item) => {
             const matchesSearch =
                 item.tenant.toLowerCase().includes(searchQuery.toLowerCase()) ||
                 item.unit.toLowerCase().includes(searchQuery.toLowerCase()) ||
                 item.meterSerial.toLowerCase().includes(searchQuery.toLowerCase());
-
             const matchesFilter = statusFilter === "All" || item.status === statusFilter;
-
             return matchesSearch && matchesFilter;
         });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [data, searchQuery, statusFilter]);
 
+    const totalPages = Math.max(1, Math.ceil(filteredData.length / PAGE_SIZE));
+    const pageData = filteredData.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+    const start = filteredData.length === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+    const end = Math.min(page * PAGE_SIZE, filteredData.length);
+
     return (
-        <div className="rounded-lg bg-white shadow-sm ring-1 ring-gray-900/5">
+        <div className="rounded-lg bg-white dark:bg-gray-800 shadow-sm ring-1 ring-gray-900/5 dark:ring-gray-700">
             {/* Header & Filters */}
-            <div className="border-b border-gray-200 px-6 py-4">
+            <div className="border-b border-gray-200 dark:border-gray-700 px-6 py-4">
                 <div className="flex flex-col space-y-4 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
-                    <h2 className="text-base font-semibold leading-7 text-gray-900">Device Inventory & Control</h2>
+                    <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">Device Inventory &amp; Control</h2>
                     <div className="flex space-x-3">
                         <div className="relative">
-                            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-900" />
+                            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400 dark:text-gray-500" />
                             <input
                                 type="text"
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
                                 placeholder="Search unit, tenant, or serial..."
-                                className="h-9 w-64 rounded-md border text-gray-900 border-gray-200 pl-9 pr-4 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                                className="h-9 w-64 rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 pl-9 pr-4 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary placeholder:text-gray-400 dark:placeholder:text-gray-500"
                             />
                         </div>
                         <div className="relative">
                             <button
                                 onClick={() => setIsFilterOpen(!isFilterOpen)}
-                                className="flex items-center space-x-2 rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
+                                className="flex items-center space-x-2 rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600"
                             >
                                 <Filter className="h-4 w-4" />
                                 <span>{statusFilter === "All" ? "Filter" : statusFilter}</span>
                                 <ChevronDown className="h-4 w-4 ml-1" />
                             </button>
                             {isFilterOpen && (
-                                <div className="absolute right-0 mt-2 w-40 rounded-md bg-white py-1 shadow-lg ring-1 ring-black ring-opacity-5 z-10">
+                                <div className="absolute right-0 mt-2 w-40 rounded-md bg-white dark:bg-gray-800 py-1 shadow-lg ring-1 ring-black ring-opacity-5 dark:ring-gray-600 z-10">
                                     {(["All", "Online", "Offline"] as const).map((status) => (
                                         <button
                                             key={status}
@@ -64,8 +72,10 @@ export function InventoryTable({ data }: InventoryTableProps) {
                                                 setIsFilterOpen(false);
                                             }}
                                             className={cn(
-                                                "block w-full px-4 py-2 text-left text-sm hover:bg-gray-50",
-                                                statusFilter === status ? "text-primary font-medium" : "text-gray-700"
+                                                "block w-full px-4 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-700",
+                                                statusFilter === status
+                                                    ? "text-primary font-medium"
+                                                    : "text-gray-700 dark:text-gray-300"
                                             )}
                                         >
                                             {status}
@@ -80,28 +90,28 @@ export function InventoryTable({ data }: InventoryTableProps) {
 
             {/* Table */}
             <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm text-gray-500">
-                    <thead className="bg-gray-50 text-xs uppercase text-gray-700">
+                <table className="w-full text-left text-sm text-gray-500 dark:text-gray-400">
+                    <thead className="bg-gray-50 dark:bg-gray-800/60 text-xs uppercase text-gray-700 dark:text-gray-400">
                         <tr>
                             <th className="px-6 py-3 font-medium">Unit / Tenant</th>
                             <th className="px-6 py-3 font-medium">Meter Serial</th>
                             <th className="px-6 py-3 font-medium">Status</th>
-                            <th className="px-6 py-3 font-medium">Utilities State</th>
+                            <th className="px-6 py-3 font-medium">Utilities</th>
                             <th className="px-6 py-3 font-medium">Last Update</th>
                             <th className="px-6 py-3 font-medium text-right">Actions</th>
                         </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-200">
-                        {filteredData.length > 0 ? (
-                            filteredData.map((item) => (
+                    <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                        {pageData.length > 0 ? (
+                            pageData.map((item) => (
                                 <tr
                                     key={item.id}
-                                    className="hover:bg-gray-50 cursor-pointer"
-                                    onClick={() => navigate(`/inventory/${item.id}`)}
+                                    className="hover:bg-gray-50 dark:hover:bg-gray-700/40 cursor-pointer"
+                                    onClick={() => navigate(`/devices/${item.id}`)}
                                 >
                                     <td className="px-6 py-4">
-                                        <div className="font-medium text-gray-900">{item.unit}</div>
-                                        <div className="text-xs">{item.tenant}</div>
+                                        <div className="font-medium text-gray-900 dark:text-gray-100">{item.unit}</div>
+                                        <div className="text-xs text-gray-500 dark:text-gray-400">{item.tenant}</div>
                                     </td>
                                     <td className="px-6 py-4 font-mono text-xs">{item.meterSerial}</td>
                                     <td className="px-6 py-4">
@@ -109,8 +119,8 @@ export function InventoryTable({ data }: InventoryTableProps) {
                                             className={cn(
                                                 "inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ring-1 ring-inset",
                                                 item.status === "Online"
-                                                    ? "bg-green-50 text-green-700 ring-green-600/20"
-                                                    : "bg-red-50 text-red-700 ring-red-600/20"
+                                                    ? "bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 ring-green-600/20"
+                                                    : "bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 ring-red-600/20"
                                             )}
                                         >
                                             {item.status}
@@ -123,7 +133,7 @@ export function InventoryTable({ data }: InventoryTableProps) {
                                                     "flex h-8 w-8 items-center justify-center rounded-md border transition-colors",
                                                     item.power
                                                         ? "border-primary bg-primary/10 text-primary"
-                                                        : "border-gray-200 bg-gray-50 text-gray-400"
+                                                        : "border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-400"
                                                 )}
                                                 title={item.power ? "Power ON" : "Power OFF"}
                                             >
@@ -133,8 +143,8 @@ export function InventoryTable({ data }: InventoryTableProps) {
                                                 className={cn(
                                                     "flex h-8 w-8 items-center justify-center rounded-md border transition-colors",
                                                     item.water
-                                                        ? "border-cyan-500 bg-cyan-50 text-cyan-600"
-                                                        : "border-gray-200 bg-gray-50 text-gray-400"
+                                                        ? "border-cyan-500 bg-cyan-50 dark:bg-cyan-900/30 text-cyan-600 dark:text-cyan-400"
+                                                        : "border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-400"
                                                 )}
                                                 title={item.water ? "Water ON" : "Water OFF"}
                                             >
@@ -142,17 +152,24 @@ export function InventoryTable({ data }: InventoryTableProps) {
                                             </div>
                                         </div>
                                     </td>
-                                    <td className="px-6 py-4">{item.lastUpdate}</td>
+                                    <td className="px-6 py-4">
+                                        <span className={cn("text-xs", item.status === "Online" ? "text-green-600 dark:text-green-400" : "text-gray-400 dark:text-gray-500")}>
+                                            {item.status === "Online" ? "Live" : "Offline"}
+                                        </span>
+                                    </td>
                                     <td className="px-6 py-4 text-right">
-                                        <button className="text-gray-400 hover:text-gray-600">
-                                            <MoreHorizontal className="h-5 w-5" />
+                                        <button
+                                            className="rounded-md border border-gray-200 dark:border-gray-600 px-3 py-1 text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                                            onClick={(e) => { e.stopPropagation(); navigate(`/devices/${item.id}`); }}
+                                        >
+                                            Detail
                                         </button>
                                     </td>
                                 </tr>
                             ))
                         ) : (
                             <tr>
-                                <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
+                                <td colSpan={6} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
                                     No devices found matching your search.
                                 </td>
                             </tr>
@@ -162,13 +179,30 @@ export function InventoryTable({ data }: InventoryTableProps) {
             </div>
 
             {/* Pagination */}
-            <div className="flex items-center justify-between border-t border-gray-200 px-6 py-4">
-                <div className="text-sm text-gray-500">
-                    Showing <span className="font-medium text-gray-900">{filteredData.length}</span> results
+            <div className="flex items-center justify-between border-t border-gray-200 dark:border-gray-700 px-6 py-4">
+                <div className="text-sm text-gray-500 dark:text-gray-400">
+                    {filteredData.length === 0
+                        ? "No results"
+                        : `Showing ${start}–${end} of ${filteredData.length}`}
                 </div>
-                <div className="flex space-x-2">
-                    <button disabled className="rounded-md border border-gray-200 px-3 py-1 text-sm font-medium text-gray-400 disabled:opacity-50">Previous</button>
-                    <button disabled className="rounded-md border border-gray-200 px-3 py-1 text-sm font-medium text-gray-400 disabled:opacity-50">Next</button>
+                <div className="flex items-center space-x-2">
+                    <button
+                        onClick={() => setPage(p => Math.max(1, p - 1))}
+                        disabled={page === 1}
+                        className="flex items-center rounded-md border border-gray-200 dark:border-gray-600 px-3 py-1 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                        <ChevronLeft className="h-4 w-4 mr-1" /> Prev
+                    </button>
+                    <span className="text-sm text-gray-500 dark:text-gray-400">
+                        {page} / {totalPages}
+                    </span>
+                    <button
+                        onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                        disabled={page === totalPages}
+                        className="flex items-center rounded-md border border-gray-200 dark:border-gray-600 px-3 py-1 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                        Next <ChevronRight className="h-4 w-4 ml-1" />
+                    </button>
                 </div>
             </div>
         </div>

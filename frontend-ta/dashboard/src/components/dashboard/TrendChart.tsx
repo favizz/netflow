@@ -13,17 +13,18 @@ import {
 } from "recharts";
 import { fetchApi } from "@/lib/api";
 
+// Primary green from the design system
+const GREEN = "oklch(0.42 0.16 142)";
+const CYAN = "#06b6d4";
+
 export function TrendChart() {
     const [data, setData] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        // Aggregate daily trends across all units by fetching all units
-        // then querying reporting for the first unit as a system-wide sample
         fetchApi('/unit')
             .then(async (units: any[]) => {
                 if (!units || units.length === 0) { setLoading(false); return; }
-                // Use first unit's daily trend as a representative trend view
                 const firstUnit = units[0].unit_no;
                 const trends = await fetchApi(`/reporting/trends/${encodeURIComponent(firstUnit)}?period=daily`);
                 const mapped = (trends || []).map((t: any) => ({
@@ -38,11 +39,17 @@ export function TrendChart() {
     }, []);
 
     return (
-        <div className="rounded-lg bg-white p-6 shadow-sm ring-1 ring-gray-900/5">
-            <h3 className="mb-4 text-base font-semibold text-gray-900">Consumption Trends</h3>
-            {loading && <p className="text-sm text-gray-400 h-80 flex items-center justify-center">Loading trends...</p>}
+        <div className="rounded-lg bg-white dark:bg-gray-800 p-6 shadow-sm ring-1 ring-gray-900/5 dark:ring-gray-700">
+            <h3 className="mb-4 text-base font-semibold text-gray-900 dark:text-gray-100">Consumption Trends</h3>
+            {loading && (
+                <p className="text-sm text-gray-400 dark:text-gray-500 h-80 flex items-center justify-center">
+                    Loading trends...
+                </p>
+            )}
             {!loading && data.length === 0 && (
-                <p className="text-sm text-gray-400 h-80 flex items-center justify-center">No trend data available yet.</p>
+                <p className="text-sm text-gray-400 dark:text-gray-500 h-80 flex items-center justify-center">
+                    No trend data available yet.
+                </p>
             )}
             {!loading && data.length > 0 && (
                 <div className="h-80 w-full min-w-0 min-h-0">
@@ -50,12 +57,12 @@ export function TrendChart() {
                         <AreaChart data={data} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                             <defs>
                                 <linearGradient id="colorElec" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="5%" stopColor="#5E81F4" stopOpacity={0.8} />
-                                    <stop offset="95%" stopColor="#5E81F4" stopOpacity={0} />
+                                    <stop offset="5%" stopColor={GREEN} stopOpacity={0.8} />
+                                    <stop offset="95%" stopColor={GREEN} stopOpacity={0} />
                                 </linearGradient>
                                 <linearGradient id="colorWater" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.8} />
-                                    <stop offset="95%" stopColor="#06b6d4" stopOpacity={0} />
+                                    <stop offset="5%" stopColor={CYAN} stopOpacity={0.8} />
+                                    <stop offset="95%" stopColor={CYAN} stopOpacity={0} />
                                 </linearGradient>
                             </defs>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
@@ -63,8 +70,8 @@ export function TrendChart() {
                             <YAxis axisLine={false} tickLine={false} tick={{ fill: '#6B7280', fontSize: 12 }} />
                             <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
                             <Legend wrapperStyle={{ paddingTop: '12px', fontSize: '12px' }} />
-                            <Area type="monotone" dataKey="electricity" stroke="#5E81F4" fillOpacity={1} fill="url(#colorElec)" name="Electricity (kWh)" />
-                            <Area type="monotone" dataKey="water" stroke="#06b6d4" fillOpacity={1} fill="url(#colorWater)" name="Water (m³)" />
+                            <Area type="monotone" dataKey="electricity" stroke={GREEN} fillOpacity={1} fill="url(#colorElec)" name="Electricity (kWh)" />
+                            <Area type="monotone" dataKey="water" stroke={CYAN} fillOpacity={1} fill="url(#colorWater)" name="Water (m³)" />
                         </AreaChart>
                     </ResponsiveContainer>
                 </div>

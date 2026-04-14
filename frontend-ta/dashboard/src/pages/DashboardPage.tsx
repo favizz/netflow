@@ -44,8 +44,8 @@ export default function DashboardPage() {
     return (
         <div className="space-y-6">
             <div className="flex items-center justify-between">
-                <h1 className="text-2xl font-bold text-gray-900">Dashboard Overview</h1>
-                <div className="text-sm text-gray-500">Last updated: Just now</div>
+                <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Dashboard Overview</h1>
+                <div className="text-sm text-gray-500 dark:text-gray-400">Last updated: Just now</div>
             </div>
 
             {/* Stats Grid */}
@@ -56,7 +56,7 @@ export default function DashboardPage() {
                     icon={Zap}
                     trend="Aggregated from all units"
                     trendDirection="neutral"
-                    iconBgClass="bg-blue-50"
+                    iconBgClass="bg-primary/10 dark:bg-primary/20"
                     iconColorClass="text-primary"
                 />
                 <StatCard
@@ -65,8 +65,8 @@ export default function DashboardPage() {
                     icon={Droplets}
                     trend="Aggregated from all units"
                     trendDirection="neutral"
-                    iconBgClass="bg-cyan-50"
-                    iconColorClass="text-cyan-600"
+                    iconBgClass="bg-cyan-50 dark:bg-cyan-900/30"
+                    iconColorClass="text-cyan-600 dark:text-cyan-400"
                 />
                 <StatCard
                     title="Online Devices"
@@ -74,8 +74,8 @@ export default function DashboardPage() {
                     icon={Activity}
                     trend="System connectivity"
                     trendDirection="neutral"
-                    iconBgClass="bg-green-50"
-                    iconColorClass="text-green-600"
+                    iconBgClass="bg-green-50 dark:bg-green-900/30"
+                    iconColorClass="text-green-600 dark:text-green-400"
                 />
                 <StatCard
                     title="Active Alerts"
@@ -83,9 +83,9 @@ export default function DashboardPage() {
                     icon={AlertTriangle}
                     trend={stats.alerts > 0 ? "Needs attention" : "All clear"}
                     trendDirection={stats.alerts > 0 ? "down" : "neutral"}
-                    iconBgClass={stats.alerts > 0 ? "bg-red-50" : "bg-green-50"}
-                    iconColorClass={stats.alerts > 0 ? "text-red-600" : "text-green-600"}
-                    valueColorClass={stats.alerts > 0 ? "text-red-600" : "text-gray-900"}
+                    iconBgClass={stats.alerts > 0 ? "bg-red-50 dark:bg-red-900/30" : "bg-green-50 dark:bg-green-900/30"}
+                    iconColorClass={stats.alerts > 0 ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"}
+                    valueColorClass={stats.alerts > 0 ? "text-red-600 dark:text-red-400" : "text-gray-900"}
                 />
             </div>
 

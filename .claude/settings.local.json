@@ -22,7 +22,9 @@
       "Bash(node -e:*)",
       "Bash(mkdir -p /c/Users/Lenovo/AppData/Local/Temp/pdfwork)",
       "Read(//c/Users/Lenovo/AppData/Local/Temp/**)",
-      "Bash(powershell -Command ':*)"
+      "Bash(powershell -Command ':*)",
+      "Bash(pnpm tsc:*)",
+      "Bash(pnpm build:*)"
     ]
   }
 }
