@@ -24,8 +24,26 @@ export class GatewayService {
     };
   }
 
-  getMobileAnomalies(unitNo: string) {
-    return this.anomalyService.getAnomaliesForUnit(unitNo);
+  async getMobileAnomalies(unitNo: string) {
+    const anomalies = await this.anomalyService.getAnomaliesForUnit(unitNo);
+    const txs = await this.paymentsService.listTransactionsForUnit(unitNo);
+    
+    // Get last 5 successful transactions
+    const successfulTxs = txs
+      .filter((tx: any) => tx.status === 'success')
+      .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 5);
+      
+    const topupNotifs = successfulTxs.map((tx: any) => ({
+      anomalyType: 'topup_success',
+      severity: 'info',
+      target: 'resident',
+      message: `Pembelian token sebesar Rp${Number(tx.amount).toLocaleString('id-ID')} berhasil masuk ke saldo Anda.`,
+      metadata: { amount: tx.amount, tx_id: tx.id },
+      detectedAt: tx.confirmedAt || tx.createdAt,
+    }));
+    
+    return [...topupNotifs, ...anomalies].sort((a: any, b: any) => new Date(b.detectedAt).getTime() - new Date(a.detectedAt).getTime());
   }
 
   getMobileTrends(unitNo: string, period: 'daily' | 'monthly') {

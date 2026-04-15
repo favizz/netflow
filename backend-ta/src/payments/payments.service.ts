@@ -25,46 +25,107 @@ export class PaymentsService {
   async initiateTopup(dto: InitiateTopupDto) {
     const unit = await this.unitService.findByUnitNo(dto.unitNo);
     const id = `TRX-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-    const gatewayReference = `PG-${Math.floor(100000 + Math.random() * 900000)}`;
 
-    const tx = this.txRepo.create({
-      id,
-      unit_id: unit.id,
-      unit_no: dto.unitNo,
-      amount_rp: dto.amount,
-      method: dto.method,
-      status: 'pending',
-      gateway_reference: gatewayReference,
+    const isProd = this.configService.get<string>('MIDTRANS_IS_PRODUCTION') === 'true';
+    const serverKey = this.configService.get<string>('MIDTRANS_SERVER_KEY');
+    
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const midtransClient = require('midtrans-client');
+    const coreApi = new midtransClient.CoreApi({
+        isProduction: isProd,
+        serverKey: serverKey,
+        clientKey: this.configService.get<string>('MIDTRANS_CLIENT_KEY') || ''
     });
 
-    await this.txRepo.save(tx);
-
-    return {
-      transactionId: id,
-      gatewayReference,
-      checkoutUrl: `/payments/checkout/${id}`,
-      status: tx.status,
+    const paymentParams: any = {
+      payment_type: dto.method === 'transfer' ? 'bank_transfer' : 'gopay',
+      transaction_details: {
+        order_id: id,
+        gross_amount: dto.amount,
+      },
+      customer_details: {
+        first_name: "Unit",
+        last_name: dto.unitNo,
+      }
     };
+
+    if (dto.method === 'transfer') {
+      paymentParams.bank_transfer = { bank: 'bca' };
+    }
+
+    try {
+      const mResponse = await coreApi.charge(paymentParams);
+
+      let vaNumber = undefined;
+      let qrUrl = undefined;
+      
+      if (mResponse.va_numbers && mResponse.va_numbers.length > 0) {
+        vaNumber = mResponse.va_numbers[0].va_number;
+      }
+      
+      if (mResponse.actions) {
+        const qrAction = mResponse.actions.find((a: any) => a.name === 'generate-qr-code');
+        if (qrAction) qrUrl = qrAction.url;
+      }
+
+      const tx = this.txRepo.create({
+        id,
+        unit_id: unit.id,
+        unit_no: dto.unitNo,
+        amount_rp: dto.amount,
+        method: dto.method,
+        status: 'pending',
+        gateway_reference: mResponse.transaction_id || mResponse.order_id,
+      });
+
+      await this.txRepo.save(tx);
+
+      return {
+        transactionId: id,
+        gatewayReference: tx.gateway_reference,
+        vaNumber,
+        qrUrl,
+        status: tx.status,
+      };
+    } catch (e: any) {
+      console.error('Midtrans Error:', e);
+      throw new Error('Gagal initiate pembayaran dengan Midtrans');
+    }
   }
 
-  async handleWebhook(dto: PaymentWebhookDto) {
-    this.verifyWebhookSecurity(dto);
+  async handleWebhook(dto: any) {
+    this.verifyMidtransSignature(dto);
 
-    // DB-level idempotency: if this event was already processed, return early
-    const alreadyProcessed = await this.txRepo.findOne({ where: { webhook_event_id: dto.eventId } });
+    // Using transaction_id for event id since midtrans might ping multiple times
+    const eventId = dto.transaction_id + '-' + dto.transaction_status;
+    const alreadyProcessed = await this.txRepo.findOne({ where: { webhook_event_id: eventId } });
     if (alreadyProcessed) {
       return { ...this.toResponse(alreadyProcessed), idempotent: true };
     }
 
-    const tx = await this.txRepo.findOne({ where: { id: dto.transactionId } });
+    const tx = await this.txRepo.findOne({ where: { id: dto.order_id } });
     if (!tx) throw new NotFoundException('Transaction not found');
 
     if (tx.status === 'pending') {
-      tx.status = dto.status;
-      tx.webhook_event_id = dto.eventId;
-      tx.confirmed_at = new Date();
+      let finalStatus: 'pending' | 'success' | 'failed' = 'pending';
+      const mStatus = dto.transaction_status;
+      const fStatus = dto.fraud_status;
 
-      if (dto.status === 'success') {
+      if (mStatus === 'capture') {
+        finalStatus = fStatus === 'challenge' ? 'pending' : 'success';
+      } else if (mStatus === 'settlement') {
+        finalStatus = 'success';
+      } else if (mStatus === 'cancel' || mStatus === 'deny' || mStatus === 'expire') {
+        finalStatus = 'failed';
+      } else if (mStatus === 'pending') {
+        finalStatus = 'pending';
+      }
+
+      tx.status = finalStatus;
+      tx.webhook_event_id = eventId;
+
+      if (finalStatus === 'success') {
+        tx.confirmed_at = new Date();
         await this.unitService.creditBalanceByUnitNo(tx.unit_no, Number(tx.amount_rp));
       }
 
@@ -153,27 +214,18 @@ export class PaymentsService {
     return lines.join('\n');
   }
 
-  private verifyWebhookSecurity(dto: PaymentWebhookDto) {
-    const now = Date.now();
-    const timestamp = Number(dto.timestamp);
-    const maxSkewMs = Number(this.configService.get<string>('PAYMENT_WEBHOOK_MAX_SKEW_MS') || 300000);
+  private verifyMidtransSignature(payload: any) {
+    const serverKey = this.configService.get<string>('MIDTRANS_SERVER_KEY');
+    const orderId = payload.order_id;
+    const statusCode = payload.status_code;
+    const grossAmount = payload.gross_amount;
+    const signatureKey = payload.signature_key;
 
-    if (!Number.isFinite(timestamp) || Math.abs(now - timestamp) > maxSkewMs) {
-      throw new UnauthorizedException('Webhook timestamp out of allowed window');
-    }
+    const createHash = require('crypto').createHash;
+    const hash = createHash('sha512').update(orderId + statusCode + grossAmount + serverKey).digest('hex');
 
-    const secret = this.configService.get<string>('PAYMENT_WEBHOOK_SECRET') || 'change-me-webhook-secret';
-    const canonicalPayload = `${dto.transactionId}|${dto.status}|${dto.eventId}|${dto.timestamp}`;
-
-    const expected = createHmac('sha256', secret).update(canonicalPayload).digest('hex');
-    const expectedBuffer = Buffer.from(expected, 'utf8');
-    const receivedBuffer = Buffer.from(dto.signature, 'utf8');
-
-    if (
-      expectedBuffer.length !== receivedBuffer.length ||
-      !timingSafeEqual(expectedBuffer, receivedBuffer)
-    ) {
-      throw new UnauthorizedException('Invalid webhook signature');
+    if (hash !== signatureKey) {
+      throw new UnauthorizedException('Invalid Midtrans Signature');
     }
   }
 }

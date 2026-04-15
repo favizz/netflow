@@ -6,10 +6,10 @@ import { DeviceService } from './device.service';
 export class DeviceController {
   constructor(private readonly deviceService: DeviceService) {}
 
-  // Pattern: "device/+/data" -> + is a wildcard matching any device_id segment
-  @MessagePattern('device/+/data')
+  // Pattern: "device/+/telemetry" -> + is a wildcard matching any device_id segment
+  @MessagePattern('device/+/telemetry')
   async handleSensorData(@Payload() data: any, @Ctx() ctx: MqttContext) {
-    // Extract device_id from the topic (e.g. "device/DEV-A-101/data" -> "DEV-A-101")
+    // Extract device_id from the topic (e.g. "device/DEV-A-101/telemetry" -> "DEV-A-101")
     const topic: string = ctx.getTopic();
     const deviceId = topic.split('/')[1] ?? null;
 

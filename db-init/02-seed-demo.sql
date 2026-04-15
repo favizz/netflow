@@ -6,6 +6,8 @@
 -- Telemetry: 30 days x hourly per device (~721 rows each)
 -- Payments : top-up history over ~3 months
 
+USE ta_db;
+
 -- -----------------------------------------
 -- 1. REFERENCE DATA
 -- -----------------------------------------

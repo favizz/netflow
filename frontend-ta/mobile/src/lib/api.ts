@@ -158,9 +158,10 @@ export type AnomalyType =
   | 'low_power_factor'
   | 'zero_flow'
   | 'usage_spike'
+  | 'topup_success'
   | 'backflow';
 
-export type AnomalySeverity = 'critical' | 'warning';
+export type AnomalySeverity = 'critical' | 'warning' | 'info';
 
 export type AnomalyItem = {
   anomalyType: AnomalyType;
@@ -313,7 +314,7 @@ export const api = {
   },
 
   initiateTopup(unitNo: string, amount: number, method: 'qris' | 'transfer' | 'ewallet') {
-    return request<{ transactionId: string; checkoutUrl: string; status: string }>(
+    return request<{ transactionId: string; checkoutUrl: string; status: string; vaNumber?: string; qrUrl?: string }>(
       `/gateway/mobile/${encodeURIComponent(unitNo)}/topup/initiate`,
       {
         method: 'POST',
@@ -321,6 +322,7 @@ export const api = {
       },
     );
   },
+
 
   autoConfirmTopup(unitNo: string, transactionId: string) {
     return request<PaymentTransaction>(

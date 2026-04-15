@@ -137,7 +137,7 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
   const [energyTariff, setEnergyTariff] = useState<number>(DEFAULT_TARIFF.kwh)
   const [currentBalance, setCurrentBalance] = useState("0 KWh")
   const [loading, setLoading] = useState(false)
-  const [initResult, setInitResult] = useState<{ transactionId: string; gatewayReference: string } | null>(null)
+  const [initResult, setInitResult] = useState<{ transactionId: string; gatewayReference: string; vaNumber?: string; qrUrl?: string } | null>(null)
   const [transactionId, setTransactionId] = useState("")
   const [copied, setCopied] = useState(false)
   const [timeLeft, setTimeLeft] = useState(0)
@@ -188,7 +188,12 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
     setLoading(true)
     try {
       const result = await api.initiateTopup(unitId, selectedAmount, selectedOption.method)
-      setInitResult({ transactionId: result.transactionId, gatewayReference: result.transactionId.replace("TRX-", "") })
+      setInitResult({
+        transactionId: result.transactionId,
+        gatewayReference: result.transactionId.replace("TRX-", ""),
+        vaNumber: result.vaNumber,
+        qrUrl: result.qrUrl
+      })
       setStep("instruction")
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Gagal memulai transaksi")
@@ -235,7 +240,8 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
   }
 
   // ── Virtual Account number derived from reference ─────────────────────────
-  const vaNumber = initResult ? `8808 ${initResult.gatewayReference.slice(0, 4)} ${initResult.gatewayReference.slice(4, 8) || "0000"} ${initResult.gatewayReference.slice(8, 12) || "0000"}` : ""
+  // Replace the complex slice logic with:
+const vaNumber = initResult?.vaNumber || "Mendapatkan nomor..."
 
   // ── Render ───────────────────────────────────────────────────────────────
   if (step === "success") return <SuccessScreen transactionId={transactionId} amount={selectedAmount} method={selectedOption} onBuyAgain={restart} onBack={onBack} />
@@ -379,9 +385,15 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
               <Card className="p-6 flex flex-col items-center gap-4">
                 <p className="text-sm font-semibold text-foreground">Scan kode QRIS berikut</p>
                 {/* QR placeholder */}
-                <div className="w-48 h-48 bg-white rounded-2xl border-2 border-border flex flex-col items-center justify-center gap-2 shadow-inner">
-                  <QrCode size={96} className="text-foreground" strokeWidth={1.2} />
-                  <p className="text-[10px] font-mono text-muted-foreground">{initResult.transactionId.slice(-12)}</p>
+                <div className="w-48 h-48 bg-white rounded-2xl border-2 border-border flex flex-col items-center justify-center gap-2 shadow-inner overflow-hidden">
+                  {initResult.qrUrl ? (
+                    <img src={initResult.qrUrl} alt="QRIS Code" className="w-full h-full object-contain" />
+                  ) : (
+                    <>
+                      <QrCode size={96} className="text-foreground" strokeWidth={1.2} />
+                      <p className="text-[10px] font-mono text-muted-foreground">{initResult.transactionId.slice(-12)}</p>
+                    </>
+                  )}
                 </div>
                 <div className="text-center space-y-1">
                   <p className="text-xs text-muted-foreground">Berlaku selama <span className="font-semibold text-foreground">15 menit</span></p>

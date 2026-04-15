@@ -29,6 +29,7 @@ const ANOMALY_META: Record<
   backflow:           { label: "Aliran Air Balik",        Icon: Activity,       action: "Laporkan ke pengelola — kemungkinan masalah instalasi pipa." },
   jailbreak:          { label: "Bypass Sistem",           Icon: ShieldAlert,    action: "Hubungi pengelola gedung segera." },
   device_offline:     { label: "Perangkat Offline",       Icon: WifiOff,        action: "Hubungi pengelola untuk pemeriksaan perangkat." },
+  topup_success:      { label: "Pembelian Token Berhasil", Icon: CheckCircle,   action: "Token otomatis terisi. Cek saldo di Beranda." },
 }
 
 // ── App ───────────────────────────────────────────────────────────────────────
@@ -259,13 +260,24 @@ function NotificationsPage({ anomalies }: { anomalies: AnomalyItem[] }) {
               action: "",
             }
             const isCritical = a.severity === "critical"
+            const isInfo     = a.severity === "info"
             const colorWrap  = isCritical
               ? "bg-status-critical/8 border-status-critical/25"
+              : isInfo 
+              ? "bg-primary/8 border-primary/25"
               : "bg-status-warn/8 border-status-warn/25"
-            const colorIcon  = isCritical ? "text-status-critical" : "text-status-warn"
+            const colorIcon  = isCritical 
+              ? "text-status-critical" 
+              : isInfo 
+              ? "text-primary" 
+              : "text-status-warn"
             const colorBadge = isCritical
               ? "bg-status-critical text-white"
+              : isInfo
+              ? "bg-primary/15 text-primary"
               : "bg-status-warn/15 text-status-warn"
+
+            const badgeLabel = isCritical ? "Kritis" : isInfo ? "Info" : "Peringatan"
 
             return (
               <div key={idx} className={`rounded-2xl border p-4 space-y-2 ${colorWrap}`}>
@@ -274,7 +286,7 @@ function NotificationsPage({ anomalies }: { anomalies: AnomalyItem[] }) {
                   <meta.Icon size={18} className={`flex-shrink-0 ${colorIcon}`} />
                   <span className={`text-sm font-semibold ${colorIcon}`}>{meta.label}</span>
                   <span className={`ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${colorBadge}`}>
-                    {isCritical ? "Kritis" : "Peringatan"}
+                    {badgeLabel}
                   </span>
                 </div>
 

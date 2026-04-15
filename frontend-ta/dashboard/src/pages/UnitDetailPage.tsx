@@ -113,7 +113,7 @@ export default function UnitDetailPage() {
         if (!unitInfo?.meterSerial) return;
 
         const client = mqtt.connect(MQTT_CONFIG.brokerUrl, MQTT_CONFIG.options);
-        const telemetryTopic = `device/${unitInfo.meterSerial}/data`;
+        const telemetryTopic = `device/${unitInfo.meterSerial}/telemetry`;
 
         client.on('connect', () => {
             setIsConnected(true);

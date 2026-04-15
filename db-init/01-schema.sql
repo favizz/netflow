@@ -1,6 +1,9 @@
 -- TA-Flowmeter MySQL 8.0 Schema
 -- Auto-run by Docker on first container start.
--- For manual VPS setup: mysql -u <user> -p <db> < db-init/01-schema.sql
+-- For manual VPS setup: mysql -u <user> -p < db-init/01-schema.sql
+
+CREATE DATABASE IF NOT EXISTS ta_db;
+USE ta_db;
 
 -- -----------------------------------------
 -- 1. RESIDENTS
