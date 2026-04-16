@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { encodeCommand } from '../common/binary-codec';
 import { ClientProxy } from '@nestjs/microservices';
 import { PaymentsService } from '../payments/payments.service';
 import { ReportingService } from '../reporting/reporting.service';
@@ -61,13 +62,13 @@ export class GatewayService {
   async setRelayByUnitNo(unitNo: string, on: boolean) {
     const unit = await this.unitService.findByUnitNo(unitNo);
     await this.unitService.setRelayStatus(unit.id, on);
-    this.mqttClient.emit(`device/${unit.device_id}/command`, { r: on ? 1 : 0 });
+    this.mqttClient.emit(`device/${unit.device_id}/command`, encodeCommand('relay', on ? 1 : 0));
     return { relayStatus: on };
   }
 
   async setValveByUnitNo(unitNo: string, open: boolean) {
     const unit = await this.unitService.findByUnitNo(unitNo);
-    this.mqttClient.emit(`device/${unit.device_id}/command`, { v: open ? 1 : 0 });
+    this.mqttClient.emit(`device/${unit.device_id}/command`, encodeCommand('valve', open ? 1 : 0));
     return { valveStatus: open };
   }
 }

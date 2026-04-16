@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ClientsModule, Transport } from '@nestjs/microservices';
+
 import { ResidentsModule } from '../residents/residents.module';
 import { UnitModule } from '../unit/unit.module';
 import { AdminController } from './admin.controller';
@@ -8,7 +10,34 @@ import { PaymentsModule } from '../payments/payments.module';
 import { AnomalyModule } from '../anomaly/anomaly.module';
 
 @Module({
-  imports: [ConfigModule, ResidentsModule, UnitModule, PaymentsModule, AnomalyModule],
+  imports: [
+    ConfigModule,
+    ResidentsModule,
+    UnitModule,
+    PaymentsModule,
+    AnomalyModule,
+    ClientsModule.registerAsync([
+      {
+        name: 'MQTT_CLIENT',
+        imports: [ConfigModule],
+        useFactory: (configService: ConfigService) => ({
+          transport: Transport.MQTT,
+          options: {
+            url: configService.get<string>('MQTT_BROKER_URL') || 'mqtt://localhost:1883',
+            serializer: {
+              serialize: (value: { data: unknown }): Buffer => {
+                const d = value.data;
+                if (Buffer.isBuffer(d)) return d;
+                if (d instanceof Uint8Array) return Buffer.from(d);
+                return Buffer.from(JSON.stringify(d));
+              },
+            },
+          },
+        }),
+        inject: [ConfigService],
+      },
+    ]),
+  ],
   controllers: [AdminController],
   providers: [AdminService],
 })

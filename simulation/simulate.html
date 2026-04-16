@@ -324,7 +324,7 @@ body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', syste
 
   <div class="preview-panel">
     <div class="preview-header">
-      <span>Last JSON Payload</span>
+      <span>Last Binary Frame (21B)</span>
       <span id="previewTopic" style="color:var(--primary)">—</span>
     </div>
     <div class="preview-code" id="previewCode">{ menunggu koneksi... }</div>
@@ -343,10 +343,43 @@ let nextIn       = 0;      // seconds until next send
 let sentTotal    = 0;
 let energyTotal  = 100.00;
 let waterTotal   = 50.000;
+let balance      = 150000; // Rp — decremented each tick by simulated cost
+let rs           = 1;      // relay status
+let vs           = 1;      // valve status
 let burstRunning = false;
 
 // Injection queue — each entry: { overrides, tag, level, note }
 let queue = [];
+
+// ── Binary encoder ───────────────────────────────────────────────────────────
+// Matches backend-ta/src/common/binary-codec.ts  encodeTelemetry()
+// Layout (21 bytes, all big-endian):
+//   [0:3]  uint32  et  × 100    (kWh)
+//   [4:5]  uint16  p   × 10     (W)
+//   [6:7]  uint16  v   × 10     (V)
+//   [8:9]  uint16  c   × 1000   (A)
+//  [10:11] uint16  wf  × 100    (L/min)
+//  [12:15] uint32  wt  × 1000   (m³)
+//  [16:19] uint32  b   × 1      (Rp integer)
+//  [20]    uint8   flags  bit0=relay  bit1=valve
+function buildTelemetryBinary(f) {
+  const buf  = new ArrayBuffer(21);
+  const view = new DataView(buf);
+  const u8   = new Uint8Array(buf);
+  view.setUint32( 0, Math.round((f.et  ?? 0) * 100),  false);
+  view.setUint16( 4, Math.round((f.p   ?? 0) * 10),   false);
+  view.setUint16( 6, Math.round((f.v   ?? 0) * 10),   false);
+  view.setUint16( 8, Math.round((f.c   ?? 0) * 1000), false);
+  view.setUint16(10, Math.round((f.wf  ?? 0) * 100),  false);
+  view.setUint32(12, Math.round((f.wt  ?? 0) * 1000), false);
+  view.setUint32(16, Math.round( f.b   ?? 0),          false);
+  u8[20] = ((f.rs ?? 0) & 1) | (((f.vs ?? 0) & 1) << 1);
+  return u8;
+}
+
+function hexDump(u8) {
+  return Array.from(u8).map(b => b.toString(16).padStart(2, '0').toUpperCase()).join(' ');
+}
 
 // ── Normal random-walk state ─────────────────────────────────────────────────
 // Values drift slowly each tick — simulates real sensor behaviour under varying load
@@ -368,8 +401,8 @@ function advanceNormal() {
 
 /** Returns the current drifted normal base (does NOT advance the walk). */
 function normalBase() {
-  const i = parseFloat((rwP / rwV).toFixed(2));
-  return { v: rwV, i, p: rwP, wf: rwWF };
+  const c = parseFloat((rwP / rwV).toFixed(3));
+  return { v: rwV, c, p: rwP, wf: rwWF };
 }
 
 // ── MQTT ────────────────────────────────────────────────────────────────────
@@ -394,8 +427,8 @@ function doConnect() {
   mqttClient.on('connect', () => {
     connected = true;
     const dev = id('deviceId').value.trim();
-    id('topicLbl').textContent = `device/${dev}/telemetry`;
-    id('previewTopic').textContent = `device/${dev}/telemetry`;
+    id('topicLbl').textContent = `device/${dev}/data`;
+    id('previewTopic').textContent = `device/${dev}/data`;
     setStatus('on', `Connected — ${url}`);
     id('connBtn').textContent = 'Disconnect';
     id('connBtn').className   = 'btn btn-disc';
@@ -532,11 +565,13 @@ async function burst(scenario, n) {
     if (!connected) break;
     const overrides = c.nullMode ? null : c.fn(i);
     if (overrides === null) {
-      // null mode: send only dev_id + et (no sensor fields)
-      const dev = id('deviceId').value.trim();
+      // null mode: all sensor fields zero, only et/wt/balance preserved
       energyTotal = parseFloat((energyTotal + 0.001).toFixed(3));
-      const payload = { dev_id: dev, et: energyTotal };
-      publishRaw(payload, c.tag, c.level, `${c.note} [${i+1}/${n}]`);
+      publishRaw(
+        { et: energyTotal, wt: waterTotal, b: Math.round(balance), rs, vs,
+          p: 0, v: 0, c: 0, wf: 0 },
+        c.tag, c.level, `${c.note} [${i+1}/${n}]`
+      );
     } else {
       doPublish(overrides, c.tag, c.level, `${c.note} [${i+1}/${n}]`);
     }
@@ -583,8 +618,6 @@ function clearQueue() {
 
 // ── Publish ─────────────────────────────────────────────────────────────────
 function doPublish(overrides, tag, level, note) {
-  const dev = id('deviceId').value.trim();
-
   // Advance the random walk only on normal ticks (not when an anomaly locks values)
   const isAnomaly = Object.keys(overrides).length > 0;
   if (!isAnomaly) advanceNormal();
@@ -592,43 +625,65 @@ function doPublish(overrides, tag, level, note) {
   energyTotal = parseFloat((energyTotal + 0.01).toFixed(3));
   waterTotal  = parseFloat((waterTotal  + 0.001).toFixed(4));
 
-  const payload = {
-    dev_id: dev,
-    ...normalBase(),   // drifting normal values as base
+  // Simulate cost deduction (roughly 5s worth of consumption)
+  const base = normalBase();
+  const p_used = overrides.p ?? base.p;
+  const wf_used = overrides.wf ?? base.wf;
+  const addedEnergy = (p_used / 3600.0) * 5;
+  const addedWater  = (wf_used / 1000.0) * (5.0 / 60.0);
+  balance = Math.max(0, balance - (addedEnergy * 1444.70 + addedWater * 5000.0));
+  if (balance <= 0) { rs = 0; vs = 0; }
+
+  // Build field map — note: simulation uses 'i' for current, protocol uses 'c'
+  const fields = {
     et: energyTotal,
     wt: waterTotal,
-    ...overrides,      // anomaly overrides win over the normal base
+    b:  Math.round(balance),
+    rs,
+    vs,
+    ...base,                        // v, p, wf, c (from normalBase)
+    ...overrides,                   // anomaly overrides win
   };
+  // normalBase() returns { v, i, p, wf } — map i→c for the binary frame
+  if (fields.i !== undefined && fields.c === undefined) {
+    fields.c = fields.i;
+  }
 
-  publishRaw(payload, tag, level, note);
+  publishRaw(fields, tag, level, note);
 }
 
-function publishRaw(payload, tag, level, note) {
+function publishRaw(fields, tag, level, note) {
   if (!connected || !mqttClient) return;
   const dev   = id('deviceId').value.trim();
-  const topic = `device/${dev}/telemetry`;
-  const json  = JSON.stringify(payload);
+  const topic = `device/${dev}/data`;
 
-  mqttClient.publish(topic, json, { qos: 1 });
+  const frame = buildTelemetryBinary(fields);
+  mqttClient.publish(topic, Buffer.from(frame), { qos: 1 });
   sentTotal++;
 
   id('cntSent').textContent = sentTotal;
   id('etVal').textContent   = energyTotal.toFixed(2);
   id('wtVal').textContent   = waterTotal.toFixed(3);
-  id('previewCode').textContent = JSON.stringify(payload, null, 2);
+  id('previewCode').textContent =
+    `[${frame.length}B binary]\n` +
+    hexDump(frame) + '\n\n' +
+    `et=${(fields.et??0).toFixed(2)}kWh  p=${(fields.p??0).toFixed(1)}W  v=${(fields.v??0).toFixed(1)}V\n` +
+    `c=${(fields.c??0).toFixed(3)}A  wf=${(fields.wf??0).toFixed(2)}L/m  wt=${(fields.wt??0).toFixed(3)}m³\n` +
+    `b=Rp${Math.round(fields.b??0)}  rs=${fields.rs??0}  vs=${fields.vs??0}`;
 
-  logPayload(payload, tag, level, note);
+  logPayload(fields, tag, level, note);
 }
 
 // ── Log ──────────────────────────────────────────────────────────────────────
 function logPayload(payload, tag, level, note) {
-  const v  = payload.v  != null ? `V:${(+payload.v).toFixed(1)}` : 'V:null';
-  const p  = payload.p  != null ? `P:${(+payload.p).toFixed(0)}W` : 'P:null';
-  const wf = payload.wf != null ? `WF:${(+payload.wf).toFixed(2)}` : 'WF:null';
-  const i  = payload.i  != null ? `I:${(+payload.i).toFixed(1)}A` : '';
+  const v  = payload.v  != null ? `V:${(+payload.v).toFixed(1)}`  : 'V:0';
+  const p  = payload.p  != null ? `P:${(+payload.p).toFixed(0)}W` : 'P:0';
+  const wf = payload.wf != null ? `WF:${(+payload.wf).toFixed(2)}`  : 'WF:0';
+  const c  = payload.c  != null ? `I:${(+payload.c).toFixed(3)}A` : '';
   const et = `ET:${(+(payload.et||0)).toFixed(2)}`;
+  const bal = `Rp:${Math.round(payload.b ?? balance)}`;
 
-  const fields = [v, p, wf, i, et].filter(Boolean).join('  ');
+  const fields = [v, p, wf, c, et, bal].filter(Boolean).join('  ');
   const dataStr = fields + (note ? `  ← ${note}` : '');
 
   addLogLine(level, tag, dataStr);

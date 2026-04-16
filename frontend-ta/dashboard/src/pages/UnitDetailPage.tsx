@@ -5,6 +5,14 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsToolti
 import { cn } from "@/lib/utils";
 import mqtt from "mqtt";
 import { decode as msgpackDecode } from "@msgpack/msgpack";
+
+// Custom 1-byte binary command frame.
+// bits [7:4] = type  : 0x1 = relay, 0x2 = valve
+// bits [3:0] = value : 0 = off/close, 1 = on/open
+function encodeCommand(type: 'relay' | 'valve', value: 0 | 1): Buffer {
+    const typeNibble = type === 'relay' ? 0x10 : 0x20;
+    return Buffer.from([typeNibble | (value & 0x0f)]);
+}
 import { fetchApi } from "@/lib/api";
 
 type TimeRange = "Real-Time" | "Today" | "Custom";
@@ -191,19 +199,28 @@ export default function UnitDetailPage() {
         return () => { client.end(); };
     }, [unitInfo?.meterSerial]);
 
-    const handlePowerToggle = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handlePowerToggle = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const newState = e.target.checked;
         setPowerState(newState);
 
+        // Persist to DB via admin endpoint so the state survives page reload
+        if (id) {
+            fetchApi(`/unit/${id}/relay`, {
+                method: 'PATCH',
+                body: JSON.stringify({ relayStatus: newState }),
+            }).catch(console.error);
+        }
+
+        // Publish 1-byte binary command: 0x11 = relay on, 0x10 = relay off
         if (unitInfo?.meterSerial && mqttClient && isConnected) {
-            const cmdTopic = `device/${unitInfo.meterSerial}/relay/set`;
-            const payload = newState ? "1" : "0";
+            const cmdTopic = `device/${unitInfo.meterSerial}/command`;
+            const payload = encodeCommand('relay', newState ? 1 : 0);
             mqttClient.publish(cmdTopic, payload);
             setLiveLogs(prev => [{
                 timestamp: new Date().toISOString(),
                 value: newState ? 1 : 0,
                 unit: 'CMD',
-                rawPayload: `OUTGOING To ${cmdTopic}: ${payload}`,
+                rawPayload: `OUTGOING [Binary] ${cmdTopic}: relay=${newState ? 1 : 0} (0x${payload[0].toString(16).toUpperCase()}) 1B`,
             }, ...prev.slice(0, 49)]);
         }
     };
@@ -212,15 +229,16 @@ export default function UnitDetailPage() {
         const newState = e.target.checked;
         setWaterState(newState);
 
+        // Publish 1-byte binary command: 0x21 = valve open, 0x20 = valve close
         if (unitInfo?.meterSerial && mqttClient && isConnected) {
-            const cmdTopic = `device/${unitInfo.meterSerial}/valve/set`;
-            const payload = newState ? "1" : "0";
+            const cmdTopic = `device/${unitInfo.meterSerial}/command`;
+            const payload = encodeCommand('valve', newState ? 1 : 0);
             mqttClient.publish(cmdTopic, payload);
             setLiveLogs(prev => [{
                 timestamp: new Date().toISOString(),
                 value: newState ? 1 : 0,
                 unit: 'CMD',
-                rawPayload: `OUTGOING To ${cmdTopic}: ${payload}`,
+                rawPayload: `OUTGOING [Binary] ${cmdTopic}: valve=${newState ? 1 : 0} (0x${payload[0].toString(16).toUpperCase()}) 1B`,
             }, ...prev.slice(0, 49)]);
         }
     };

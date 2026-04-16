@@ -2,7 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
-import { decode } from '@msgpack/msgpack';
+import { decodeTelemetry, encodeCommand } from '../common/binary-codec';
 import { Unit } from '../unit/entities/unit.entity';
 import { MeterReading } from './entities/device.entity';
 import { AnomalyService } from '../anomaly/anomaly.service';
@@ -22,15 +22,17 @@ export class DeviceService {
     const deviceId: string | undefined = payload?._deviceId || payload?.dev_id || payload?.device_id;
     if (!deviceId) return;
 
-    // Decode payload: supports MessagePack binary buffer or plain JSON object
+    // Decode payload: custom 21-byte binary telemetry frame from firmware.
+    // Falls back to plain object (e.g. unit-test injection) if not a Buffer.
     let data: Record<string, any>;
     if (Buffer.isBuffer(payload) || payload instanceof Uint8Array) {
-      data = decode(payload) as Record<string, any>;
+      const buf = Buffer.isBuffer(payload) ? payload : Buffer.from(payload);
+      if (buf.length < 21) return; // malformed frame
+      data = decodeTelemetry(buf) as Record<string, any>;
     } else if (typeof payload === 'object' && payload !== null) {
-      // Already parsed by NestJS (JSON or enriched object from controller)
       data = payload as Record<string, any>;
     } else {
-      return; // unrecognised format
+      return;
     }
 
     const incomingEnergyTotal = Number(data.et || 0);
@@ -75,11 +77,11 @@ export class DeviceService {
             unit.balance = 0;
             if (unit.relay_status) {
               unit.relay_status = false;
-              this.mqttClient.emit(`device/${deviceId}/command`, { r: 0 });
+              this.mqttClient.emit(`device/${deviceId}/command`, encodeCommand('relay', 0));
             }
             if (unit.valve_status) {
               unit.valve_status = false;
-              this.mqttClient.emit(`device/${deviceId}/command`, { v: 0 });
+              this.mqttClient.emit(`device/${deviceId}/command`, encodeCommand('valve', 0));
             }
           }
         }

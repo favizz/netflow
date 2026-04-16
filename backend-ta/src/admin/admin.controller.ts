@@ -1,7 +1,7 @@
 import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, UseGuards } from '@nestjs/common';
 import { AdminApiKeyGuard } from '../common/guards/admin-api-key.guard';
 import { UpdateAdminAccessDto } from './dto/update-admin-access.dto';
-import { AdminService } from './admin.service';
+import { AdminService, CalibrationSettings } from './admin.service';
 import { ResidentsService } from '../residents/residents.service';
 import { UnitService } from '../unit/unit.service';
 import { AnomalyService } from '../anomaly/anomaly.service';
@@ -25,7 +25,7 @@ export class AdminController {
     private readonly anomalyService: AnomalyService,
   ) {}
 
-  // --- Legacy admin accounts (in-memory) ---
+  // ── Admin accounts ────────────────────────────────────────────────────────
 
   @Get('accounts')
   listAccounts() {
@@ -37,12 +37,14 @@ export class AdminController {
     return this.adminService.updateAccount(email, payload);
   }
 
-  // --- Transactions ---
+  // ── Transactions ──────────────────────────────────────────────────────────
 
   @Get('transactions')
   getTransactions() {
     return this.adminService.getTransactions();
   }
+
+  // ── Anomalies ─────────────────────────────────────────────────────────────
 
   @Get('anomalies')
   async getRecentAnomalies() {
@@ -50,14 +52,13 @@ export class AdminController {
     const results = await Promise.all(
       units.map(u => this.anomalyService.getAnomaliesForUnit(u.unit_no))
     );
-    // Flatten, sort by detectedAt desc, return latest 20
     return results
       .flat()
       .sort((a, b) => new Date(b.detectedAt).getTime() - new Date(a.detectedAt).getTime())
       .slice(0, 20);
   }
 
-  // --- Resident management (registered Google accounts) ---
+  // ── Residents ─────────────────────────────────────────────────────────────
 
   @Get('residents')
   listResidents() {
@@ -82,5 +83,38 @@ export class AdminController {
   @Delete('residents/:email/units/:unitId')
   unassignUnit(@Param('email') email: string, @Param('unitId', ParseIntPipe) unitId: number) {
     return this.unitService.setResidentEmail(unitId, null);
+  }
+
+  // ── Calibration settings ──────────────────────────────────────────────────
+
+  /** GET  /admin/settings — read current calibration values */
+  @Get('settings')
+  getSettings() {
+    return this.adminService.getSettings();
+  }
+
+  /** PUT  /admin/settings — update calibration values (in-memory) */
+  @Patch('settings')
+  updateSettings(@Body() body: Partial<CalibrationSettings>) {
+    return this.adminService.updateSettings(body);
+  }
+
+  /**
+   * POST /admin/push-config/:deviceId
+   * Push calibration config as MsgPack binary to a single device.
+   * Payload on wire: device/{deviceId}/config → { cf, cp, st }
+   */
+  @Post('push-config/:deviceId')
+  pushConfig(@Param('deviceId') deviceId: string) {
+    return this.adminService.pushConfigToDevice(deviceId);
+  }
+
+  /**
+   * POST /admin/push-config
+   * Push calibration config to every registered device at once.
+   */
+  @Post('push-config')
+  pushConfigAll() {
+    return this.adminService.pushConfigToAll();
   }
 }

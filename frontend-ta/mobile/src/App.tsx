@@ -41,6 +41,17 @@ export default function App() {
   const [availableUnits, setAvailableUnits]   = useState<UnitSummary[]>([])
   const [anomalies, setAnomalies]             = useState<AnomalyItem[]>([])
 
+  // ── Force-logout when tokens are cleared mid-session ─────────────────────
+  useEffect(() => {
+    const handler = () => {
+      setIsLoggedIn(false)
+      setUserUnit('')
+      setAnomalies([])
+    }
+    window.addEventListener('auth:cleared', handler)
+    return () => window.removeEventListener('auth:cleared', handler)
+  }, [])
+
   // ── Bootstrap ─────────────────────────────────────────────────────────────
   useEffect(() => {
     let active = true

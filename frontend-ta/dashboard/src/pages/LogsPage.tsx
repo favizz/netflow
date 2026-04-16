@@ -1,175 +1,201 @@
-import { useState, useEffect, useMemo } from "react";
-import { Search, ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
+import { useState, useEffect } from "react";
+import { ScrollText, Search, Filter, ChevronDown } from "lucide-react";
 import { fetchApi } from "@/lib/api";
 
-interface LogEntry {
-    id: string;
-    adminEmail: string;
-    action: string;
-    targetUnit?: string;
-    details?: string;
-    createdAt: string;
-    ip?: string;
-}
-
 const PAGE_SIZE = 10;
+
+type LogEntry = {
+    id: string;
+    timestamp: string;
+    actor: string;
+    actorRole: 'admin' | 'system' | 'resident';
+    action: string;
+    target: string;
+    details: string;
+    result: 'success' | 'failure' | 'info';
+};
+
+const RESULT_STYLE: Record<string, string> = {
+    success: "bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 ring-green-600/20",
+    failure: "bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 ring-red-600/20",
+    info:    "bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 ring-blue-600/20",
+};
+
+const ACTOR_STYLE: Record<string, string> = {
+    admin:    "text-primary font-medium",
+    system:   "text-yellow-600 dark:text-yellow-400 font-medium",
+    resident: "text-blue-600 dark:text-blue-400 font-medium",
+};
+
+// Synthesise log entries from transactions + anomalies as a proxy for audit log
+// until a dedicated /admin/logs endpoint is implemented
+function synthesiseLogs(transactions: any[], anomalies: any[]): LogEntry[] {
+    const logs: LogEntry[] = [];
+
+    transactions.forEach(tx => {
+        logs.push({
+            id: `tx-${tx.id}`,
+            timestamp: tx.date ?? tx.createdAt ?? tx.created_at,
+            actor: tx.unitNo ?? tx.unit_no ?? 'Unknown',
+            actorRole: 'resident',
+            action: 'TOKEN_PURCHASE',
+            target: `Unit ${tx.unitNo ?? tx.unit_no}`,
+            details: `Rp ${Number(tx.amount ?? tx.amount_rp).toLocaleString('id-ID')} via ${tx.method ?? tx.type} — ${tx.status}`,
+            result: tx.status === 'success' ? 'success' : tx.status === 'failed' ? 'failure' : 'info',
+        });
+    });
+
+    anomalies.forEach((a: any) => {
+        logs.push({
+            id: `anm-${a.id}`,
+            timestamp: a.created_at,
+            actor: a.device_id ?? 'system',
+            actorRole: 'system',
+            action: `ANOMALY_${(a.type ?? '').toUpperCase()}`,
+            target: `Device ${a.device_id}`,
+            details: a.description,
+            result: a.severity === 'critical' ? 'failure' : 'info',
+        });
+    });
+
+    return logs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+}
 
 export default function LogsPage() {
     const [logs, setLogs] = useState<LogEntry[]>([]);
     const [loading, setLoading] = useState(true);
-    const [searchUnit, setSearchUnit] = useState("");
-    const [searchAdmin, setSearchAdmin] = useState("");
-    const [page, setPage] = useState(1);
+    const [search, setSearch] = useState('');
+    const [filterRole, setFilterRole] = useState<'All' | 'admin' | 'system' | 'resident'>('All');
+    const [filterOpen, setFilterOpen] = useState(false);
+    const [page, setPage] = useState(0);
 
-    const load = () => {
+    useEffect(() => {
         setLoading(true);
-        fetchApi('/admin/logs')
-            .then((data: any[]) => {
-                setLogs(data.map((l: any) => ({
-                    id: l.id ?? String(Math.random()),
-                    adminEmail: l.adminEmail ?? l.admin_email ?? l.user ?? '—',
-                    action: l.action ?? l.event ?? '—',
-                    targetUnit: l.targetUnit ?? l.target_unit ?? l.unit_no ?? undefined,
-                    details: l.details ?? l.description ?? undefined,
-                    createdAt: l.createdAt ?? l.created_at ?? l.timestamp ?? null,
-                    ip: l.ip ?? undefined,
-                })));
-            })
-            .catch(() => setLogs([]))
-            .finally(() => setLoading(false));
-    };
+        Promise.all([
+            fetchApi('/admin/transactions').catch(() => []),
+            fetchApi('/admin/anomalies').catch(() => []),
+        ]).then(([txs, anoms]) => {
+            setLogs(synthesiseLogs(txs, anoms));
+        }).finally(() => setLoading(false));
+    }, []);
 
-    useEffect(() => { load(); }, []);
-
-    const filtered = useMemo(() => {
-        setPage(1);
-        return logs.filter(l => {
-            const matchUnit = !searchUnit || (l.targetUnit ?? '').toLowerCase().includes(searchUnit.toLowerCase());
-            const matchAdmin = !searchAdmin || l.adminEmail.toLowerCase().includes(searchAdmin.toLowerCase());
-            return matchUnit && matchAdmin;
-        });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [logs, searchUnit, searchAdmin]);
+    const filtered = logs.filter(l => {
+        const matchesSearch =
+            l.actor.toLowerCase().includes(search.toLowerCase()) ||
+            l.action.toLowerCase().includes(search.toLowerCase()) ||
+            l.target.toLowerCase().includes(search.toLowerCase()) ||
+            l.details.toLowerCase().includes(search.toLowerCase());
+        const matchesRole = filterRole === 'All' || l.actorRole === filterRole;
+        return matchesSearch && matchesRole;
+    });
 
     const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-    const pageData = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-    const start = filtered.length === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
-    const end = Math.min(page * PAGE_SIZE, filtered.length);
+    const pageItems = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
     return (
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Activity Logs</h1>
-                    <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Audit trail for all admin actions.</p>
+                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                        <ScrollText className="h-6 w-6 text-primary" />
+                        System Logs
+                    </h1>
+                    <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">
+                        Audit trail of all user actions, system events, and anomalies. {filtered.length} entries.
+                    </p>
                 </div>
-                <button
-                    onClick={load}
-                    className="flex items-center gap-2 rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                >
-                    <RefreshCw className="h-4 w-4" />
-                    Refresh
-                </button>
             </div>
 
             {/* Filters */}
-            <div className="flex flex-wrap gap-3">
-                <div className="relative">
-                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400 dark:text-gray-500" />
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                <div className="relative flex-1 max-w-sm">
+                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" />
                     <input
                         type="text"
-                        value={searchAdmin}
-                        onChange={e => setSearchAdmin(e.target.value)}
-                        placeholder="Filter by admin..."
-                        className="h-9 w-52 rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 pl-9 pr-4 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary placeholder:text-gray-400 dark:placeholder:text-gray-500"
+                        value={search}
+                        onChange={e => { setSearch(e.target.value); setPage(0); }}
+                        placeholder="Search logs..."
+                        className="h-9 w-full rounded-md border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-800 pl-9 pr-4 text-sm text-gray-900 dark:text-white outline-none focus:border-primary focus:ring-1 focus:ring-primary"
                     />
                 </div>
                 <div className="relative">
-                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400 dark:text-gray-500" />
-                    <input
-                        type="text"
-                        value={searchUnit}
-                        onChange={e => setSearchUnit(e.target.value)}
-                        placeholder="Filter by unit..."
-                        className="h-9 w-52 rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 pl-9 pr-4 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary placeholder:text-gray-400 dark:placeholder:text-gray-500"
-                    />
+                    <button
+                        onClick={() => setFilterOpen(o => !o)}
+                        className="flex items-center gap-2 rounded-md border border-gray-200 dark:border-slate-600 px-3 py-2 text-sm font-medium text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800"
+                    >
+                        <Filter className="h-4 w-4" />
+                        {filterRole === 'All' ? 'All Actors' : filterRole}
+                        <ChevronDown className="h-4 w-4" />
+                    </button>
+                    {filterOpen && (
+                        <div className="absolute left-0 mt-2 w-40 rounded-md bg-white dark:bg-slate-800 py-1 shadow-lg ring-1 ring-black/5 z-10">
+                            {(['All', 'admin', 'system', 'resident'] as const).map(r => (
+                                <button key={r} onClick={() => { setFilterRole(r); setFilterOpen(false); setPage(0); }}
+                                    className="block w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700 capitalize">
+                                    {r}
+                                </button>
+                            ))}
+                        </div>
+                    )}
                 </div>
             </div>
 
-            <div className="rounded-lg bg-white dark:bg-gray-800 shadow-sm ring-1 ring-gray-900/5 dark:ring-gray-700 overflow-hidden">
-                <table className="w-full text-left text-sm text-gray-500 dark:text-gray-400">
-                    <thead className="bg-gray-50 dark:bg-gray-800/60 text-xs uppercase text-gray-700 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700">
-                        <tr>
-                            <th className="px-6 py-3 font-medium">Timestamp</th>
-                            <th className="px-6 py-3 font-medium">Admin</th>
-                            <th className="px-6 py-3 font-medium">Action</th>
-                            <th className="px-6 py-3 font-medium">Unit</th>
-                            <th className="px-6 py-3 font-medium">Details</th>
-                            <th className="px-6 py-3 font-medium">IP</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                        {loading && (
+            {/* Table */}
+            <div className="rounded-lg bg-white dark:bg-slate-900 shadow-sm ring-1 ring-gray-900/5 dark:ring-slate-700 overflow-hidden">
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm text-gray-500 dark:text-slate-400">
+                        <thead className="bg-gray-50 dark:bg-slate-800 text-xs uppercase text-gray-700 dark:text-slate-300">
                             <tr>
-                                <td colSpan={6} className="px-6 py-8 text-center text-gray-400 dark:text-gray-500">
-                                    Loading logs...
-                                </td>
+                                <th className="px-4 py-3 font-medium">Timestamp</th>
+                                <th className="px-4 py-3 font-medium">Actor</th>
+                                <th className="px-4 py-3 font-medium">Action</th>
+                                <th className="px-4 py-3 font-medium">Target</th>
+                                <th className="px-4 py-3 font-medium">Details</th>
+                                <th className="px-4 py-3 font-medium">Result</th>
                             </tr>
-                        )}
-                        {!loading && pageData.length === 0 && (
-                            <tr>
-                                <td colSpan={6} className="px-6 py-8 text-center text-gray-400 dark:text-gray-500">
-                                    {logs.length === 0
-                                        ? "No activity logs found. Ensure the /admin/logs endpoint is implemented."
-                                        : "No logs match the current filter."}
-                                </td>
-                            </tr>
-                        )}
-                        {pageData.map((log) => (
-                            <tr key={log.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/40">
-                                <td className="px-6 py-3 font-mono text-xs whitespace-nowrap">
-                                    {log.createdAt ? new Date(log.createdAt).toLocaleString('id-ID') : '—'}
-                                </td>
-                                <td className="px-6 py-3 text-gray-900 dark:text-gray-100 text-xs">{log.adminEmail}</td>
-                                <td className="px-6 py-3">
-                                    <span className="inline-flex rounded-full bg-primary/10 dark:bg-primary/20 px-2 py-0.5 text-xs font-medium text-primary">
-                                        {log.action}
-                                    </span>
-                                </td>
-                                <td className="px-6 py-3 font-medium text-gray-900 dark:text-gray-100 text-xs">
-                                    {log.targetUnit ?? '—'}
-                                </td>
-                                <td className="px-6 py-3 text-xs text-gray-500 dark:text-gray-400 max-w-xs truncate" title={log.details}>
-                                    {log.details ?? '—'}
-                                </td>
-                                <td className="px-6 py-3 font-mono text-xs text-gray-400 dark:text-gray-500">
-                                    {log.ip ?? '—'}
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200 dark:divide-slate-700">
+                            {loading && (
+                                <tr><td colSpan={6} className="px-4 py-6 text-center">Loading logs...</td></tr>
+                            )}
+                            {!loading && pageItems.length === 0 && (
+                                <tr><td colSpan={6} className="px-4 py-6 text-center">No log entries found.</td></tr>
+                            )}
+                            {pageItems.map(log => (
+                                <tr key={log.id} className="hover:bg-gray-50 dark:hover:bg-slate-800/50">
+                                    <td className="px-4 py-3 whitespace-nowrap font-mono text-xs text-gray-900 dark:text-slate-300">
+                                        {log.timestamp ? new Date(log.timestamp).toLocaleString('id-ID') : '—'}
+                                    </td>
+                                    <td className={`px-4 py-3 whitespace-nowrap text-xs ${ACTOR_STYLE[log.actorRole]}`}>
+                                        {log.actor}
+                                    </td>
+                                    <td className="px-4 py-3 font-mono text-xs text-gray-700 dark:text-slate-300">{log.action}</td>
+                                    <td className="px-4 py-3 text-xs text-gray-900 dark:text-slate-300">{log.target}</td>
+                                    <td className="px-4 py-3 text-xs max-w-xs truncate" title={log.details}>{log.details}</td>
+                                    <td className="px-4 py-3">
+                                        <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${RESULT_STYLE[log.result]}`}>
+                                            {log.result}
+                                        </span>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
 
                 {/* Pagination */}
-                <div className="flex items-center justify-between border-t border-gray-200 dark:border-gray-700 px-6 py-4">
-                    <div className="text-sm text-gray-500 dark:text-gray-400">
-                        {filtered.length === 0 ? "No results" : `Showing ${start}–${end} of ${filtered.length}`}
-                    </div>
-                    <div className="flex items-center space-x-2">
-                        <button
-                            onClick={() => setPage(p => Math.max(1, p - 1))}
-                            disabled={page === 1}
-                            className="flex items-center rounded-md border border-gray-200 dark:border-gray-600 px-3 py-1 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed"
-                        >
-                            <ChevronLeft className="h-4 w-4 mr-1" /> Prev
+                <div className="flex items-center justify-between border-t border-gray-200 dark:border-slate-700 px-4 py-3">
+                    <span className="text-xs text-gray-500 dark:text-slate-400">
+                        Showing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, filtered.length)} of {filtered.length}
+                    </span>
+                    <div className="flex gap-2">
+                        <button disabled={page === 0} onClick={() => setPage(p => p - 1)}
+                            className="rounded border border-gray-200 dark:border-slate-600 px-3 py-1 text-xs font-medium text-gray-600 dark:text-slate-400 disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-slate-800">
+                            Previous
                         </button>
-                        <span className="text-sm text-gray-500 dark:text-gray-400">{page} / {totalPages}</span>
-                        <button
-                            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                            disabled={page === totalPages}
-                            className="flex items-center rounded-md border border-gray-200 dark:border-gray-600 px-3 py-1 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed"
-                        >
-                            Next <ChevronRight className="h-4 w-4 ml-1" />
+                        <button disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)}
+                            className="rounded border border-gray-200 dark:border-slate-600 px-3 py-1 text-xs font-medium text-gray-600 dark:text-slate-400 disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-slate-800">
+                            Next
                         </button>
                     </div>
                 </div>

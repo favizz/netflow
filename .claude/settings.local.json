@@ -24,7 +24,13 @@
       "Read(//c/Users/Lenovo/AppData/Local/Temp/**)",
       "Bash(powershell -Command ':*)",
       "Bash(pnpm tsc:*)",
-      "Bash(pnpm build:*)"
+      "Bash(pnpm build:*)",
+      "Bash(node data/gen-payloads.mjs)",
+      "Bash(xxd /c/Users/Lenovo/Documents/GitHub/TA-Flowmeter/data/payload_telemetry.msgpack)",
+      "Bash(xxd /c/Users/Lenovo/Documents/GitHub/TA-Flowmeter/data/payload_command.msgpack)",
+      "Bash(xxd /c/Users/Lenovo/Documents/GitHub/TA-Flowmeter/data/payload_status.msgpack)",
+      "Bash(npx tsc *)",
+      "Bash(node *)"
     ]
   }
 }

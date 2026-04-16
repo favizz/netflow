@@ -207,6 +207,8 @@ export const authStore = {
   clear() {
     setAccessToken(null);
     setRefreshToken(null);
+    // Notify React state so any polling effects stop immediately
+    window.dispatchEvent(new Event('auth:cleared'));
   },
 };
 
