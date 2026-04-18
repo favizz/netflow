@@ -8,11 +8,13 @@ import { DeviceController } from './device.controller';
 import { MeterReading } from './entities/device.entity';
 import { Unit } from '../unit/entities/unit.entity';
 import { AnomalyModule } from '../anomaly/anomaly.module';
+import { TariffModule } from '../tariff/tariff.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([MeterReading, Unit]),
     ConfigModule,
+    TariffModule,
     ClientsModule.registerAsync([
       {
         name: 'MQTT_CLIENT',

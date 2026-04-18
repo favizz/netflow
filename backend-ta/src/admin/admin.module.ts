@@ -8,6 +8,9 @@ import { AdminController } from './admin.controller';
 import { AdminService } from './admin.service';
 import { PaymentsModule } from '../payments/payments.module';
 import { AnomalyModule } from '../anomaly/anomaly.module';
+import { TariffModule } from '../tariff/tariff.module';
+import { AuditLogModule } from '../audit-log/audit-log.module';
+import { AdminJwtGuard } from '../common/guards/admin-jwt.guard';
 
 @Module({
   imports: [
@@ -16,6 +19,8 @@ import { AnomalyModule } from '../anomaly/anomaly.module';
     UnitModule,
     PaymentsModule,
     AnomalyModule,
+    TariffModule,
+    AuditLogModule,
     ClientsModule.registerAsync([
       {
         name: 'MQTT_CLIENT',
@@ -39,6 +44,6 @@ import { AnomalyModule } from '../anomaly/anomaly.module';
     ]),
   ],
   controllers: [AdminController],
-  providers: [AdminService],
+  providers: [AdminService, AdminJwtGuard],
 })
 export class AdminModule {}

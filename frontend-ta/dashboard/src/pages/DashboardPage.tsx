@@ -3,7 +3,6 @@ import { Activity, Droplets, Zap, AlertTriangle } from "lucide-react";
 import { fetchApi } from "@/lib/api";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { TrendChart } from "@/components/dashboard/TrendChart";
-import { RecentAlerts } from "@/components/dashboard/RecentAlerts";
 
 export default function DashboardPage() {
     const [stats, setStats] = useState({
@@ -43,34 +42,30 @@ export default function DashboardPage() {
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center justify-between">
-                <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Dashboard Overview</h1>
-                <div className="text-sm text-gray-500 dark:text-gray-400">Last updated: Just now</div>
-            </div>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Overview</h1>
 
-            {/* Stats Grid */}
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <StatCard
-                    title="Total Energy (cumulative)"
-                    value={stats.loaded ? `${stats.totalPower.toLocaleString(undefined, { maximumFractionDigits: 1 })} kWh` : "Loading..."}
+                    title="Total Energy"
+                    value={stats.loaded ? `${stats.totalPower.toLocaleString(undefined, { maximumFractionDigits: 1 })} kWh` : "—"}
                     icon={Zap}
-                    trend="Aggregated from all units"
+                    trend="Cumulative from all units"
                     trendDirection="neutral"
                     iconBgClass="bg-primary/10 dark:bg-primary/20"
                     iconColorClass="text-primary"
                 />
                 <StatCard
-                    title="Total Water (cumulative)"
-                    value={stats.loaded ? `${stats.totalWater.toLocaleString(undefined, { maximumFractionDigits: 1 })} m³` : "Loading..."}
+                    title="Total Water"
+                    value={stats.loaded ? `${stats.totalWater.toLocaleString(undefined, { maximumFractionDigits: 1 })} m³` : "—"}
                     icon={Droplets}
-                    trend="Aggregated from all units"
+                    trend="Cumulative from all units"
                     trendDirection="neutral"
                     iconBgClass="bg-cyan-50 dark:bg-cyan-900/30"
                     iconColorClass="text-cyan-600 dark:text-cyan-400"
                 />
                 <StatCard
                     title="Online Devices"
-                    value={stats.loaded ? `${stats.onlineDevices} / ${stats.totalDevices}` : "Loading..."}
+                    value={stats.loaded ? `${stats.onlineDevices} / ${stats.totalDevices}` : "—"}
                     icon={Activity}
                     trend="System connectivity"
                     trendDirection="neutral"
@@ -79,7 +74,7 @@ export default function DashboardPage() {
                 />
                 <StatCard
                     title="Active Alerts"
-                    value={stats.loaded ? String(stats.alerts) : "Loading..."}
+                    value={stats.loaded ? String(stats.alerts) : "—"}
                     icon={AlertTriangle}
                     trend={stats.alerts > 0 ? "Needs attention" : "All clear"}
                     trendDirection={stats.alerts > 0 ? "down" : "neutral"}
@@ -89,15 +84,7 @@ export default function DashboardPage() {
                 />
             </div>
 
-            {/* Charts & Alerts */}
-            <div className="grid gap-6 lg:grid-cols-3">
-                <div className="lg:col-span-2">
-                    <TrendChart />
-                </div>
-                <div>
-                    <RecentAlerts />
-                </div>
-            </div>
+            <TrendChart />
         </div>
     );
 }

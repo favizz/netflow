@@ -9,6 +9,8 @@ import { PaymentsModule } from './payments/payments.module';
 import { ReportingModule } from './reporting/reporting.module';
 import { UnitModule } from './unit/unit.module';
 import { AuthModule } from './auth/auth.module';
+import { TariffModule } from './tariff/tariff.module';
+import { AuditLogModule } from './audit-log/audit-log.module';
 
 @Module({
   imports: [
@@ -31,6 +33,8 @@ import { AuthModule } from './auth/auth.module';
     AnomalyModule,
     AdminModule,
     AuthModule,
+    TariffModule,
+    AuditLogModule,
   ],
 })
 export class AppModule {}

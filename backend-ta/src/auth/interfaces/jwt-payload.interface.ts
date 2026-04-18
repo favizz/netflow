@@ -1,6 +1,6 @@
 export interface JwtPayload {
-  sub: string;            // resident email
-  role: 'resident';
+  sub: string;
+  role: 'resident' | 'admin';
   unitId: number | null;
   unitNo: string | null;
 }

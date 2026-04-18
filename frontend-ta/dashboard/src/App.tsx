@@ -11,7 +11,7 @@ import ControlCenterPage from '@/pages/ControlCenterPage';
 import LoginPage from '@/pages/LoginPage';
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
-  const token = localStorage.getItem('admin-api-key');
+  const token = localStorage.getItem('admin-token');
   const location = useLocation();
 
   if (!token) {

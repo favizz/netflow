@@ -1,68 +1,119 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Lock } from 'lucide-react';
-import { fetchApi } from '@/lib/api';
+
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
+
+declare global {
+  interface Window {
+    google?: {
+      accounts: {
+        id: {
+          initialize: (config: object) => void;
+          renderButton: (element: HTMLElement, config: object) => void;
+        };
+      };
+    };
+  }
+}
 
 export default function LoginPage() {
-  const [key, setKey] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const buttonRef = useRef<HTMLDivElement>(null);
+  const initializedRef = useRef(false);
   const navigate = useNavigate();
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleCredential = async (response: { credential: string }) => {
     setLoading(true);
     setError('');
-
-    localStorage.setItem('admin-api-key', key);
     try {
-      await fetchApi('/unit');
+      const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+      const res = await fetch(`${BASE_URL}/auth/admin`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ credential: response.credential }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.message || 'Your account does not have admin access.');
+      }
+      const data = await res.json();
+      localStorage.setItem('admin-token', data.accessToken);
       navigate('/');
-    } catch {
-      setError('Invalid API key or network error');
-      localStorage.removeItem('admin-api-key');
+    } catch (err: any) {
+      setError(err.message || 'Sign-in failed. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
+  useEffect(() => {
+    const init = () => {
+      if (!window.google || !buttonRef.current || !GOOGLE_CLIENT_ID || initializedRef.current) return;
+      initializedRef.current = true;
+      window.google.accounts.id.initialize({
+        client_id: GOOGLE_CLIENT_ID,
+        callback: handleCredential,
+      });
+      window.google.accounts.id.renderButton(buttonRef.current, {
+        theme: 'outline',
+        size: 'large',
+        width: buttonRef.current.offsetWidth || 360,
+        text: 'signin_with',
+      });
+    };
+
+    if (window.google) {
+      init();
+    } else {
+      const interval = setInterval(() => {
+        if (window.google) { clearInterval(interval); init(); }
+      }, 100);
+      return () => clearInterval(interval);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
-    <div className="flex h-screen items-center justify-center bg-gray-50 dark:bg-gray-900">
-      <div className="w-full max-w-md rounded-xl bg-white dark:bg-gray-800 p-8 shadow-lg border border-gray-200 dark:border-gray-700">
-        <div className="mb-8 flex flex-col items-center">
-          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 dark:bg-primary/20 text-primary">
-            <Lock className="h-8 w-8" />
+    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
+      <div className="w-full max-w-sm">
+        <div className="mb-8 flex flex-col items-center gap-4">
+          <img
+            src="/netflow-logo-black.png"
+            alt="NETFLOW"
+            className="h-12 object-contain"
+          />
+          <div className="text-center">
+            <h1 className="text-2xl font-bold text-gray-900">Admin Dashboard</h1>
+            <p className="mt-1 text-sm text-gray-500">
+              Sign in with your administrator Google account.
+            </p>
           </div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-            NET<span className="text-primary">FLOW</span>
-          </h1>
-          <p className="mt-2 text-center text-sm text-gray-500 dark:text-gray-400">
-            Enter your administrator API key to access the dashboard.
-          </p>
         </div>
 
-        <form onSubmit={handleLogin} className="space-y-5">
-          <div>
-            <input
-              type="password"
-              placeholder="Enter x-api-key..."
-              value={key}
-              onChange={(e) => setKey(e.target.value)}
-              className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 p-3 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-              required
-            />
-          </div>
+        <div className="rounded-xl bg-white p-8 shadow-sm ring-1 ring-gray-900/5">
+          {!GOOGLE_CLIENT_ID && (
+            <div className="mb-4 rounded-md bg-amber-50 border border-amber-200 px-4 py-3 text-xs text-amber-700">
+              Google Sign-In is not configured. Set <code className="font-mono font-medium">VITE_GOOGLE_CLIENT_ID</code> to enable it.
+            </div>
+          )}
 
-          {error && <p className="text-sm font-medium text-red-600 dark:text-red-400">{error}</p>}
+          {error && (
+            <div className="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+              {error}
+            </div>
+          )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded-md bg-primary px-4 py-3 font-semibold text-white transition-colors hover:bg-primary/90 focus:outline-none disabled:opacity-50"
-          >
-            {loading ? 'Verifying...' : 'Login to Dashboard'}
-          </button>
-        </form>
+          {loading ? (
+            <div className="flex items-center justify-center py-3">
+              <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+              <span className="ml-2 text-sm text-gray-500">Verifying...</span>
+            </div>
+          ) : (
+            <div ref={buttonRef} className="flex justify-center" />
+          )}
+        </div>
+
       </div>
     </div>
   );

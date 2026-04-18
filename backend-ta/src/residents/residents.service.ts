@@ -14,6 +14,10 @@ export class ResidentsService {
     return this.residentRepo.find({ order: { email: 'ASC' } });
   }
 
+  findAdmins(): Promise<Resident[]> {
+    return this.residentRepo.find({ where: { role: 'admin' }, order: { email: 'ASC' } });
+  }
+
   findByEmail(email: string): Promise<Resident | null> {
     return this.residentRepo.findOne({ where: { email } });
   }
@@ -22,7 +26,7 @@ export class ResidentsService {
     const existing = await this.residentRepo.findOne({ where: { email } });
     if (existing) throw new BadRequestException('Resident already registered');
 
-    const resident = this.residentRepo.create({ email, name: name ?? null, google_id: null, picture: null });
+    const resident = this.residentRepo.create({ email, name: name ?? null, google_id: null, picture: null, role: 'resident' });
     return this.residentRepo.save(resident);
   }
 
@@ -41,5 +45,12 @@ export class ResidentsService {
       ...(data.name !== undefined && { name: data.name }),
       ...(data.picture !== undefined && { picture: data.picture }),
     });
+  }
+
+  async setRole(email: string, role: 'resident' | 'admin'): Promise<Resident> {
+    const resident = await this.residentRepo.findOne({ where: { email } });
+    if (!resident) throw new NotFoundException('Resident not found');
+    resident.role = role;
+    return this.residentRepo.save(resident);
   }
 }

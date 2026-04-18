@@ -14,6 +14,9 @@ export class Resident {
   @Column({ type: 'text', nullable: true })
   picture!: string | null;
 
+  @Column({ type: 'enum', enum: ['resident', 'admin'], default: 'resident' })
+  role!: 'resident' | 'admin';
+
   @CreateDateColumn({ type: 'datetime' })
   created_at!: Date;
 }

@@ -1,7 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import { InventoryTable } from "@/components/inventory/InventoryTable";
 import { AddDeviceModal } from "@/components/inventory/AddDeviceModal";
+import { EditUnitModal } from "@/components/inventory/EditUnitModal";
 import type { InventoryItem } from "@/lib/mockData";
 import { fetchApi } from "@/lib/api";
 
@@ -10,38 +11,52 @@ export default function DevicesPage() {
     const initialFilter = searchParams.get("unit") ?? "";
 
     const [data, setData] = useState<InventoryItem[]>([]);
-    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isAddOpen, setIsAddOpen] = useState(false);
+    const [editTarget, setEditTarget] = useState<InventoryItem | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [deleteConfirm, setDeleteConfirm] = useState<InventoryItem | null>(null);
+    const [deleteLoading, setDeleteLoading] = useState(false);
+    const [deleteError, setDeleteError] = useState<string | null>(null);
 
-    useEffect(() => {
+    const loadData = useCallback(() => {
+        setIsLoading(true);
         Promise.all([
             fetchApi('/unit'),
             fetchApi('/unit/connectivity').catch(() => ({ onlineUnitsList: [], offlineUnitsList: [] }))
         ])
             .then(([units, conn]) => {
                 const onlineIds = new Set((conn.onlineUnitsList || []).map((u: any) => u.device_id));
-
-                const mapped: InventoryItem[] = units.map((u: any) => {
-                    const isOnline = onlineIds.has(u.device_id);
-                    return {
-                        id: String(u.id),
-                        tenant: u.resident_email || "Unassigned",
-                        unit: u.unit_no,
-                        meterSerial: u.device_id,
-                        status: isOnline ? "Online" : "Offline",
-                        power: !!u.relay_status,
-                        water: !!u.valve_status,
-                        lastUpdate: isOnline ? "Live" : "Offline",
-                    };
-                });
+                const mapped: InventoryItem[] = units.map((u: any) => ({
+                    id: String(u.id),
+                    tenant: u.resident_email || "Unassigned",
+                    unit: u.unit_no,
+                    meterSerial: u.device_id,
+                    status: onlineIds.has(u.device_id) ? "Online" : "Offline",
+                    power: !!u.relay_status,
+                    water: !!u.valve_status,
+                    lastUpdate: onlineIds.has(u.device_id) ? "Live" : "Offline",
+                }));
                 setData(mapped);
             })
             .catch(console.error)
             .finally(() => setIsLoading(false));
     }, []);
 
-    const handleAddDevice = (device: InventoryItem) => {
-        setData((prev) => [device, ...prev]);
+    useEffect(() => { loadData(); }, [loadData]);
+
+    const handleDelete = async () => {
+        if (!deleteConfirm) return;
+        setDeleteLoading(true);
+        setDeleteError(null);
+        try {
+            await fetchApi(`/unit/${deleteConfirm.id}`, { method: 'DELETE' });
+            setDeleteConfirm(null);
+            loadData();
+        } catch (err: any) {
+            setDeleteError(err.message?.replace(/^API error \(\d+\): /, '') || "Failed to delete unit");
+        } finally {
+            setDeleteLoading(false);
+        }
     };
 
     return (
@@ -52,10 +67,10 @@ export default function DevicesPage() {
                     <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Manage smart meters and tenant units.</p>
                 </div>
                 <button
-                    onClick={() => setIsModalOpen(true)}
+                    onClick={() => setIsAddOpen(true)}
                     className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-primary/90 transition-colors"
                 >
-                    Add Device
+                    Add Unit
                 </button>
             </div>
 
@@ -64,14 +79,44 @@ export default function DevicesPage() {
                     Loading devices...
                 </div>
             ) : (
-                <InventoryTable data={data} initialFilter={initialFilter} />
+                <InventoryTable
+                    data={data}
+                    initialFilter={initialFilter}
+                    onEdit={(item) => setEditTarget(item)}
+                    onDelete={(item) => setDeleteConfirm(item)}
+                />
             )}
 
-            <AddDeviceModal
-                isOpen={isModalOpen}
-                onClose={() => setIsModalOpen(false)}
-                onAdd={handleAddDevice}
-            />
+            <AddDeviceModal isOpen={isAddOpen} onClose={() => setIsAddOpen(false)} onSuccess={loadData} />
+            <EditUnitModal unit={editTarget} onClose={() => setEditTarget(null)} onSuccess={loadData} />
+
+            {deleteConfirm && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                    <div className="w-full max-w-sm rounded-lg bg-white dark:bg-gray-800 shadow-xl ring-1 ring-gray-900/5 dark:ring-gray-700 p-6">
+                        <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Delete Unit</h3>
+                        <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                            Permanently delete unit <strong>{deleteConfirm.unit}</strong> ({deleteConfirm.meterSerial})? This also removes all associated meter readings.
+                        </p>
+                        {deleteError && <p className="mt-2 text-xs text-red-600 dark:text-red-400">{deleteError}</p>}
+                        <div className="mt-4 flex justify-end space-x-3">
+                            <button
+                                onClick={() => { setDeleteConfirm(null); setDeleteError(null); }}
+                                disabled={deleteLoading}
+                                className="rounded-md border border-gray-200 dark:border-gray-600 px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-60"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleDelete}
+                                disabled={deleteLoading}
+                                className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-60"
+                            >
+                                {deleteLoading ? "Deleting..." : "Delete"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

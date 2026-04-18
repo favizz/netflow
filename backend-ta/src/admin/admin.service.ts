@@ -4,17 +4,10 @@ import { UnitService } from '../unit/unit.service';
 import { PaymentsService } from '../payments/payments.service';
 import { encodeCalibration } from '../common/binary-codec';
 
-export interface AdminAccount {
-  email: string;
-  role: 'viewer' | 'operator' | 'super-admin';
-  enabled: boolean;
-  updatedAt: string;
-}
-
 export interface CalibrationSettings {
-  CAL_FACTOR_FLOWRATE: number;  // float 0 – 5,  default 4.55
-  CAL_FACTOR_POWER: number;     // float 0 – 2,  default 1.05
-  SENSOR_SAMPLING_TIME: number; // int   1 – 10, default 5 s
+  CAL_FACTOR_FLOWRATE: number;
+  CAL_FACTOR_POWER: number;
+  SENSOR_SAMPLING_TIME: number;
 }
 
 const DEFAULT_SETTINGS: CalibrationSettings = {
@@ -25,20 +18,6 @@ const DEFAULT_SETTINGS: CalibrationSettings = {
 
 @Injectable()
 export class AdminService {
-  private readonly accounts = new Map<string, AdminAccount>([
-    [
-      'ops@ta-flowmeter.local',
-      {
-        email: 'ops@ta-flowmeter.local',
-        role: 'super-admin',
-        enabled: true,
-        updatedAt: new Date().toISOString(),
-      },
-    ],
-  ]);
-
-  // In-memory calibration settings (shared across all devices as defaults).
-  // Individual device overrides can be pushed via pushConfig.
   private settings: CalibrationSettings = { ...DEFAULT_SETTINGS };
 
   constructor(
@@ -46,30 +25,6 @@ export class AdminService {
     private readonly paymentsService: PaymentsService,
     @Inject('MQTT_CLIENT') private readonly mqttClient: ClientProxy,
   ) {}
-
-  // ── Accounts ─────────────────────────────────────────────────────────────
-
-  listAccounts() {
-    return [...this.accounts.values()].sort((a, b) => a.email.localeCompare(b.email));
-  }
-
-  updateAccount(email: string, payload: Partial<Pick<AdminAccount, 'enabled' | 'role'>>) {
-    const current = this.accounts.get(email) || {
-      email,
-      role: 'viewer' as const,
-      enabled: true,
-      updatedAt: new Date().toISOString(),
-    };
-
-    const updated: AdminAccount = {
-      ...current,
-      ...payload,
-      updatedAt: new Date().toISOString(),
-    };
-
-    this.accounts.set(email, updated);
-    return updated;
-  }
 
   // ── Transactions ──────────────────────────────────────────────────────────
 
@@ -106,14 +61,6 @@ export class AdminService {
     return { ...this.settings };
   }
 
-  /**
-   * Push calibration config to a specific device as MsgPack binary.
-   * Topic:   device/{deviceId}/config
-   * Payload: { cf: float, cp: float, st: int }  — short keys match telemetry convention
-   *
-   * The ClientProxy serializer (set up in admin.module.ts) encodes value.data
-   * as MsgPack, so the device receives binary on the wire.
-   */
   async pushConfigToDevice(deviceId: string, overrides?: Partial<CalibrationSettings>): Promise<void> {
     const merged = overrides ? { ...this.settings, ...overrides } : this.settings;
 
@@ -127,9 +74,6 @@ export class AdminService {
     );
   }
 
-  /**
-   * Push calibration config to every registered device at once.
-   */
   async pushConfigToAll(): Promise<{ pushed: string[] }> {
     const units = await this.unitService.findAll();
     for (const unit of units) {

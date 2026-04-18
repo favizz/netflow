@@ -6,6 +6,7 @@ import { decodeTelemetry, encodeCommand } from '../common/binary-codec';
 import { Unit } from '../unit/entities/unit.entity';
 import { MeterReading } from './entities/device.entity';
 import { AnomalyService } from '../anomaly/anomaly.service';
+import { TariffService } from '../tariff/tariff.service';
 
 @Injectable()
 export class DeviceService {
@@ -15,19 +16,17 @@ export class DeviceService {
     private readonly dataSource: DataSource,
     @Inject('MQTT_CLIENT') private readonly mqttClient: ClientProxy,
     private readonly anomalyService: AnomalyService,
+    private readonly tariffService: TariffService,
   ) {}
 
   async saveSensorData(payload: any) {
-    // _deviceId injected by controller from the MQTT topic; fall back to payload field for legacy
     const deviceId: string | undefined = payload?._deviceId || payload?.dev_id || payload?.device_id;
     if (!deviceId) return;
 
-    // Decode payload: custom 21-byte binary telemetry frame from firmware.
-    // Falls back to plain object (e.g. unit-test injection) if not a Buffer.
     let data: Record<string, any>;
     if (Buffer.isBuffer(payload) || payload instanceof Uint8Array) {
       const buf = Buffer.isBuffer(payload) ? payload : Buffer.from(payload);
-      if (buf.length < 21) return; // malformed frame
+      if (buf.length < 21) return;
       data = decodeTelemetry(buf) as Record<string, any>;
     } else if (typeof payload === 'object' && payload !== null) {
       data = payload as Record<string, any>;
@@ -42,6 +41,12 @@ export class DeviceService {
     const power    = this.toNumber(data.p);
     const waterFlow = this.toNumber(data.wf);
     const incomingBalance = data.b !== undefined ? Number(data.b) : null;
+
+    // Fetch current tariffs outside the transaction (read-only, no locking needed)
+    const [energyTariff, waterTariff] = await Promise.all([
+      this.tariffService.findCurrent('electricity'),
+      this.tariffService.findCurrent('water'),
+    ]);
 
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -66,7 +71,7 @@ export class DeviceService {
           deltaWater = incomingWaterTotal - Number(unit.last_water_reading);
         }
 
-        const cost = (deltaEnergy * Number(unit.energy_tariff)) + (deltaWater * Number(unit.water_tariff));
+        const cost = (deltaEnergy * energyTariff) + (deltaWater * waterTariff);
 
         if (cost > 0) {
           unit.balance = Number(unit.balance) - cost;
@@ -86,26 +91,19 @@ export class DeviceService {
           }
         }
 
-        // --- HYBRID EDGE SECURITY AUDIT ---
-        // If the IoT device sent its local balance, cross-check it with our secure Server balance
         if (incomingBalance !== null) {
           const cloudBalance = Number(unit.balance);
           const diff = Math.abs(cloudBalance - incomingBalance);
-          
-          if (diff > 500) { 
-            // If the device balance deviates by more than Rp 500, it might be hacked or lost sync
-            console.warn(`[SECURITY] 🚨 Mismatch on ${deviceId}! Edge: Rp ${incomingBalance} | Cloud: Rp ${cloudBalance}`);
+          if (diff > 500) {
+            console.warn(`[SECURITY] Balance mismatch on ${deviceId}: edge Rp ${incomingBalance} vs cloud Rp ${cloudBalance}`);
           } else {
-            // If it's just minor float rounding differences, gently snap the server to the device's math
             unit.balance = incomingBalance;
           }
         }
 
         await queryRunner.manager.save(unit);
-
         savedUnit = unit;
 
-        // Only store telemetry for known registered devices
         const row = queryRunner.manager.create(MeterReading, {
           time: new Date(),
           device_id: deviceId,
@@ -127,7 +125,6 @@ export class DeviceService {
       await queryRunner.release();
     }
 
-    // Run anomaly checks after transaction commits — non-blocking
     if (savedUnit) {
       void this.anomalyService
         .checkOnTelemetry(
@@ -139,9 +136,7 @@ export class DeviceService {
           Number(savedUnit.balance),
           savedUnit.relay_status,
         )
-        .catch(() => {
-          // Anomaly check failures must not affect telemetry ingestion
-        });
+        .catch(() => {});
     }
   }
 

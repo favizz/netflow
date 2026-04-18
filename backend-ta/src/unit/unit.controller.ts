@@ -9,7 +9,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { AdminApiKeyGuard } from '../common/guards/admin-api-key.guard';
+import { AdminJwtGuard } from '../common/guards/admin-jwt.guard';
 import { CreateUnitDto } from './dto/create-unit.dto';
 import { UpdateUnitDto } from './dto/update-unit.dto';
 import { UnitService } from './unit.service';
@@ -18,6 +18,7 @@ import { UnitService } from './unit.service';
 export class UnitController {
   constructor(private readonly unitService: UnitService) {}
 
+  @UseGuards(AdminJwtGuard)
   @Post()
   create(@Body() createUnitDto: CreateUnitDto) {
     return this.unitService.create(createUnitDto);
@@ -43,31 +44,22 @@ export class UnitController {
     return this.unitService.findOne(+id);
   }
 
+  @UseGuards(AdminJwtGuard)
   @Patch(':id')
   update(@Param('id') id: string, @Body() updateUnitDto: UpdateUnitDto) {
     return this.unitService.update(+id, updateUnitDto);
   }
 
+  @UseGuards(AdminJwtGuard)
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.unitService.remove(+id);
   }
 
-  @Post(':id/token-engine/deduct')
-  deduct(@Param('id') id: string, @Body() body: { energyDeltaKwh: number }) {
-    return this.unitService.applyTokenEngineDeduction(+id, body);
-  }
-
-  @UseGuards(AdminApiKeyGuard)
+  @UseGuards(AdminJwtGuard)
   @Patch(':id/relay')
   relay(@Param('id') id: string, @Body() body: { relayStatus: boolean }) {
     return this.unitService.setRelayStatus(+id, Boolean(body.relayStatus));
-  }
-
-  @UseGuards(AdminApiKeyGuard)
-  @Patch(':id/tariff')
-  tariff(@Param('id') id: string, @Body() body: { energyTariff: number }) {
-    return this.unitService.setTariff(+id, Number(body.energyTariff));
   }
 
   @Get(':unitNo/notifications')

@@ -1,19 +1,33 @@
-import { useState, useEffect } from "react";
-import { ScrollText, Search, Filter, ChevronDown } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { ScrollText, Search, ChevronDown, Copy, Check } from "lucide-react";
 import { fetchApi } from "@/lib/api";
 
-const PAGE_SIZE = 10;
+const PAGE_SIZE = 15;
 
-type LogEntry = {
-    id: string;
-    timestamp: string;
-    actor: string;
-    actorRole: 'admin' | 'system' | 'resident';
-    action: string;
-    target: string;
-    details: string;
-    result: 'success' | 'failure' | 'info';
+const ACTION_CATEGORY: Record<string, string> = {
+    CREATE: 'User Management',
+    DELETE: 'User Management',
+    UPDATE_ACCESS: 'User Management',
+    ASSIGN_UNIT: 'Unit Management',
+    UNASSIGN_UNIT: 'Unit Management',
+    UPDATE_SETTINGS: 'Calibration',
+    'CREATE_TARIFF': 'Tariff',
+    'UPDATE_TARIFF': 'Tariff',
+    'DELETE_TARIFF': 'Tariff',
+    TOKEN_PURCHASE: 'Transactions',
+    ANOMALY: 'Anomaly',
+    CLIENT_ERROR: 'System Error',
 };
+
+function deriveCategory(action: string): string {
+    for (const [key, cat] of Object.entries(ACTION_CATEGORY)) {
+        if (action.startsWith(key)) return cat;
+    }
+    return 'Other';
+}
+
+const CATEGORIES = ['All', 'User Management', 'Unit Management', 'Calibration', 'Tariff', 'Transactions', 'Anomaly', 'System Error', 'Other'];
+const RESULTS = ['All', 'success', 'failure', 'info'];
 
 const RESULT_STYLE: Record<string, string> = {
     success: "bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 ring-green-600/20",
@@ -21,72 +35,118 @@ const RESULT_STYLE: Record<string, string> = {
     info:    "bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 ring-blue-600/20",
 };
 
-const ACTOR_STYLE: Record<string, string> = {
-    admin:    "text-primary font-medium",
-    system:   "text-yellow-600 dark:text-yellow-400 font-medium",
-    resident: "text-blue-600 dark:text-blue-400 font-medium",
+function CopyCell({ text }: { text: string }) {
+    const [copied, setCopied] = useState(false);
+    const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    const handleCopy = () => {
+        navigator.clipboard.writeText(text).then(() => {
+            setCopied(true);
+            if (timer.current) clearTimeout(timer.current);
+            timer.current = setTimeout(() => setCopied(false), 2000);
+        }).catch(() => {});
+    };
+
+    return (
+        <button
+            onClick={handleCopy}
+            title="Click to copy"
+            className="group relative flex items-center gap-1.5 max-w-[200px] text-left hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+        >
+            <span className="truncate">{text}</span>
+            <span className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                {copied
+                    ? <Check className="h-3 w-3 text-green-500" />
+                    : <Copy className="h-3 w-3 text-gray-400" />
+                }
+            </span>
+            {copied && (
+                <span className="absolute -top-6 left-1/2 -translate-x-1/2 rounded bg-gray-900 dark:bg-gray-700 px-2 py-0.5 text-[10px] text-white whitespace-nowrap pointer-events-none">
+                    Copied
+                </span>
+            )}
+        </button>
+    );
+}
+
+type LogEntry = {
+    id: string;
+    timestamp: string;
+    actor: string;
+    action: string;
+    category: string;
+    entity: string;
+    entity_id: string | null;
+    details: string | null;
+    result: 'success' | 'failure' | 'info';
 };
 
-// Synthesise log entries from transactions + anomalies as a proxy for audit log
-// until a dedicated /admin/logs endpoint is implemented
-function synthesiseLogs(transactions: any[], anomalies: any[]): LogEntry[] {
-    const logs: LogEntry[] = [];
+function mapAuditLog(entry: any): LogEntry {
+    return {
+        id: String(entry.id),
+        timestamp: entry.created_at,
+        actor: entry.admin_email ?? 'system',
+        action: entry.action ?? '',
+        category: deriveCategory(entry.action ?? ''),
+        entity: entry.entity ?? '',
+        entity_id: entry.entity_id ?? null,
+        details: entry.details,
+        result: (entry.result as any) ?? 'success',
+    };
+}
 
-    transactions.forEach(tx => {
-        logs.push({
-            id: `tx-${tx.id}`,
-            timestamp: tx.date ?? tx.createdAt ?? tx.created_at,
-            actor: tx.unitNo ?? tx.unit_no ?? 'Unknown',
-            actorRole: 'resident',
-            action: 'TOKEN_PURCHASE',
-            target: `Unit ${tx.unitNo ?? tx.unit_no}`,
-            details: `Rp ${Number(tx.amount ?? tx.amount_rp).toLocaleString('id-ID')} via ${tx.method ?? tx.type} — ${tx.status}`,
-            result: tx.status === 'success' ? 'success' : tx.status === 'failed' ? 'failure' : 'info',
-        });
-    });
-
-    anomalies.forEach((a: any) => {
-        logs.push({
-            id: `anm-${a.id}`,
-            timestamp: a.created_at,
-            actor: a.device_id ?? 'system',
-            actorRole: 'system',
-            action: `ANOMALY_${(a.type ?? '').toUpperCase()}`,
-            target: `Device ${a.device_id}`,
-            details: a.description,
-            result: a.severity === 'critical' ? 'failure' : 'info',
-        });
-    });
-
-    return logs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+function FilterDropdown({ label, options, value, onChange }: {
+    label: string;
+    options: string[];
+    value: string;
+    onChange: (v: string) => void;
+}) {
+    const [open, setOpen] = useState(false);
+    return (
+        <div className="relative">
+            <button
+                onClick={() => setOpen(o => !o)}
+                className="flex items-center gap-2 rounded-md border border-gray-200 dark:border-gray-600 px-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 bg-white dark:bg-gray-800"
+            >
+                {label}: <span className="text-gray-900 dark:text-gray-200 capitalize">{value}</span>
+                <ChevronDown className="h-4 w-4" />
+            </button>
+            {open && (
+                <div className="absolute left-0 mt-1 min-w-[160px] rounded-md bg-white dark:bg-gray-800 py-1 shadow-lg ring-1 ring-black/5 dark:ring-gray-700 z-10">
+                    {options.map(o => (
+                        <button key={o} onClick={() => { onChange(o); setOpen(false); }}
+                            className="block w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 capitalize">
+                            {o}
+                        </button>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
 }
 
 export default function LogsPage() {
     const [logs, setLogs] = useState<LogEntry[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
-    const [filterRole, setFilterRole] = useState<'All' | 'admin' | 'system' | 'resident'>('All');
-    const [filterOpen, setFilterOpen] = useState(false);
+    const [filterCategory, setFilterCategory] = useState('All');
+    const [filterResult, setFilterResult] = useState('All');
     const [page, setPage] = useState(0);
 
     useEffect(() => {
         setLoading(true);
-        Promise.all([
-            fetchApi('/admin/transactions').catch(() => []),
-            fetchApi('/admin/anomalies').catch(() => []),
-        ]).then(([txs, anoms]) => {
-            setLogs(synthesiseLogs(txs, anoms));
-        }).finally(() => setLoading(false));
+        fetchApi('/admin/audit-logs')
+            .then((data: any[]) => setLogs(Array.isArray(data) ? data.map(mapAuditLog) : []))
+            .catch(() => setLogs([]))
+            .finally(() => setLoading(false));
     }, []);
 
     const filtered = logs.filter(l => {
-        const matchesSearch =
-            l.actor.toLowerCase().includes(search.toLowerCase()) ||
-            l.action.toLowerCase().includes(search.toLowerCase()) ||
-            l.target.toLowerCase().includes(search.toLowerCase()) ||
-            l.details.toLowerCase().includes(search.toLowerCase());
-        const matchesRole = filterRole === 'All' || l.actorRole === filterRole;
-        return matchesSearch && matchesRole;
+        const q = search.toLowerCase();
+        const matchSearch = !q || l.actor.toLowerCase().includes(q) || l.action.toLowerCase().includes(q) || l.entity.toLowerCase().includes(q) || (l.entity_id ?? '').toLowerCase().includes(q) || (l.details ?? '').toLowerCase().includes(q);
+        const matchCat = filterCategory === 'All' || l.category === filterCategory;
+        const matchResult = filterResult === 'All' || l.result === filterResult;
+        return matchSearch && matchCat && matchResult;
     });
 
     const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
@@ -94,86 +154,70 @@ export default function LogsPage() {
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                        <ScrollText className="h-6 w-6 text-primary" />
-                        System Logs
-                    </h1>
-                    <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">
-                        Audit trail of all user actions, system events, and anomalies. {filtered.length} entries.
-                    </p>
-                </div>
+            <div>
+                <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                    <ScrollText className="h-6 w-6 text-primary" />
+                    System Logs
+                </h1>
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                    Audit trail of admin actions and system events. {filtered.length} entries.
+                </p>
             </div>
 
-            {/* Filters */}
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                <div className="relative flex-1 max-w-sm">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:flex-wrap">
+                <div className="relative flex-1 min-w-[200px] max-w-sm">
                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" />
                     <input
                         type="text"
                         value={search}
                         onChange={e => { setSearch(e.target.value); setPage(0); }}
                         placeholder="Search logs..."
-                        className="h-9 w-full rounded-md border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-800 pl-9 pr-4 text-sm text-gray-900 dark:text-white outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                        className="h-9 w-full rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 pl-9 pr-4 text-sm text-gray-900 dark:text-white outline-none focus:border-primary focus:ring-1 focus:ring-primary"
                     />
                 </div>
-                <div className="relative">
-                    <button
-                        onClick={() => setFilterOpen(o => !o)}
-                        className="flex items-center gap-2 rounded-md border border-gray-200 dark:border-slate-600 px-3 py-2 text-sm font-medium text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800"
-                    >
-                        <Filter className="h-4 w-4" />
-                        {filterRole === 'All' ? 'All Actors' : filterRole}
-                        <ChevronDown className="h-4 w-4" />
-                    </button>
-                    {filterOpen && (
-                        <div className="absolute left-0 mt-2 w-40 rounded-md bg-white dark:bg-slate-800 py-1 shadow-lg ring-1 ring-black/5 z-10">
-                            {(['All', 'admin', 'system', 'resident'] as const).map(r => (
-                                <button key={r} onClick={() => { setFilterRole(r); setFilterOpen(false); setPage(0); }}
-                                    className="block w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700 capitalize">
-                                    {r}
-                                </button>
-                            ))}
-                        </div>
-                    )}
-                </div>
+                <FilterDropdown label="Category" options={CATEGORIES} value={filterCategory} onChange={v => { setFilterCategory(v); setPage(0); }} />
+                <FilterDropdown label="Result" options={RESULTS} value={filterResult} onChange={v => { setFilterResult(v); setPage(0); }} />
             </div>
 
-            {/* Table */}
-            <div className="rounded-lg bg-white dark:bg-slate-900 shadow-sm ring-1 ring-gray-900/5 dark:ring-slate-700 overflow-hidden">
+            <div className="rounded-lg bg-white dark:bg-gray-900 shadow-sm ring-1 ring-gray-900/5 dark:ring-gray-700 overflow-hidden">
                 <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm text-gray-500 dark:text-slate-400">
-                        <thead className="bg-gray-50 dark:bg-slate-800 text-xs uppercase text-gray-700 dark:text-slate-300">
+                    <table className="w-full text-left text-sm text-gray-500 dark:text-gray-400">
+                        <thead className="bg-gray-50 dark:bg-gray-800 text-xs uppercase text-gray-700 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
                             <tr>
                                 <th className="px-4 py-3 font-medium">Timestamp</th>
-                                <th className="px-4 py-3 font-medium">Actor</th>
+                                <th className="px-4 py-3 font-medium">Admin</th>
                                 <th className="px-4 py-3 font-medium">Action</th>
+                                <th className="px-4 py-3 font-medium">Category</th>
                                 <th className="px-4 py-3 font-medium">Target</th>
                                 <th className="px-4 py-3 font-medium">Details</th>
                                 <th className="px-4 py-3 font-medium">Result</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-200 dark:divide-slate-700">
+                        <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                             {loading && (
-                                <tr><td colSpan={6} className="px-4 py-6 text-center">Loading logs...</td></tr>
+                                <tr><td colSpan={7} className="px-4 py-6 text-center">Loading logs...</td></tr>
                             )}
                             {!loading && pageItems.length === 0 && (
-                                <tr><td colSpan={6} className="px-4 py-6 text-center">No log entries found.</td></tr>
+                                <tr><td colSpan={7} className="px-4 py-6 text-center">No log entries found.</td></tr>
                             )}
                             {pageItems.map(log => (
-                                <tr key={log.id} className="hover:bg-gray-50 dark:hover:bg-slate-800/50">
-                                    <td className="px-4 py-3 whitespace-nowrap font-mono text-xs text-gray-900 dark:text-slate-300">
+                                <tr key={log.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                    <td className="px-4 py-3 whitespace-nowrap font-mono text-xs text-gray-900 dark:text-gray-300">
                                         {log.timestamp ? new Date(log.timestamp).toLocaleString('id-ID') : '—'}
                                     </td>
-                                    <td className={`px-4 py-3 whitespace-nowrap text-xs ${ACTOR_STYLE[log.actorRole]}`}>
-                                        {log.actor}
+                                    <td className="px-4 py-3 text-xs text-primary font-medium whitespace-nowrap">{log.actor}</td>
+                                    <td className="px-4 py-3 font-mono text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">{log.action}</td>
+                                    <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{log.category}</td>
+                                    <td className="px-4 py-3 text-xs text-gray-900 dark:text-gray-300">
+                                        {log.entity}{log.entity_id ? ` #${log.entity_id}` : ''}
                                     </td>
-                                    <td className="px-4 py-3 font-mono text-xs text-gray-700 dark:text-slate-300">{log.action}</td>
-                                    <td className="px-4 py-3 text-xs text-gray-900 dark:text-slate-300">{log.target}</td>
-                                    <td className="px-4 py-3 text-xs max-w-xs truncate" title={log.details}>{log.details}</td>
+                                    <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400">
+                                        {log.details ? (
+                                            <CopyCell text={(() => { try { return JSON.stringify(JSON.parse(log.details)); } catch { return log.details; } })()} />
+                                        ) : '—'}
+                                    </td>
                                     <td className="px-4 py-3">
-                                        <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${RESULT_STYLE[log.result]}`}>
+                                        <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${RESULT_STYLE[log.result] ?? RESULT_STYLE.info}`}>
                                             {log.result}
                                         </span>
                                     </td>
@@ -183,18 +227,17 @@ export default function LogsPage() {
                     </table>
                 </div>
 
-                {/* Pagination */}
-                <div className="flex items-center justify-between border-t border-gray-200 dark:border-slate-700 px-4 py-3">
-                    <span className="text-xs text-gray-500 dark:text-slate-400">
-                        Showing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, filtered.length)} of {filtered.length}
+                <div className="flex items-center justify-between border-t border-gray-200 dark:border-gray-700 px-4 py-3">
+                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                        {filtered.length === 0 ? 'No entries' : `${page * PAGE_SIZE + 1}–${Math.min((page + 1) * PAGE_SIZE, filtered.length)} of ${filtered.length}`}
                     </span>
                     <div className="flex gap-2">
                         <button disabled={page === 0} onClick={() => setPage(p => p - 1)}
-                            className="rounded border border-gray-200 dark:border-slate-600 px-3 py-1 text-xs font-medium text-gray-600 dark:text-slate-400 disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-slate-800">
+                            className="rounded border border-gray-200 dark:border-gray-600 px-3 py-1 text-xs font-medium text-gray-600 dark:text-gray-400 disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-800">
                             Previous
                         </button>
                         <button disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)}
-                            className="rounded border border-gray-200 dark:border-slate-600 px-3 py-1 text-xs font-medium text-gray-600 dark:text-slate-400 disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-slate-800">
+                            className="rounded border border-gray-200 dark:border-gray-600 px-3 py-1 text-xs font-medium text-gray-600 dark:text-gray-400 disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-800">
                             Next
                         </button>
                     </div>

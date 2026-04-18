@@ -24,6 +24,11 @@ export class AuthController {
     return this.authService.googleLogin(dto.credential);
   }
 
+  @Post('admin')
+  adminGoogleLogin(@Body() dto: GoogleAuthDto) {
+    return this.authService.adminGoogleLogin(dto.credential);
+  }
+
   @UseGuards(JwtAuthGuard)
   @Post('select-unit')
   selectUnit(@CurrentUser() user: JwtPayload, @Body() dto: SelectUnitDto) {

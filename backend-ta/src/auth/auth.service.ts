@@ -136,9 +136,10 @@ export class AuthService {
     record.revoked_at = new Date();
     await this.refreshTokenRepo.save(record);
 
+    const resident = await this.residentsService.findByEmail(record.user_sub);
     const payload: JwtPayload = {
       sub: record.user_sub,
-      role: 'resident',
+      role: resident?.role ?? 'resident',
       unitId: record.unit_id,
       unitNo: record.unit_no,
     };
@@ -168,8 +169,49 @@ export class AuthService {
     return { loggedOut: true };
   }
 
+  async adminGoogleLogin(credential: string) {
+    const clientId = this.configService.get<string>('GOOGLE_CLIENT_ID');
+
+    let googleSub: string;
+    let googleEmail: string;
+    let googleName: string | null = null;
+    let googlePicture: string | null = null;
+
+    try {
+      const ticket = await this.googleClient.verifyIdToken({ idToken: credential, audience: clientId });
+      const p = ticket.getPayload();
+      if (!p?.email) throw new Error('No email in token');
+      googleSub = p.sub;
+      googleEmail = p.email;
+      googleName = p.name ?? null;
+      googlePicture = p.picture ?? null;
+    } catch {
+      throw new UnauthorizedException('Invalid Google token');
+    }
+
+    const resident = await this.residentsService.findByEmail(googleEmail);
+    if (!resident || resident.role !== 'admin') {
+      throw new UnauthorizedException('Not authorized as admin. Contact the system administrator.');
+    }
+
+    await this.residentsService.updateProfile(googleEmail, {
+      googleId: googleSub,
+      name: googleName,
+      picture: googlePicture,
+    });
+
+    const payload: JwtPayload = {
+      sub: googleEmail,
+      role: 'admin',
+      unitId: null,
+      unitNo: null,
+    };
+
+    return this.issueTokenPair(payload);
+  }
+
   async me(user: JwtPayload) {
-    const units = await this.unitService.findByResidentEmail(user.sub);
+    const units = user.role === 'admin' ? [] : await this.unitService.findByResidentEmail(user.sub);
     return {
       email: user.sub,
       role: user.role,

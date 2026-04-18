@@ -9,6 +9,7 @@ import { CreateUnitDto } from './dto/create-unit.dto';
 import { UpdateUnitDto } from './dto/update-unit.dto';
 import { Unit } from './entities/unit.entity';
 import { MeterReading } from '../device/entities/device.entity';
+import { TariffService } from '../tariff/tariff.service';
 
 @Injectable()
 export class UnitService {
@@ -17,6 +18,7 @@ export class UnitService {
     private readonly unitRepo: Repository<Unit>,
     @InjectRepository(MeterReading)
     private readonly meterRepo: Repository<MeterReading>,
+    private readonly tariffService: TariffService,
   ) {}
 
   async create(createUnitDto: CreateUnitDto) {
@@ -29,9 +31,9 @@ export class UnitService {
       unit_no: createUnitDto.unit_no,
       device_id: createUnitDto.device_id,
       balance: createUnitDto.balance ?? 0,
-      energy_tariff: createUnitDto.energy_tariff ?? 1444.7,
       relay_status: true,
       last_energy_reading: 0,
+      last_water_reading: 0,
     });
 
     return this.unitRepo.save(entity);
@@ -91,42 +93,11 @@ export class UnitService {
     return this.unitRepo.save(unit);
   }
 
-  async setTariff(id: number, energyTariff: number) {
-    if (energyTariff <= 0) {
-      throw new BadRequestException('energyTariff must be greater than zero');
-    }
-
-    const unit = await this.findOne(id);
-    unit.energy_tariff = energyTariff;
-    return this.unitRepo.save(unit);
-  }
-
-  async applyTokenEngineDeduction(id: number, payload: { energyDeltaKwh: number }) {
-    const unit = await this.findOne(id);
-    const energyDeltaKwh = Math.max(0, payload.energyDeltaKwh || 0);
-    const deduction = energyDeltaKwh * Number(unit.energy_tariff);
-
-    unit.balance = Math.max(0, Number(unit.balance) - deduction);
-    if (unit.balance <= 0) {
-      unit.relay_status = false;
-    }
-
-    await this.unitRepo.save(unit);
-
-    return {
-      unitId: unit.id,
-      energyDeltaKwh,
-      tariff: Number(unit.energy_tariff),
-      deductedAmount: Number(deduction.toFixed(2)),
-      remainingBalance: Number(unit.balance),
-      relayStatus: unit.relay_status,
-    };
-  }
-
   async getOwnerDashboard(unitNo: string) {
     const unit = await this.findByUnitNo(unitNo);
+    const energyTariff = await this.tariffService.findCurrent('electricity');
 
-    const remainingKwh = Number(unit.energy_tariff) > 0 ? Number(unit.balance) / Number(unit.energy_tariff) : 0;
+    const remainingKwh = energyTariff > 0 ? Number(unit.balance) / energyTariff : 0;
     const averageKwhPerHour = 0.85;
     const estimateHours = averageKwhPerHour > 0 ? remainingKwh / averageKwhPerHour : 0;
 
@@ -144,7 +115,7 @@ export class UnitService {
       id: unit.id,
       unitNo: unit.unit_no,
       balance: Number(unit.balance),
-      energyTariff: Number(unit.energy_tariff),
+      energyTariff,
       relayStatus: unit.relay_status,
       remainingEstimate: {
         kwh: Number(remainingKwh.toFixed(2)),
