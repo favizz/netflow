@@ -1,8 +1,11 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository, IsNull } from 'typeorm';
 import { ClientProxy } from '@nestjs/microservices';
 import { UnitService } from '../unit/unit.service';
 import { PaymentsService } from '../payments/payments.service';
 import { encodeCalibration } from '../common/binary-codec';
+import { CalibrationSetting } from './entities/calibration-setting.entity';
 
 export interface CalibrationSettings {
   CAL_FACTOR_FLOWRATE: number;
@@ -10,30 +13,35 @@ export interface CalibrationSettings {
   SENSOR_SAMPLING_TIME: number;
 }
 
-const DEFAULT_SETTINGS: CalibrationSettings = {
+const DEFAULTS: CalibrationSettings = {
   CAL_FACTOR_FLOWRATE: 4.55,
   CAL_FACTOR_POWER: 1.05,
   SENSOR_SAMPLING_TIME: 5,
 };
 
 @Injectable()
-export class AdminService {
-  private settings: CalibrationSettings = { ...DEFAULT_SETTINGS };
+export class AdminService implements OnModuleInit {
+  /** In-memory cache — loaded from DB on startup, written through on every update. */
+  private cached: CalibrationSettings = { ...DEFAULTS };
 
   constructor(
+    @InjectRepository(CalibrationSetting)
+    private readonly calRepo: Repository<CalibrationSetting>,
     private readonly unitService: UnitService,
     private readonly paymentsService: PaymentsService,
     @Inject('MQTT_CLIENT') private readonly mqttClient: ClientProxy,
   ) {}
+
+  async onModuleInit() {
+    await this.loadFromDb();
+  }
 
   // ── Transactions ──────────────────────────────────────────────────────────
 
   async getTransactions() {
     const rawTxs = await this.paymentsService.listAllTransactions();
     const units = await this.unitService.findAll();
-
     const unitMap = new Map(units.map(u => [u.unit_no, u.resident_email || 'Unassigned']));
-
     return rawTxs.map(tx => ({
       ...tx,
       user: unitMap.get(tx.unitNo) || 'Unassigned',
@@ -42,34 +50,49 @@ export class AdminService {
     }));
   }
 
-  // ── Calibration settings ──────────────────────────────────────────────────
+  // ── Calibration settings (DB-backed) ─────────────────────────────────────
 
   getSettings(): CalibrationSettings {
-    return { ...this.settings };
+    return { ...this.cached };
   }
 
-  updateSettings(patch: Partial<CalibrationSettings>): CalibrationSettings {
+  async updateSettings(patch: Partial<CalibrationSettings>): Promise<CalibrationSettings> {
     if (patch.CAL_FACTOR_FLOWRATE !== undefined) {
-      this.settings.CAL_FACTOR_FLOWRATE = Math.min(5, Math.max(0, Number(patch.CAL_FACTOR_FLOWRATE)));
+      this.cached.CAL_FACTOR_FLOWRATE = Math.min(5, Math.max(0, Number(patch.CAL_FACTOR_FLOWRATE)));
     }
     if (patch.CAL_FACTOR_POWER !== undefined) {
-      this.settings.CAL_FACTOR_POWER = Math.min(2, Math.max(0, Number(patch.CAL_FACTOR_POWER)));
+      this.cached.CAL_FACTOR_POWER = Math.min(2, Math.max(0, Number(patch.CAL_FACTOR_POWER)));
     }
     if (patch.SENSOR_SAMPLING_TIME !== undefined) {
-      this.settings.SENSOR_SAMPLING_TIME = Math.min(10, Math.max(1, Math.round(Number(patch.SENSOR_SAMPLING_TIME))));
+      this.cached.SENSOR_SAMPLING_TIME = Math.min(10, Math.max(1, Math.round(Number(patch.SENSOR_SAMPLING_TIME))));
     }
-    return { ...this.settings };
+    await this.persistToDb(null);
+    return { ...this.cached };
+  }
+
+  async getDeviceSettings(deviceId: string): Promise<CalibrationSettings> {
+    const override = await this.calRepo.findOne({ where: { device_id: deviceId } });
+    if (!override) return { ...this.cached };
+    return {
+      CAL_FACTOR_FLOWRATE: Number(override.flowrate_factor),
+      CAL_FACTOR_POWER:    Number(override.power_factor),
+      SENSOR_SAMPLING_TIME: override.sampling_time,
+    };
   }
 
   async pushConfigToDevice(deviceId: string, overrides?: Partial<CalibrationSettings>): Promise<void> {
-    const merged = overrides ? { ...this.settings, ...overrides } : this.settings;
+    const base = overrides ? { ...this.cached, ...overrides } : this.cached;
+
+    if (overrides) {
+      await this.persistToDb(deviceId, overrides);
+    }
 
     this.mqttClient.emit(
       `device/${deviceId}/config`,
       encodeCalibration({
-        cf: merged.CAL_FACTOR_FLOWRATE,
-        cp: merged.CAL_FACTOR_POWER,
-        st: merged.SENSOR_SAMPLING_TIME,
+        cf: base.CAL_FACTOR_FLOWRATE,
+        cp: base.CAL_FACTOR_POWER,
+        st: base.SENSOR_SAMPLING_TIME,
       }),
     );
   }
@@ -80,5 +103,44 @@ export class AdminService {
       await this.pushConfigToDevice(unit.device_id);
     }
     return { pushed: units.map(u => u.device_id) };
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+
+  private async loadFromDb(): Promise<void> {
+    try {
+      const global = await this.calRepo.findOne({ where: { device_id: IsNull() } });
+      if (global) {
+        this.cached = {
+          CAL_FACTOR_FLOWRATE: Number(global.flowrate_factor),
+          CAL_FACTOR_POWER:    Number(global.power_factor),
+          SENSOR_SAMPLING_TIME: global.sampling_time,
+        };
+      }
+    } catch {
+      // DB not ready (first boot before schema applied) — keep defaults
+    }
+  }
+
+  private async persistToDb(deviceId: string | null, overrides?: Partial<CalibrationSettings>): Promise<void> {
+    const settings = overrides
+      ? { ...this.cached, ...overrides }
+      : this.cached;
+
+    try {
+      const whereClause = deviceId === null
+        ? { device_id: IsNull() }
+        : { device_id: deviceId };
+      let row = await this.calRepo.findOne({ where: whereClause });
+      if (!row) {
+        row = this.calRepo.create({ device_id: deviceId });
+      }
+      row.flowrate_factor = settings.CAL_FACTOR_FLOWRATE;
+      row.power_factor    = settings.CAL_FACTOR_POWER;
+      row.sampling_time   = settings.SENSOR_SAMPLING_TIME;
+      await this.calRepo.save(row);
+    } catch {
+      // Non-fatal — in-memory value is still updated
+    }
   }
 }

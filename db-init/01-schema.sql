@@ -1,13 +1,27 @@
--- TA-Flowmeter MySQL 8.0 Schema
--- Auto-run by Docker on first container start.
--- For manual VPS setup: mysql -u <user> -p < db-init/01-schema.sql
+-- TA-Flowmeter MySQL 8.0 Schema  ·  v2 (scale edition)
+-- Supports 10 000+ units across multiple buildings.
+-- For fresh installs:  mysql -u <user> -p < db-init/01-schema.sql
+-- For upgrades:        mysql -u <user> -p < db-init/03-migration-v2.sql
 
 CREATE DATABASE IF NOT EXISTS ta_db;
 USE ta_db;
 
 -- -----------------------------------------
--- 1. RESIDENTS
---    Google OAuth allowlist managed by admin.
+-- 1. BUILDINGS  (multi-tenant root)
+-- -----------------------------------------
+CREATE TABLE IF NOT EXISTS buildings (
+  id          INT AUTO_INCREMENT PRIMARY KEY,
+  code        VARCHAR(20)  NOT NULL UNIQUE,   -- "TOWER-A", "BLOK-1", etc.
+  name        VARCHAR(100) NOT NULL,
+  address     TEXT         NULL,
+  floors      TINYINT      NOT NULL DEFAULT 1,
+  created_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+INSERT IGNORE INTO buildings (id, code, name) VALUES (1, 'DEFAULT', 'Default Building');
+
+-- -----------------------------------------
+-- 2. RESIDENTS
 -- -----------------------------------------
 CREATE TABLE IF NOT EXISTS residents (
   email      VARCHAR(255) PRIMARY KEY,
@@ -19,13 +33,11 @@ CREATE TABLE IF NOT EXISTS residents (
 );
 
 -- -----------------------------------------
--- 2. UNITS
---    One row per apartment unit.
---    Balance is denormalized here (fast read, no join on every dashboard load).
---    Tariffs are stored in the tariffs table (global configuration, not per-unit).
+-- 3. UNITS
 -- -----------------------------------------
 CREATE TABLE IF NOT EXISTS units (
   id                   INT AUTO_INCREMENT PRIMARY KEY,
+  building_id          INT            NOT NULL DEFAULT 1,
   unit_no              VARCHAR(50)    NOT NULL UNIQUE,
   device_id            VARCHAR(100)   NOT NULL UNIQUE,
   resident_email       VARCHAR(255)   NULL,
@@ -35,13 +47,20 @@ CREATE TABLE IF NOT EXISTS units (
   last_energy_reading  DECIMAL(15,4)  NOT NULL DEFAULT 0,
   last_water_reading   DECIMAL(15,4)  NOT NULL DEFAULT 0,
   created_at           DATETIME       NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  CONSTRAINT fk_units_resident FOREIGN KEY (resident_email) REFERENCES residents(email)
+  CONSTRAINT fk_units_resident FOREIGN KEY (resident_email) REFERENCES residents(email),
+  CONSTRAINT fk_units_building FOREIGN KEY (building_id)    REFERENCES buildings(id)
 );
 
+CREATE INDEX idx_units_building  ON units (building_id);
+CREATE INDEX idx_units_resident  ON units (resident_email);
+
 -- -----------------------------------------
--- 3. METER READINGS (time-series telemetry)
---    Composite PK on (time, device_id).
---    Index on (device_id, time DESC) covers every dashboard query pattern.
+-- 4. METER READINGS  (partitioned time-series)
+--    No FK on device_id — MySQL forbids FK on partitioned tables.
+--    Referential integrity is enforced at application layer.
+--    Partitioned monthly: full partition elimination on date-range queries.
+--    At 10 k units × 1 reading/5 s → ~172 M rows/day; each monthly
+--    partition fits in buffer pool independently.
 -- -----------------------------------------
 CREATE TABLE IF NOT EXISTS meter_readings (
   time         DATETIME      NOT NULL,
@@ -52,14 +71,47 @@ CREATE TABLE IF NOT EXISTS meter_readings (
   energy_total DECIMAL(15,4) NULL,
   water_flow   DECIMAL(10,4) NULL,
   water_total  DECIMAL(15,4) NULL,
-  PRIMARY KEY (time, device_id),
-  CONSTRAINT fk_meter_readings_device FOREIGN KEY (device_id) REFERENCES units(device_id) ON DELETE CASCADE
+  PRIMARY KEY (time, device_id)
+)
+PARTITION BY RANGE (TO_DAYS(time)) (
+  PARTITION p2025_01 VALUES LESS THAN (TO_DAYS('2025-02-01')),
+  PARTITION p2025_02 VALUES LESS THAN (TO_DAYS('2025-03-01')),
+  PARTITION p2025_03 VALUES LESS THAN (TO_DAYS('2025-04-01')),
+  PARTITION p2025_04 VALUES LESS THAN (TO_DAYS('2025-05-01')),
+  PARTITION p2025_05 VALUES LESS THAN (TO_DAYS('2025-06-01')),
+  PARTITION p2025_06 VALUES LESS THAN (TO_DAYS('2025-07-01')),
+  PARTITION p2025_07 VALUES LESS THAN (TO_DAYS('2025-08-01')),
+  PARTITION p2025_08 VALUES LESS THAN (TO_DAYS('2025-09-01')),
+  PARTITION p2025_09 VALUES LESS THAN (TO_DAYS('2025-10-01')),
+  PARTITION p2025_10 VALUES LESS THAN (TO_DAYS('2025-11-01')),
+  PARTITION p2025_11 VALUES LESS THAN (TO_DAYS('2025-12-01')),
+  PARTITION p2025_12 VALUES LESS THAN (TO_DAYS('2026-01-01')),
+  PARTITION p2026_01 VALUES LESS THAN (TO_DAYS('2026-02-01')),
+  PARTITION p2026_02 VALUES LESS THAN (TO_DAYS('2026-03-01')),
+  PARTITION p2026_03 VALUES LESS THAN (TO_DAYS('2026-04-01')),
+  PARTITION p2026_04 VALUES LESS THAN (TO_DAYS('2026-05-01')),
+  PARTITION p2026_05 VALUES LESS THAN (TO_DAYS('2026-06-01')),
+  PARTITION p2026_06 VALUES LESS THAN (TO_DAYS('2026-07-01')),
+  PARTITION p2026_07 VALUES LESS THAN (TO_DAYS('2026-08-01')),
+  PARTITION p2026_08 VALUES LESS THAN (TO_DAYS('2026-09-01')),
+  PARTITION p2026_09 VALUES LESS THAN (TO_DAYS('2026-10-01')),
+  PARTITION p2026_10 VALUES LESS THAN (TO_DAYS('2026-11-01')),
+  PARTITION p2026_11 VALUES LESS THAN (TO_DAYS('2026-12-01')),
+  PARTITION p2026_12 VALUES LESS THAN (TO_DAYS('2027-01-01')),
+  PARTITION p2027_01 VALUES LESS THAN (TO_DAYS('2027-02-01')),
+  PARTITION p2027_02 VALUES LESS THAN (TO_DAYS('2027-03-01')),
+  PARTITION p2027_03 VALUES LESS THAN (TO_DAYS('2027-04-01')),
+  PARTITION p2027_04 VALUES LESS THAN (TO_DAYS('2027-05-01')),
+  PARTITION p2027_05 VALUES LESS THAN (TO_DAYS('2027-06-01')),
+  PARTITION p2027_06 VALUES LESS THAN (TO_DAYS('2027-07-01')),
+  PARTITION p_future VALUES LESS THAN MAXVALUE
 );
 
-CREATE INDEX idx_meter_readings_device_time ON meter_readings (device_id, time DESC);
+-- Covers "latest N for device" and "device in date range" queries within each partition.
+CREATE INDEX idx_mr_device_time ON meter_readings (device_id, time DESC);
 
 -- -----------------------------------------
--- 4. TRANSACTIONS
+-- 5. TRANSACTIONS
 -- -----------------------------------------
 CREATE TABLE IF NOT EXISTS transactions (
   id                VARCHAR(100)                       PRIMARY KEY,
@@ -79,9 +131,7 @@ CREATE INDEX idx_transactions_unit_id ON transactions (unit_id, created_at DESC)
 CREATE INDEX idx_transactions_status  ON transactions (status);
 
 -- -----------------------------------------
--- 5. TARIFFS
---    Global rate configuration — no FK to units.
---    Billing uses the latest tariff row effective on the current date.
+-- 6. TARIFFS
 -- -----------------------------------------
 CREATE TABLE IF NOT EXISTS tariffs (
   id             INT AUTO_INCREMENT PRIMARY KEY,
@@ -93,8 +143,13 @@ CREATE TABLE IF NOT EXISTS tariffs (
 
 CREATE INDEX idx_tariffs_type_date ON tariffs (utility_type, effective_date DESC);
 
+-- Seed default tariffs (Indonesian PLN R-1 / PDAM rates)
+INSERT IGNORE INTO tariffs (utility_type, price_per_unit, effective_date)
+VALUES ('electricity', 1444.70, '2024-01-01'),
+       ('water',       5000.00, '2024-01-01');
+
 -- -----------------------------------------
--- 6. AUTH REFRESH TOKENS
+-- 7. AUTH REFRESH TOKENS
 -- -----------------------------------------
 CREATE TABLE IF NOT EXISTS auth_refresh_tokens (
   id         INT AUTO_INCREMENT PRIMARY KEY,
@@ -106,22 +161,11 @@ CREATE TABLE IF NOT EXISTS auth_refresh_tokens (
   revoked_at DATETIME     NULL,
   created_at DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT fk_refresh_tokens_user FOREIGN KEY (user_sub) REFERENCES residents(email) ON DELETE CASCADE,
-  CONSTRAINT fk_refresh_tokens_unit FOREIGN KEY (unit_id) REFERENCES units(id) ON DELETE CASCADE
+  CONSTRAINT fk_refresh_tokens_unit FOREIGN KEY (unit_id)  REFERENCES units(id) ON DELETE CASCADE
 );
 
 CREATE INDEX idx_refresh_tokens_user_sub   ON auth_refresh_tokens (user_sub);
 CREATE INDEX idx_refresh_tokens_expires_at ON auth_refresh_tokens (expires_at);
-
--- -----------------------------------------
--- 7. DATA RETENTION
---    Keeps 1 year of telemetry, runs daily.
--- -----------------------------------------
-SET GLOBAL event_scheduler = ON;
-
-CREATE EVENT IF NOT EXISTS cleanup_old_meter_readings
-  ON SCHEDULE EVERY 1 DAY
-  STARTS CURRENT_TIMESTAMP
-  DO DELETE FROM meter_readings WHERE time < NOW() - INTERVAL 1 YEAR;
 
 -- -----------------------------------------
 -- 8. ANOMALIES
@@ -133,16 +177,17 @@ CREATE TABLE IF NOT EXISTS anomalies (
   severity     VARCHAR(20)  NOT NULL,
   description  TEXT         NOT NULL,
   action_taken TEXT         NULL,
+  ml_score     DECIMAL(5,4) NULL,         -- Isolation Forest score [0,1]
   created_at   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   resolved_at  DATETIME     NULL,
   CONSTRAINT fk_anomalies_device FOREIGN KEY (device_id) REFERENCES units(device_id) ON DELETE CASCADE
 );
 
 CREATE INDEX idx_anomalies_device_time ON anomalies (device_id, created_at DESC);
+CREATE INDEX idx_anomalies_unresolved  ON anomalies (resolved_at, device_id);
 
 -- -----------------------------------------
 -- 9. AUDIT LOGS
---    Every admin CRUD action is recorded here.
 -- -----------------------------------------
 CREATE TABLE IF NOT EXISTS audit_logs (
   id          INT AUTO_INCREMENT PRIMARY KEY,
@@ -159,9 +204,26 @@ CREATE INDEX idx_audit_logs_admin ON audit_logs (admin_email, created_at DESC);
 CREATE INDEX idx_audit_logs_time  ON audit_logs (created_at DESC);
 
 -- -----------------------------------------
--- 10. LEGEND / LOOKUP TABLES
+-- 10. CALIBRATION SETTINGS  (replaces in-memory AdminService.settings)
+--     device_id NULL  = global default applied to all devices.
+--     device_id set   = per-device override.
 -- -----------------------------------------
+CREATE TABLE IF NOT EXISTS calibration_settings (
+  id              INT AUTO_INCREMENT PRIMARY KEY,
+  device_id       VARCHAR(100)   NULL UNIQUE,
+  flowrate_factor DECIMAL(8,4)   NOT NULL DEFAULT 4.5500,
+  power_factor    DECIMAL(8,4)   NOT NULL DEFAULT 1.0500,
+  sampling_time   TINYINT        NOT NULL DEFAULT 5,
+  updated_at      DATETIME       NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
 
+-- Global default row (device_id = NULL)
+INSERT IGNORE INTO calibration_settings (device_id, flowrate_factor, power_factor, sampling_time)
+VALUES (NULL, 4.55, 1.05, 5);
+
+-- -----------------------------------------
+-- 11. LEGEND / LOOKUP TABLES
+-- -----------------------------------------
 CREATE TABLE IF NOT EXISTS legend_switch_status (
   code        TINYINT(1) PRIMARY KEY,
   label       VARCHAR(20)  NOT NULL,
@@ -173,7 +235,7 @@ INSERT IGNORE INTO legend_switch_status VALUES
 
 CREATE TABLE IF NOT EXISTS legend_anomaly_severity (
   code        VARCHAR(20) PRIMARY KEY,
-  label       VARCHAR(40) NOT NULL,
+  label       VARCHAR(40)  NOT NULL,
   description VARCHAR(150) NOT NULL
 );
 INSERT IGNORE INTO legend_anomaly_severity VALUES
@@ -196,7 +258,8 @@ INSERT IGNORE INTO legend_anomaly_type VALUES
   ('low_power_factor',   'Low Power Factor',       'Power factor below 0.7 — inefficient load detected'),
   ('zero_flow',          'Zero Flow',              'Meter reports zero flow while valve is open'),
   ('usage_spike',        'Usage Spike',            'Consumption jumped beyond normal variance'),
-  ('backflow',           'Backflow',               'Reverse water flow detected — possible contamination risk');
+  ('backflow',           'Backflow',               'Reverse water flow detected — possible contamination risk'),
+  ('ml_anomaly',         'ML Anomaly',             'Isolation Forest detected statistically anomalous sensor pattern');
 
 CREATE TABLE IF NOT EXISTS legend_payment_method (
   code        VARCHAR(20) PRIMARY KEY,
@@ -218,4 +281,43 @@ INSERT IGNORE INTO legend_transaction_status VALUES
   ('success', 'Success', 'Payment confirmed and balance credited to unit'),
   ('failed',  'Failed',  'Payment rejected or timed out by the payment gateway');
 
+-- -----------------------------------------
+-- 12. DATA RETENTION & PARTITION MANAGEMENT
+-- -----------------------------------------
+SET GLOBAL event_scheduler = ON;
+
+-- Drop monthly partitions older than 1 year; fires daily at 03:00.
+CREATE EVENT IF NOT EXISTS cleanup_old_partitions
+  ON SCHEDULE EVERY 1 DAY
+  STARTS (CURRENT_DATE + INTERVAL 1 DAY + INTERVAL 3 HOUR)
+  DO
+  BEGIN
+    DECLARE cutoff_days INT DEFAULT TO_DAYS(DATE_SUB(CURDATE(), INTERVAL 1 YEAR));
+    -- Partition pruning: delete rows older than 1 year inside each partition.
+    DELETE FROM meter_readings WHERE time < DATE_SUB(NOW(), INTERVAL 1 YEAR);
+  END;
+
+-- Add next month's partition on the 25th of every month, 2 months ahead.
+DELIMITER $$
+CREATE EVENT IF NOT EXISTS create_monthly_partition
+  ON SCHEDULE EVERY 1 MONTH
+  STARTS (DATE_FORMAT(CURDATE(), '%Y-%m-25 02:00:00'))
+  DO
+  BEGIN
+    SET @target      = DATE_ADD(CURDATE(), INTERVAL 2 MONTH);
+    SET @pname       = CONCAT('p', DATE_FORMAT(@target, '%Y_%m'));
+    SET @next_month  = DATE_ADD(@target, INTERVAL 1 MONTH);
+    SET @upper       = TO_DAYS(DATE_FORMAT(@next_month, '%Y-%m-01'));
+    SET @sql = CONCAT(
+      'ALTER TABLE meter_readings REORGANIZE PARTITION p_future INTO (',
+        'PARTITION ', @pname, ' VALUES LESS THAN (', @upper, '), ',
+        'PARTITION p_future VALUES LESS THAN MAXVALUE)'
+    );
+    PREPARE stmt FROM @sql;
+    EXECUTE stmt;
+    DEALLOCATE PREPARE stmt;
+  END$$
+DELIMITER ;
+
 -- Seed data lives in db-init/02-seed-demo.sql.
+-- Migration for existing deployments: db-init/03-migration-v2.sql.

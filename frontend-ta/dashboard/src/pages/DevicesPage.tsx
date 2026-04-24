@@ -25,7 +25,10 @@ export default function DevicesPage() {
             fetchApi('/unit/connectivity').catch(() => ({ onlineUnitsList: [], offlineUnitsList: [] }))
         ])
             .then(([units, conn]) => {
-                const onlineIds = new Set((conn.onlineUnitsList || []).map((u: any) => u.device_id));
+                // conn.units is the per-unit connectivity array from /unit/connectivity
+                const onlineIds = new Set(
+                    ((conn.units || []) as any[]).filter((u: any) => u.online).map((u: any) => u.deviceId)
+                );
                 const mapped: InventoryItem[] = units.map((u: any) => ({
                     id: String(u.id),
                     tenant: u.resident_email || "Unassigned",

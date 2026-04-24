@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
-import { Zap, Droplets, Wifi, WifiOff, Radio } from "lucide-react"
+import { Zap, Droplets, Wifi, WifiOff, Radio, CalendarDays, TrendingDown } from "lucide-react"
 import mqtt from "mqtt"
 import { decode as msgpackDecode } from "@msgpack/msgpack"
 import { toast } from "sonner"
@@ -74,6 +74,14 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
   const [trendData, setTrendData]       = useState<TrendPoint[]>([])
   const [trendLoading, setTrendLoading] = useState(false)
 
+  // ── ML Forecast ──────────────────────────────────────────────────────────
+  const [forecast, setForecast] = useState<{
+    estimatedDaysRemaining: number;
+    avgDailyKwh: number;
+    dailyCostRp: number;
+    confidence: 'high' | 'medium' | 'low';
+  } | null>(null)
+
   // ── MQTT live ────────────────────────────────────────────────────────────
   const [liveData, setLiveData]           = useState<LivePoint[]>([])
   const [mqttConnected, setMqttConnected] = useState(false)
@@ -94,6 +102,15 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
       finally { if (active) setLoading(false) }
     }
     void load()
+    return () => { active = false }
+  }, [unitId])
+
+  // ── Load ML forecast (once on mount / unit change) ───────────────────────
+  useEffect(() => {
+    let active = true
+    api.getForecast(unitId)
+      .then((f) => { if (active) setForecast(f) })
+      .catch(() => { /* ML service may be down — forecast stays hidden */ })
     return () => { active = false }
   }, [unitId])
 
@@ -294,6 +311,37 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
           onControlToggle={(next) => requestToggle("valve", next)}
         />
       </div>
+
+      {/* ML Forecast card */}
+      {forecast && (
+        <div className="bg-card border border-border rounded-2xl p-4 flex items-center gap-4">
+          <div className={`p-2.5 rounded-xl ${forecast.estimatedDaysRemaining <= 3 ? "bg-status-critical/10" : "bg-primary/10"}`}>
+            {forecast.estimatedDaysRemaining <= 3
+              ? <TrendingDown size={20} className="text-status-critical" />
+              : <CalendarDays size={20} className="text-primary" />
+            }
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs text-muted-foreground">Estimasi Saldo Habis</p>
+            <p className={`text-xl font-bold leading-tight ${forecast.estimatedDaysRemaining <= 3 ? "text-status-critical" : "text-foreground"}`}>
+              {forecast.estimatedDaysRemaining <= 0
+                ? "Habis"
+                : `${forecast.estimatedDaysRemaining.toFixed(1)} hari`
+              }
+            </p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Rp {forecast.dailyCostRp.toLocaleString("id-ID", { maximumFractionDigits: 0 })}/hari · {forecast.avgDailyKwh.toFixed(2)} kWh rata-rata
+            </p>
+          </div>
+          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
+            forecast.confidence === 'high'   ? "bg-primary/15 text-primary" :
+            forecast.confidence === 'medium' ? "bg-status-warn/15 text-status-warn" :
+                                               "bg-muted text-muted-foreground"
+          }`}>
+            {forecast.confidence === 'high' ? "Tinggi" : forecast.confidence === 'medium' ? "Sedang" : "Rendah"}
+          </span>
+        </div>
+      )}
 
       {/* Konsumsi card */}
       <div className="bg-card border border-border rounded-2xl p-4 space-y-4">

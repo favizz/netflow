@@ -1,7 +1,9 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import { Card } from "@/components/ui/card"
-import { AlertCircle, CheckCircle2 } from "lucide-react"
+import { AlertCircle, CheckCircle2, Loader2 } from "lucide-react"
+import { api, type AnomalyItem } from "@/lib/api"
 
 interface AuditEntry {
   id: string
@@ -12,41 +14,39 @@ interface AuditEntry {
 }
 
 interface SystemAuditLogProps {
+  unitNo?: string
   entries?: AuditEntry[]
 }
 
-export default function SystemAuditLog({ entries }: SystemAuditLogProps) {
-  // Mock audit entries
-  const mockEntries: AuditEntry[] = entries || [
-    {
-      id: "audit-1",
-      timestamp: new Date(Date.now() - 3600000).toISOString(),
-      action: "Meter Sinkronisasi",
-      type: "info",
-      details: "Meter listrik dan air berhasil disinkronkan dengan server",
-    },
-    {
-      id: "audit-2",
-      timestamp: new Date(Date.now() - 7200000).toISOString(),
-      action: "Transaksi Berhasil",
-      type: "info",
-      details: "Token senilai Rp 100.000 berhasil ditambahkan (45 KWh)",
-    },
-    {
-      id: "audit-3",
-      timestamp: new Date(Date.now() - 86400000).toISOString(),
-      action: "Konsumsi Terukur",
-      type: "info",
-      details: "Konsumsi harian 12.5 KWh tercatat dalam sistem",
-    },
-    {
-      id: "audit-4",
-      timestamp: new Date(Date.now() - 172800000).toISOString(),
-      action: "Peringatan Saldo Rendah",
-      type: "warning",
-      details: "Saldo KWh di bawah 20 unit - rekomendasi pengisian ulang",
-    },
-  ]
+function anomalyToAudit(a: AnomalyItem, idx: number): AuditEntry {
+  const typeMap: Record<string, "info" | "warning" | "error"> = {
+    critical: "error",
+    warning: "warning",
+    info: "info",
+  }
+  return {
+    id: `anomaly-${idx}`,
+    timestamp: a.detectedAt,
+    action: a.anomalyType.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+    type: typeMap[a.severity] ?? "info",
+    details: a.message,
+  }
+}
+
+export default function SystemAuditLog({ unitNo, entries }: SystemAuditLogProps) {
+  const [loaded, setLoaded] = useState<AuditEntry[] | null>(null)
+  const [error, setError]   = useState(false)
+
+  useEffect(() => {
+    if (!unitNo) return
+    api.getAnomalies(unitNo)
+      .then((items) => setLoaded(items.map(anomalyToAudit)))
+      .catch(() => setError(true))
+  }, [unitNo])
+
+  const displayEntries: AuditEntry[] =
+    entries ??
+    (loaded !== null ? loaded : [])
 
   const getIcon = (type: string) => {
     switch (type) {
@@ -72,11 +72,23 @@ export default function SystemAuditLog({ entries }: SystemAuditLogProps) {
     }
   }
 
+  if (unitNo && loaded === null && !error) {
+    return (
+      <div className="flex items-center gap-2 py-8 justify-center text-muted-foreground text-sm">
+        <Loader2 size={16} className="animate-spin" />
+        Memuat log...
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-3">
       <p className="text-sm font-semibold text-foreground">Log Audit Sistem</p>
+      {displayEntries.length === 0 && (
+        <p className="text-sm text-muted-foreground text-center py-6">Tidak ada log untuk ditampilkan.</p>
+      )}
       <div className="space-y-2">
-        {mockEntries.map((entry) => (
+        {displayEntries.map((entry) => (
           <Card key={entry.id} className="p-4">
             <div className="flex gap-3">
               <div className="mt-1 flex-shrink-0">{getIcon(entry.type)}</div>

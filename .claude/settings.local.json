@@ -33,7 +33,12 @@
       "Bash(node *)",
       "Bash(grep -rn \"MIDTRANS\" /c/Users/Lenovo/Documents/GitHub/TA-Flowmeter/.env*)",
       "Bash(ls /c/Users/Lenovo/Documents/GitHub/TA-Flowmeter/*.env*)",
-      "Bash(ls /c/Users/Lenovo/Documents/GitHub/TA-Flowmeter/.env*)"
+      "Bash(ls /c/Users/Lenovo/Documents/GitHub/TA-Flowmeter/.env*)",
+      "Bash(xargs wc *)",
+      "Bash(xargs cat *)",
+      "Bash(npm view *)",
+      "Bash(npm run *)",
+      "Bash(npm test *)"
     ]
   }
 }

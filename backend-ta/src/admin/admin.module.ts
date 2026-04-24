@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 
 import { ResidentsModule } from '../residents/residents.module';
@@ -11,10 +12,12 @@ import { AnomalyModule } from '../anomaly/anomaly.module';
 import { TariffModule } from '../tariff/tariff.module';
 import { AuditLogModule } from '../audit-log/audit-log.module';
 import { AdminJwtGuard } from '../common/guards/admin-jwt.guard';
+import { CalibrationSetting } from './entities/calibration-setting.entity';
 
 @Module({
   imports: [
     ConfigModule,
+    TypeOrmModule.forFeature([CalibrationSetting]),
     ResidentsModule,
     UnitModule,
     PaymentsModule,
@@ -29,6 +32,8 @@ import { AdminJwtGuard } from '../common/guards/admin-jwt.guard';
           transport: Transport.MQTT,
           options: {
             url: configService.get<string>('MQTT_BROKER_URL') || 'mqtt://localhost:1883',
+            username: configService.get<string>('MQTT_USERNAME') || undefined,
+            password: configService.get<string>('MQTT_PASSWORD') || undefined,
             serializer: {
               serialize: (value: { data: unknown }): Buffer => {
                 const d = value.data;

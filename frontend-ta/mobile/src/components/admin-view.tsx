@@ -103,7 +103,7 @@ export default function AdminView({ devices, unitId, lastUpdated, onDeviceToggle
           </div>
         )}
 
-        {selectedTab === "audit" && <SystemAuditLog />}
+        {selectedTab === "audit" && <SystemAuditLog unitNo={unitId} />}
       </div>
     </div>
   )

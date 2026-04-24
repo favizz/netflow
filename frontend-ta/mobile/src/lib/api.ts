@@ -354,4 +354,17 @@ export const api = {
       },
     );
   },
+
+  getForecast(unitNo: string) {
+    return request<{
+      unitNo: string;
+      balanceRp: number;
+      estimatedDaysRemaining: number;
+      avgDailyKwh: number;
+      avgDailyM3: number;
+      dailyCostRp: number;
+      confidence: 'high' | 'medium' | 'low';
+      forecastAt: string;
+    }>(`/gateway/mobile/${encodeURIComponent(unitNo)}/forecast`);
+  },
 };

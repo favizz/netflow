@@ -2,9 +2,11 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ClientsModule, Transport } from '@nestjs/microservices';
+import { BullModule } from '@nestjs/bullmq';
 
 import { DeviceService } from './device.service';
 import { DeviceController } from './device.controller';
+import { TelemetryProcessor, TELEMETRY_QUEUE } from './telemetry.processor';
 import { MeterReading } from './entities/device.entity';
 import { Unit } from '../unit/entities/unit.entity';
 import { AnomalyModule } from '../anomaly/anomaly.module';
@@ -15,6 +17,12 @@ import { TariffModule } from '../tariff/tariff.module';
     TypeOrmModule.forFeature([MeterReading, Unit]),
     ConfigModule,
     TariffModule,
+    AnomalyModule,
+
+    // Telemetry ingestion queue backed by Redis
+    BullModule.registerQueue({ name: TELEMETRY_QUEUE }),
+
+    // MQTT client for emitting relay/valve commands
     ClientsModule.registerAsync([
       {
         name: 'MQTT_CLIENT',
@@ -23,7 +31,8 @@ import { TariffModule } from '../tariff/tariff.module';
           transport: Transport.MQTT,
           options: {
             url: configService.get<string>('MQTT_BROKER_URL') || 'mqtt://localhost:1883',
-            // Pass pre-encoded Buffers through unchanged; fall back to JSON otherwise.
+            username: configService.get<string>('MQTT_USERNAME') || undefined,
+            password: configService.get<string>('MQTT_PASSWORD') || undefined,
             serializer: {
               serialize: (value: { data: unknown }): Buffer => {
                 const d = value.data;
@@ -37,9 +46,9 @@ import { TariffModule } from '../tariff/tariff.module';
         inject: [ConfigService],
       },
     ]),
-    AnomalyModule,
   ],
   controllers: [DeviceController],
-  providers: [DeviceService],
+  providers: [DeviceService, TelemetryProcessor],
+  exports: [DeviceService],
 })
 export class DeviceModule {}

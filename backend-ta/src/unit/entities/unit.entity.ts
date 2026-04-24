@@ -1,6 +1,6 @@
-import { Entity, Column, PrimaryGeneratedColumn } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn } from 'typeorm';
 
-class ColumnNumericTransformer {
+class NumericTransformer {
   to(data: number): number { return data; }
   from(data: string): number { return parseFloat(data); }
 }
@@ -10,16 +10,19 @@ export class Unit {
   @PrimaryGeneratedColumn()
   id!: number;
 
-  @Column()
+  @Column({ default: 1 })
+  building_id!: number;
+
+  @Column({ unique: true })
   unit_no!: string;
 
   @Column({ unique: true })
   device_id!: string;
 
-  @Column('decimal', {
-    precision: 15, scale: 2, default: 0,
-    transformer: new ColumnNumericTransformer()
-  })
+  @Column({ type: 'varchar', nullable: true })
+  resident_email!: string | null;
+
+  @Column('decimal', { precision: 15, scale: 2, default: 0, transformer: new NumericTransformer() })
   balance!: number;
 
   @Column({ default: true })
@@ -28,18 +31,12 @@ export class Unit {
   @Column({ default: true })
   valve_status!: boolean;
 
-  @Column('decimal', {
-    precision: 15, scale: 4, default: 0,
-    transformer: new ColumnNumericTransformer()
-  })
+  @Column('decimal', { precision: 15, scale: 4, default: 0, transformer: new NumericTransformer() })
   last_energy_reading!: number;
 
-  @Column('decimal', {
-    precision: 15, scale: 4, default: 0,
-    transformer: new ColumnNumericTransformer()
-  })
+  @Column('decimal', { precision: 15, scale: 4, default: 0, transformer: new NumericTransformer() })
   last_water_reading!: number;
 
-  @Column({ type: 'varchar', nullable: true })
-  resident_email!: string | null;
+  @CreateDateColumn()
+  created_at!: Date;
 }
