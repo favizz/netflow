@@ -3,22 +3,23 @@ import { useNavigate } from "react-router-dom";
 import { Search, Power, Droplets, ChevronDown, ChevronLeft, ChevronRight, Filter, Pencil, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { InventoryItem } from "@/lib/mockData";
-
-const PAGE_SIZE = 10;
+import { PAGE_SIZE } from "@/lib/constants";
 
 interface InventoryTableProps {
     data: InventoryItem[];
     initialFilter?: string;
     onEdit?: (item: InventoryItem) => void;
     onDelete?: (item: InventoryItem) => void;
+    onCommand?: (deviceId: string, type: 'relay' | 'valve', value: 0 | 1) => Promise<void>;
 }
 
-export function InventoryTable({ data, initialFilter = "", onEdit, onDelete }: InventoryTableProps) {
+export function InventoryTable({ data, initialFilter = "", onEdit, onDelete, onCommand }: InventoryTableProps) {
     const navigate = useNavigate();
     const [searchQuery, setSearchQuery] = useState(initialFilter);
     const [statusFilter, setStatusFilter] = useState<"All" | "Online" | "Offline">("All");
     const [isFilterOpen, setIsFilterOpen] = useState(false);
     const [page, setPage] = useState(1);
+    const [cmdPending, setCmdPending] = useState<string | null>(null);
 
     const filteredData = useMemo(() => {
         setPage(1);
@@ -120,26 +121,48 @@ export function InventoryTable({ data, initialFilter = "", onEdit, onDelete }: I
                                     </td>
                                     <td className="px-6 py-4">
                                         <div className="flex space-x-2">
-                                            <div className={cn("flex h-8 w-8 items-center justify-center rounded-md border transition-colors",
-                                                item.power ? "border-primary bg-primary/10 text-primary" : "border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-400"
-                                            )} title={item.power ? "Power ON" : "Power OFF"}>
+                                            <button
+                                                disabled={!onCommand || cmdPending === `relay-${item.id}`}
+                                                title={onCommand ? (item.power ? "Click to turn OFF relay" : "Click to turn ON relay") : (item.power ? "Power ON" : "Power OFF")}
+                                                onClick={async (e) => {
+                                                    e.stopPropagation();
+                                                    if (!onCommand) return;
+                                                    const newVal: 0 | 1 = item.power ? 0 : 1;
+                                                    setCmdPending(`relay-${item.id}`);
+                                                    await onCommand(item.meterSerial, 'relay', newVal).finally(() => setCmdPending(null));
+                                                }}
+                                                className={cn("flex h-8 w-8 items-center justify-center rounded-md border transition-colors disabled:cursor-not-allowed",
+                                                    item.power
+                                                        ? "border-primary bg-primary/10 text-primary hover:bg-primary/20"
+                                                        : "border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-600",
+                                                    !onCommand && "cursor-default"
+                                                )}
+                                            >
                                                 <Power className="h-4 w-4" />
-                                            </div>
-                                            <div className={cn("flex h-8 w-8 items-center justify-center rounded-md border transition-colors",
-                                                item.water ? "border-cyan-500 bg-cyan-50 dark:bg-cyan-900/30 text-cyan-600 dark:text-cyan-400" : "border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-400"
-                                            )} title={item.water ? "Water ON" : "Water OFF"}>
+                                            </button>
+                                            <button
+                                                disabled={!onCommand || cmdPending === `valve-${item.id}`}
+                                                title={onCommand ? (item.water ? "Click to CLOSE valve" : "Click to OPEN valve") : (item.water ? "Water ON" : "Water OFF")}
+                                                onClick={async (e) => {
+                                                    e.stopPropagation();
+                                                    if (!onCommand) return;
+                                                    const newVal: 0 | 1 = item.water ? 0 : 1;
+                                                    setCmdPending(`valve-${item.id}`);
+                                                    await onCommand(item.meterSerial, 'valve', newVal).finally(() => setCmdPending(null));
+                                                }}
+                                                className={cn("flex h-8 w-8 items-center justify-center rounded-md border transition-colors disabled:cursor-not-allowed",
+                                                    item.water
+                                                        ? "border-cyan-500 bg-cyan-50 dark:bg-cyan-900/30 text-cyan-600 dark:text-cyan-400 hover:bg-cyan-100 dark:hover:bg-cyan-900/50"
+                                                        : "border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-600",
+                                                    !onCommand && "cursor-default"
+                                                )}
+                                            >
                                                 <Droplets className="h-4 w-4" />
-                                            </div>
+                                            </button>
                                         </div>
                                     </td>
                                     <td className="px-6 py-4 text-right">
                                         <div className="flex items-center justify-end space-x-2">
-                                            <button
-                                                className="rounded-md border border-gray-200 dark:border-gray-600 px-3 py-1 text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                                                onClick={(e) => { e.stopPropagation(); navigate(`/devices/${item.id}`); }}
-                                            >
-                                                Detail
-                                            </button>
                                             {onEdit && (
                                                 <button
                                                     className="rounded-md border border-blue-200 dark:border-blue-800 px-2 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"

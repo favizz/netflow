@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
-import { ScrollText, Search, ChevronDown, Copy, Check } from "lucide-react";
+import { ScrollText, Search, ChevronDown, Copy, Check, ExternalLink } from "lucide-react";
 import { fetchApi } from "@/lib/api";
+import { API_BASE_URL } from "@/lib/constants";
 
 const PAGE_SIZE = 15;
 
@@ -154,14 +155,25 @@ export default function LogsPage() {
 
     return (
         <div className="space-y-6">
-            <div>
-                <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                    <ScrollText className="h-6 w-6 text-primary" />
-                    System Logs
-                </h1>
-                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                    Audit trail of admin actions and system events. {filtered.length} entries.
-                </p>
+            <div className="flex items-start justify-between gap-4">
+                <div>
+                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                        <ScrollText className="h-6 w-6 text-primary" />
+                        System Logs
+                    </h1>
+                    <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                        Audit trail of admin actions and system events. {filtered.length} entries.
+                    </p>
+                </div>
+                <a
+                    href={`${API_BASE_URL}/admin/queues`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 rounded-md border border-gray-200 dark:border-gray-600 px-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors whitespace-nowrap"
+                >
+                    <ExternalLink className="h-4 w-4" />
+                    Queue Monitor
+                </a>
             </div>
 
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:flex-wrap">

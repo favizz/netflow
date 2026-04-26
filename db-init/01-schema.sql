@@ -282,42 +282,16 @@ INSERT IGNORE INTO legend_transaction_status VALUES
   ('failed',  'Failed',  'Payment rejected or timed out by the payment gateway');
 
 -- -----------------------------------------
--- 12. DATA RETENTION & PARTITION MANAGEMENT
+-- 12. DATA RETENTION
+--     Partitions are pre-defined through 2027; p_future catches anything beyond.
+--     New partitions can be added manually via ALTER TABLE ... REORGANIZE.
 -- -----------------------------------------
 SET GLOBAL event_scheduler = ON;
 
--- Drop monthly partitions older than 1 year; fires daily at 03:00.
+-- Delete meter readings older than 1 year; fires daily at 03:00.
 CREATE EVENT IF NOT EXISTS cleanup_old_partitions
   ON SCHEDULE EVERY 1 DAY
   STARTS (CURRENT_DATE + INTERVAL 1 DAY + INTERVAL 3 HOUR)
-  DO
-  BEGIN
-    DECLARE cutoff_days INT DEFAULT TO_DAYS(DATE_SUB(CURDATE(), INTERVAL 1 YEAR));
-    -- Partition pruning: delete rows older than 1 year inside each partition.
-    DELETE FROM meter_readings WHERE time < DATE_SUB(NOW(), INTERVAL 1 YEAR);
-  END;
-
--- Add next month's partition on the 25th of every month, 2 months ahead.
-DELIMITER $$
-CREATE EVENT IF NOT EXISTS create_monthly_partition
-  ON SCHEDULE EVERY 1 MONTH
-  STARTS (DATE_FORMAT(CURDATE(), '%Y-%m-25 02:00:00'))
-  DO
-  BEGIN
-    SET @target      = DATE_ADD(CURDATE(), INTERVAL 2 MONTH);
-    SET @pname       = CONCAT('p', DATE_FORMAT(@target, '%Y_%m'));
-    SET @next_month  = DATE_ADD(@target, INTERVAL 1 MONTH);
-    SET @upper       = TO_DAYS(DATE_FORMAT(@next_month, '%Y-%m-01'));
-    SET @sql = CONCAT(
-      'ALTER TABLE meter_readings REORGANIZE PARTITION p_future INTO (',
-        'PARTITION ', @pname, ' VALUES LESS THAN (', @upper, '), ',
-        'PARTITION p_future VALUES LESS THAN MAXVALUE)'
-    );
-    PREPARE stmt FROM @sql;
-    EXECUTE stmt;
-    DEALLOCATE PREPARE stmt;
-  END$$
-DELIMITER ;
+  DO DELETE FROM meter_readings WHERE time < DATE_SUB(NOW(), INTERVAL 1 YEAR);
 
 -- Seed data lives in db-init/02-seed-demo.sql.
--- Migration for existing deployments: db-init/03-migration-v2.sql.

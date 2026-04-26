@@ -32,6 +32,12 @@
  */
 
 // ─────────────────────────────────────────────────────────────
+// OTA FRAME  (JSON, variable length)  server → device
+//   topic: device/{id}/ota
+//   {"url":"https://host/fw-v1.2.0.bin","version":"1.2.0","size":524288}
+//   ESP32 uses HTTPUpdate to fetch and flash; auto-reboots on success.
+
+// ─────────────────────────────────────────────────────────────
 // TELEMETRY FRAME  (21 bytes)  device → backend
 //   bytes  [0:3]  uint32 BE  et × 100     energy_total (kWh, 0.01 precision)
 //   bytes  [4:5]  uint16 BE  p  × 10      power        (W,   0.1  precision)
@@ -108,5 +114,35 @@ export function encodeCalibration(payload: CalibrationPayload): Buffer {
   buf.writeUInt16BE(Math.round(payload.cf * 100), 0);
   buf[2] = Math.round(payload.cp * 100);
   buf[3] = payload.st;
+  return buf;
+}
+
+export interface OtaPayload {
+  version:    string;  // semver "1.0.1"
+  binaryLink: string;  // full URL to .bin file (e.g. GitHub raw)
+  updateNow?: boolean; // default true → flags byte 0x01
+}
+
+/**
+ * Compact binary OTA frame — no JSON wrapper.
+ *   byte[0]   major  (uint8)
+ *   byte[1]   minor  (uint8)
+ *   byte[2]   patch  (uint8)
+ *   byte[3]   flags  0x01=update_now  0x02=force
+ *   byte[4..N] binary_link as UTF-8 (length = frame.length − 4)
+ *
+ * ~4 + URL_len bytes vs ~150+ bytes for equivalent JSON.
+ */
+export function encodeOta(payload: OtaPayload): Buffer {
+  const parts = payload.version.split('.').map(Number);
+  const [maj = 0, min = 0, pat = 0] = parts;
+  const flags = payload.updateNow !== false ? 0x01 : 0x00;
+  const urlBytes = Buffer.from(payload.binaryLink, 'utf8');
+  const buf = Buffer.allocUnsafe(4 + urlBytes.length);
+  buf[0] = maj & 0xFF;
+  buf[1] = min & 0xFF;
+  buf[2] = pat & 0xFF;
+  buf[3] = flags;
+  urlBytes.copy(buf, 4);
   return buf;
 }

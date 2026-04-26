@@ -7,6 +7,7 @@ import { UnitService } from '../unit/unit.service';
 import type { AnomalyItem } from './anomaly.types';
 import { Anomaly } from './entities/anomaly.entity';
 import { encodeCommand } from '../common/binary-codec';
+import { NotificationService } from '../notification/notification.service';
 
 // ── Detection thresholds ────────────────────────────────────────────────────
 const MCB_WATT_LIMIT          = 1300;
@@ -39,6 +40,7 @@ export class AnomalyService implements OnModuleInit {
     @InjectRepository(Anomaly)
     private readonly anomalyRepo: Repository<Anomaly>,
     @Inject('MQTT_CLIENT') private readonly mqttClient: ClientProxy,
+    private readonly notificationService: NotificationService,
   ) {}
 
   onModuleInit() {
@@ -155,6 +157,16 @@ export class AnomalyService implements OnModuleInit {
             description: comp.message,
             action_taken: JSON.stringify(comp.metadata),
           });
+
+          // Proactive Resident Notification (Spec 2.1.8)
+          if (unit.resident_email && (comp.severity === 'critical' || comp.severity === 'warning')) {
+            const subject = `[NetFlow Alert] ${comp.anomalyType.toUpperCase()} on Unit ${unitNo}`;
+            void this.notificationService.sendResidentNotification(
+              unit.resident_email,
+              subject,
+              comp.message,
+            ).catch(() => {});
+          }
         }
       }
     } catch {

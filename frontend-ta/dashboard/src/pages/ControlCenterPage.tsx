@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
-import { SlidersHorizontal, Save, RefreshCw, CheckCircle, AlertCircle, Zap, Droplets, Loader2, Clock, Pencil, Check, X } from "lucide-react";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { SlidersHorizontal, Save, RefreshCw, CheckCircle, AlertCircle, Zap, Droplets, Loader2, Clock, Pencil, Check, X, Terminal, Radio, UploadCloud } from "lucide-react";
 import { fetchApi } from "@/lib/api";
 
 interface CalibrationConfig {
@@ -160,15 +160,39 @@ function SliderField({ label, value, min, max, step, unit, onChange }: {
     );
 }
 
+type LogEntry = { ts: string; level: 'info' | 'ok' | 'err'; text: string };
+
+function ts() { return new Date().toLocaleTimeString('id-ID', { hour12: false }); }
+
 export default function ControlCenterPage() {
+    // ── Calibration ───────────────────────────────────────────────────────────
     const [config, setConfig] = useState<CalibrationConfig>(DEFAULTS);
+    const [serverConfig, setServerConfig] = useState<CalibrationConfig>(DEFAULTS);
     const [loadingConfig, setLoadingConfig] = useState(true);
     const [saving, setSaving] = useState(false);
     const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
 
+    // ── Tariffs ───────────────────────────────────────────────────────────────
     const [elecTariff, setElecTariff] = useState<Tariff | null>(null);
     const [waterTariff, setWaterTariff] = useState<Tariff | null>(null);
     const [lastUpdated, setLastUpdated] = useState<string | null>(null);
+
+    // ── Broadcast commands state ──────────────────────────────────────────────
+    const [cmdPending, setCmdPending] = useState<string | null>(null);
+    const [log, setLog] = useState<LogEntry[]>([]);
+
+    // ── OTA state ─────────────────────────────────────────────────────────────
+    const [otaBinaryLink, setOtaBinaryLink] = useState('');
+    const [otaVersion, setOtaVersion] = useState('');
+    const [otaPending, setOtaPending] = useState(false);
+
+    const isDirty = useMemo(
+        () => JSON.stringify(config) !== JSON.stringify(serverConfig),
+        [config, serverConfig]
+    );
+
+    const addLog = (level: LogEntry['level'], text: string) =>
+        setLog(prev => [...prev.slice(-49), { ts: ts(), level, text }]);
 
     const loadTariffs = useCallback(() => {
         fetchApi('/admin/tariff')
@@ -186,11 +210,13 @@ export default function ControlCenterPage() {
         fetchApi('/admin/settings')
             .then((data: any) => {
                 if (data) {
-                    setConfig({
+                    const loaded: CalibrationConfig = {
                         CAL_FACTOR_FLOWRATE: Number(data.CAL_FACTOR_FLOWRATE ?? DEFAULTS.CAL_FACTOR_FLOWRATE),
                         CAL_FACTOR_POWER: Number(data.CAL_FACTOR_POWER ?? DEFAULTS.CAL_FACTOR_POWER),
                         SENSOR_SAMPLING_TIME: Number(data.SENSOR_SAMPLING_TIME ?? DEFAULTS.SENSOR_SAMPLING_TIME),
-                    });
+                    };
+                    setConfig(loaded);
+                    setServerConfig(loaded);
                 }
             })
             .catch(() => {})
@@ -204,6 +230,7 @@ export default function ControlCenterPage() {
         setSaveStatus('idle');
         try {
             await fetchApi('/admin/settings', { method: 'PATCH', body: JSON.stringify(config) });
+            setServerConfig({ ...config });
             setSaveStatus('success');
             setLastUpdated(new Date().toLocaleString('id-ID'));
         } catch {
@@ -211,6 +238,53 @@ export default function ControlCenterPage() {
         } finally {
             setSaving(false);
             setTimeout(() => setSaveStatus('idle'), 3000);
+        }
+    };
+
+    const sendCommandAll = async (type: 'relay' | 'valve', value: 0 | 1) => {
+        const key = `${type}-${value}`;
+        setCmdPending(key);
+        addLog('info', `→ BROADCAST  ${type} → ${value ? 'ON/OPEN' : 'OFF/CLOSE'}  (all devices)`);
+        try {
+            const res = await fetchApi('/admin/command', {
+                method: 'POST',
+                body: JSON.stringify({ type, value }),
+            });
+            addLog('ok', `✓ COMMAND sent to ${Array.isArray(res?.pushed) ? res.pushed.length : '?'} device(s)`);
+        } catch (err: any) {
+            addLog('err', `✗ BROADCAST failed: ${err.message}`);
+        } finally {
+            setCmdPending(null);
+        }
+    };
+
+    const pushConfigAll = async () => {
+        setCmdPending('config');
+        addLog('info', '→ CONFIG  push to ALL devices');
+        try {
+            const res = await fetchApi('/admin/push-config', { method: 'POST' });
+            addLog('ok', `✓ CONFIG pushed to ${Array.isArray(res?.pushed) ? res.pushed.length : '?'} device(s)`);
+        } catch (err: any) {
+            addLog('err', `✗ CONFIG push failed: ${err.message}`);
+        } finally {
+            setCmdPending(null);
+        }
+    };
+
+    const pushOta = async () => {
+        if (!otaBinaryLink || !otaVersion) return;
+        setOtaPending(true);
+        addLog('info', `→ OTA  v${otaVersion}  → all devices`);
+        try {
+            const res = await fetchApi('/admin/ota', {
+                method: 'POST',
+                body: JSON.stringify({ version: otaVersion, binaryLink: otaBinaryLink, updateNow: true }),
+            });
+            addLog('ok', `✓ OTA pushed to ${Array.isArray(res?.pushed) ? res.pushed.length : '?'} device(s)`);
+        } catch (err: any) {
+            addLog('err', `✗ OTA push failed: ${err.message}`);
+        } finally {
+            setOtaPending(false);
         }
     };
 
@@ -236,7 +310,7 @@ export default function ControlCenterPage() {
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Control Center</h1>
                     <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                        Global tariff rates and sensor calibration settings.
+                        Global tariff rates, sensor calibration, and broadcast device commands.
                     </p>
                 </div>
                 {lastUpdated && (
@@ -275,14 +349,19 @@ export default function ControlCenterPage() {
                         <div className="rounded-lg bg-primary/10 dark:bg-primary/20 p-2">
                             <SlidersHorizontal className="h-5 w-5 text-primary" />
                         </div>
-                        <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">Sensor Calibration</h2>
+                        <div>
+                            <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">Sensor Calibration</h2>
+                            {isDirty && (
+                                <p className="text-xs text-amber-500 dark:text-amber-400">Unsaved changes</p>
+                            )}
+                        </div>
                     </div>
                     <button
-                        onClick={() => setConfig(DEFAULTS)}
+                        onClick={() => setConfig({ ...serverConfig })}
                         className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
                     >
                         <RefreshCw className="h-3.5 w-3.5" />
-                        Reset defaults
+                        Reset to server
                     </button>
                 </div>
 
@@ -316,14 +395,23 @@ export default function ControlCenterPage() {
                             onChange={v => setConfig(c => ({ ...c, SENSOR_SAMPLING_TIME: v }))}
                         />
 
-                        <div className="flex items-center gap-3 pt-2">
+                        <div className="flex items-center gap-3 pt-2 border-t border-gray-100 dark:border-gray-700">
                             <button
                                 onClick={handleSave}
-                                disabled={saving}
-                                className="flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+                                disabled={saving || !isDirty}
+                                className="flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                             >
                                 <Save className="h-4 w-4" />
-                                {saving ? 'Saving...' : 'Save Changes'}
+                                {saving ? 'Saving...' : 'Save to Server'}
+                            </button>
+                            <button
+                                onClick={pushConfigAll}
+                                disabled={!!cmdPending || isDirty}
+                                title={isDirty ? 'Save changes first before pushing to devices' : 'Push saved calibration to all devices'}
+                                className="flex items-center gap-1.5 rounded-md border border-gray-200 dark:border-gray-600 px-3 py-2 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            >
+                                {cmdPending === 'config' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <SlidersHorizontal className="h-3.5 w-3.5" />}
+                                Push to All Devices
                             </button>
                             {saveStatus === 'success' && (
                                 <span className="flex items-center gap-1.5 text-sm text-green-600 dark:text-green-400">
@@ -339,6 +427,114 @@ export default function ControlCenterPage() {
                     </div>
                 )}
             </div>
+
+            {/* Broadcast Commands — all devices */}
+            <div className="rounded-lg bg-white dark:bg-gray-800 p-6 shadow-sm ring-1 ring-gray-900/5 dark:ring-gray-700 space-y-5">
+                <div className="flex items-center gap-3">
+                    <div className="rounded-lg bg-primary/10 dark:bg-primary/20 p-2">
+                        <Radio className="h-5 w-5 text-primary" />
+                    </div>
+                    <div>
+                        <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">Broadcast Commands</h2>
+                        <p className="text-xs text-gray-400 dark:text-gray-500">Send relay / valve command to every device simultaneously</p>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                        <p className="text-xs font-medium text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                            <Zap className="h-3.5 w-3.5 text-yellow-500" /> Relay (All Units)
+                        </p>
+                        <div className="flex gap-2">
+                            <button onClick={() => sendCommandAll('relay', 1)} disabled={!!cmdPending}
+                                className="flex-1 rounded-md bg-green-600 px-3 py-2 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50 transition-colors">
+                                {cmdPending === 'relay-1' ? <Loader2 className="h-3.5 w-3.5 animate-spin mx-auto" /> : 'ON'}
+                            </button>
+                            <button onClick={() => sendCommandAll('relay', 0)} disabled={!!cmdPending}
+                                className="flex-1 rounded-md bg-red-600 px-3 py-2 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50 transition-colors">
+                                {cmdPending === 'relay-0' ? <Loader2 className="h-3.5 w-3.5 animate-spin mx-auto" /> : 'OFF'}
+                            </button>
+                        </div>
+                    </div>
+                    <div className="space-y-2">
+                        <p className="text-xs font-medium text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                            <Droplets className="h-3.5 w-3.5 text-cyan-500" /> Valve (All Units)
+                        </p>
+                        <div className="flex gap-2">
+                            <button onClick={() => sendCommandAll('valve', 1)} disabled={!!cmdPending}
+                                className="flex-1 rounded-md bg-green-600 px-3 py-2 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50 transition-colors">
+                                {cmdPending === 'valve-1' ? <Loader2 className="h-3.5 w-3.5 animate-spin mx-auto" /> : 'OPEN'}
+                            </button>
+                            <button onClick={() => sendCommandAll('valve', 0)} disabled={!!cmdPending}
+                                className="flex-1 rounded-md bg-red-600 px-3 py-2 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50 transition-colors">
+                                {cmdPending === 'valve-0' ? <Loader2 className="h-3.5 w-3.5 animate-spin mx-auto" /> : 'CLOSE'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* OTA Firmware Update */}
+            <div className="rounded-lg bg-white dark:bg-gray-800 p-6 shadow-sm ring-1 ring-gray-900/5 dark:ring-gray-700 space-y-4">
+                <div className="flex items-center gap-3">
+                    <div className="rounded-lg bg-primary/10 dark:bg-primary/20 p-2">
+                        <UploadCloud className="h-5 w-5 text-primary" />
+                    </div>
+                    <div>
+                        <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">OTA Firmware Update</h2>
+                        <p className="text-xs text-gray-400 dark:text-gray-500">Broadcast firmware binary link to all devices via MQTT</p>
+                    </div>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-4">
+                    <div className="sm:col-span-3">
+                        <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Binary Link (URL to .bin)</label>
+                        <input type="url" value={otaBinaryLink} onChange={e => setOtaBinaryLink(e.target.value)}
+                            placeholder="https://raw.githubusercontent.com/.../firmware.bin"
+                            className="block w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-1.5 text-sm text-gray-900 dark:text-gray-100 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary" />
+                    </div>
+                    <div>
+                        <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Version</label>
+                        <input type="text" value={otaVersion} onChange={e => setOtaVersion(e.target.value)}
+                            placeholder="1.2.0"
+                            className="block w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-1.5 text-sm text-gray-900 dark:text-gray-100 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary" />
+                    </div>
+                </div>
+
+                <button onClick={pushOta} disabled={otaPending || !otaBinaryLink || !otaVersion}
+                    className="flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                    {otaPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />}
+                    {otaPending ? 'Pushing...' : 'Push OTA to All Devices'}
+                </button>
+            </div>
+
+            {/* MQTT Command Log */}
+            <div className="rounded-lg bg-white dark:bg-gray-800 shadow-sm ring-1 ring-gray-900/5 dark:ring-gray-700 overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-700">
+                    <div className="flex items-center gap-2">
+                        <Terminal className="h-4 w-4 text-primary" />
+                        <span className="text-sm font-medium text-gray-900 dark:text-gray-100">Command Log</span>
+                        {log.length > 0 && (
+                            <span className="rounded-full bg-gray-100 dark:bg-gray-700 px-2 py-0.5 text-[10px] text-gray-500 dark:text-gray-400">{log.length}</span>
+                        )}
+                    </div>
+                    {log.length > 0 && (
+                        <button onClick={() => setLog([])} className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">Clear</button>
+                    )}
+                </div>
+                <div className="h-40 overflow-y-auto bg-gray-950 p-3 font-mono text-[11px] space-y-0.5">
+                    {log.length === 0 ? (
+                        <p className="text-gray-600">No commands sent yet.</p>
+                    ) : (
+                        log.map((entry, i) => (
+                            <div key={i} className={entry.level === 'ok' ? 'text-green-400' : entry.level === 'err' ? 'text-red-400' : 'text-gray-300'}>
+                                <span className="text-gray-600 mr-2">[{entry.ts}]</span>{entry.text}
+                            </div>
+                        ))
+                    )}
+                </div>
+            </div>
+
         </div>
     );
 }

@@ -1,25 +1,34 @@
 import {
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
-import { createHmac, timingSafeEqual } from 'crypto';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 import { UnitService } from '../unit/unit.service';
 import { Transaction } from './entities/transaction.entity';
 import { InitiateTopupDto } from './dto/initiate-topup.dto';
 import { PaymentWebhookDto } from './dto/payment-webhook.dto';
+import { PAYMENT_EXPIRY_QUEUE } from './payment-expiry.processor';
+
+const PAYMENT_EXPIRY_MS = 30 * 60 * 1_000; // 30 minutes
 
 @Injectable()
 export class PaymentsService {
+  private readonly logger = new Logger(PaymentsService.name);
+
   constructor(
     @InjectRepository(Transaction)
     private readonly txRepo: Repository<Transaction>,
     private readonly unitService: UnitService,
     private readonly configService: ConfigService,
+    @InjectQueue(PAYMENT_EXPIRY_QUEUE)
+    private readonly expiryQueue: Queue,
   ) {}
 
   async initiateTopup(dto: InitiateTopupDto) {
@@ -80,15 +89,27 @@ export class PaymentsService {
 
       await this.txRepo.save(tx);
 
+      // Schedule auto-cancel after 30 minutes if payment is not settled
+      try {
+        await this.expiryQueue.add(
+          'expire',
+          { transactionId: id },
+          { delay: PAYMENT_EXPIRY_MS, removeOnComplete: true, removeOnFail: 100 },
+        );
+      } catch {
+        this.logger.warn(`Could not schedule expiry for ${id} (Redis unavailable)`);
+      }
+
       return {
         transactionId: id,
         gatewayReference: tx.gateway_reference,
         vaNumber,
         qrUrl,
         status: tx.status,
+        expiresAt: new Date(Date.now() + PAYMENT_EXPIRY_MS).toISOString(),
       };
     } catch (e: any) {
-      console.error('Midtrans Error:', e);
+      this.logger.error('Midtrans Error:', e);
       throw new Error('Gagal initiate pembayaran dengan Midtrans');
     }
   }

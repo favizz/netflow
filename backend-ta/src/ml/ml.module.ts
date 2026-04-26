@@ -16,7 +16,7 @@ import { TariffModule } from '../tariff/tariff.module';
     HttpModule.registerAsync({
       imports: [ConfigModule],
       useFactory: (cfg: ConfigService) => ({
-        baseURL: cfg.get('ML_SERVICE_URL', 'http://localhost:8000'),
+        baseURL: cfg.get('ML_SERVICE_URL'),
         timeout: 8_000,
       }),
       inject: [ConfigService],

@@ -4,7 +4,7 @@ import { Repository, IsNull } from 'typeorm';
 import { ClientProxy } from '@nestjs/microservices';
 import { UnitService } from '../unit/unit.service';
 import { PaymentsService } from '../payments/payments.service';
-import { encodeCalibration } from '../common/binary-codec';
+import { encodeCalibration, encodeCommand, encodeOta } from '../common/binary-codec';
 import { CalibrationSetting } from './entities/calibration-setting.entity';
 
 export interface CalibrationSettings {
@@ -101,6 +101,37 @@ export class AdminService implements OnModuleInit {
     const units = await this.unitService.findAll();
     for (const unit of units) {
       await this.pushConfigToDevice(unit.device_id);
+    }
+    return { pushed: units.map(u => u.device_id) };
+  }
+
+  // ── OTA firmware update ───────────────────────────────────────────────────
+
+  pushOtaToDevice(deviceId: string, version: string, binaryLink: string, updateNow = true): void {
+    this.mqttClient.emit(
+      `device/${deviceId}/ota`,
+      encodeOta({ version, binaryLink, updateNow }),
+    );
+  }
+
+  // ── Direct device commands ────────────────────────────────────────────────
+
+  sendCommand(deviceId: string, type: 'relay' | 'valve', value: 0 | 1): void {
+    this.mqttClient.emit(`device/${deviceId}/command`, encodeCommand(type, value));
+  }
+
+  async sendCommandToAll(type: 'relay' | 'valve', value: 0 | 1): Promise<{ pushed: string[] }> {
+    const units = await this.unitService.findAll();
+    for (const unit of units) {
+      this.mqttClient.emit(`device/${unit.device_id}/command`, encodeCommand(type, value));
+    }
+    return { pushed: units.map(u => u.device_id) };
+  }
+
+  async pushOtaToAll(version: string, binaryLink: string, updateNow = true): Promise<{ pushed: string[] }> {
+    const units = await this.unitService.findAll();
+    for (const unit of units) {
+      this.pushOtaToDevice(unit.device_id, version, binaryLink, updateNow);
     }
     return { pushed: units.map(u => u.device_id) };
   }

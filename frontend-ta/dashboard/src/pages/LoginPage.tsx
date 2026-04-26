@@ -27,7 +27,7 @@ export default function LoginPage() {
     setLoading(true);
     setError('');
     try {
-      const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+      const BASE_URL = import.meta.env.VITE_API_BASE_URL as string;
       const res = await fetch(`${BASE_URL}/auth/admin`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -74,46 +74,95 @@ export default function LoginPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const handleDevLogin = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const BASE_URL = import.meta.env.VITE_API_BASE_URL as string;
+      const res = await fetch(`${BASE_URL}/auth/dev-login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: 'izza.diasputra10@gmail.com' }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.message || 'Dev login failed.');
+      }
+      const data = await res.json();
+      localStorage.setItem('admin-token', data.accessToken);
+      navigate('/');
+    } catch (err: any) {
+      setError(err.message || 'Dev login failed.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const isDev = !GOOGLE_CLIENT_ID || 
+    GOOGLE_CLIENT_ID.startsWith('replace-') || 
+    window.location.hostname === 'localhost' || 
+    window.location.hostname === '127.0.0.1';
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
-      <div className="w-full max-w-sm">
-        <div className="mb-8 flex flex-col items-center gap-4">
-          <img
-            src="/netflow-logo-black.png"
-            alt="NETFLOW"
-            className="h-12 object-contain"
-          />
-          <div className="text-center">
-            <h1 className="text-2xl font-bold text-gray-900">Admin Dashboard</h1>
-            <p className="mt-1 text-sm text-gray-500">
-              Sign in with your administrator Google account.
-            </p>
+    <div className="min-h-screen bg-gradient-to-br from-[color-mix(in_oklch,var(--primary)_10%,transparent)] via-background to-[color-mix(in_oklch,var(--primary)_5%,transparent)] flex items-center justify-center p-4">
+      <div className="w-full max-w-md shadow-lg ring-1 ring-[var(--card-border)] bg-[var(--card)]/80 backdrop-blur-xl rounded-2xl">
+        <div className="p-8 md:p-10 space-y-8">
+
+          {/* Branding */}
+          <div className="text-center space-y-3">
+            <div className="flex justify-center mb-6">
+              <img
+                src="/netflow-logo-icon.png"
+                alt="NETFLOW"
+                className="h-20 w-20 object-contain"
+              />
+            </div>
+            <h1 className="text-4xl font-extrabold text-foreground tracking-tight">NETFLOW</h1>
+            <p className="text-base text-muted-text">Admin Dashboard</p>
           </div>
+
+          {/* Sign-in area */}
+          <div className="flex flex-col items-center gap-4 pt-2">
+            {!GOOGLE_CLIENT_ID && !isDev && (
+              <div className="w-full rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-xs text-amber-700">
+                Google Sign-In is not configured. Set{' '}
+                <code className="font-mono font-medium">VITE_GOOGLE_CLIENT_ID</code> to enable it.
+              </div>
+            )}
+
+            {error && (
+              <div className="w-full rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+                {error}
+              </div>
+            )}
+
+            {loading ? (
+              <div className="flex items-center justify-center py-3 gap-2">
+                <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                <span className="text-sm text-muted-text">Verifying...</span>
+              </div>
+            ) : (
+              <>
+                <div ref={buttonRef} className="flex justify-center w-full" />
+                {isDev && (
+                  <button
+                    onClick={() => void handleDevLogin()}
+                    className="mt-4 w-full py-2 px-4 rounded-xl border border-dashed border-amber-400 text-amber-700 text-sm font-semibold hover:bg-amber-50 transition-colors"
+                  >
+                    [Dev] Login as Admin (izza.diasputra10@gmail.com)
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+
+          {/* Footer */}
+          {GOOGLE_CLIENT_ID && (
+            <div className="border-t border-[var(--card-border)] pt-5 text-center text-[12px] text-muted-text">
+              By continuing, you confirm you have administrator access to this system.
+            </div>
+          )}
         </div>
-
-        <div className="rounded-xl bg-white p-8 shadow-sm ring-1 ring-gray-900/5">
-          {!GOOGLE_CLIENT_ID && (
-            <div className="mb-4 rounded-md bg-amber-50 border border-amber-200 px-4 py-3 text-xs text-amber-700">
-              Google Sign-In is not configured. Set <code className="font-mono font-medium">VITE_GOOGLE_CLIENT_ID</code> to enable it.
-            </div>
-          )}
-
-          {error && (
-            <div className="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
-              {error}
-            </div>
-          )}
-
-          {loading ? (
-            <div className="flex items-center justify-center py-3">
-              <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-              <span className="ml-2 text-sm text-gray-500">Verifying...</span>
-            </div>
-          ) : (
-            <div ref={buttonRef} className="flex justify-center" />
-          )}
-        </div>
-
       </div>
     </div>
   );

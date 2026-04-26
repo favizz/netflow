@@ -8,6 +8,7 @@ import UsersPage from '@/pages/UsersPage';
 import TransactionsPage from '@/pages/TransactionsPage';
 import LogsPage from '@/pages/LogsPage';
 import ControlCenterPage from '@/pages/ControlCenterPage';
+import FAQPage from '@/pages/FAQPage';
 import LoginPage from '@/pages/LoginPage';
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -33,6 +34,7 @@ export default function App() {
           <Route path="users" element={<UsersPage />} />
           <Route path="logs" element={<LogsPage />} />
           <Route path="control-center" element={<ControlCenterPage />} />
+          <Route path="faq" element={<FAQPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>

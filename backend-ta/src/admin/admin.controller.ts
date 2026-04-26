@@ -138,6 +138,52 @@ export class AdminController {
     return this.adminService.pushConfigToAll();
   }
 
+  // ── Direct device command (relay / valve) ────────────────────────────────
+
+  @Post('command/:deviceId')
+  async sendCommand(
+    @Param('deviceId') deviceId: string,
+    @Body() body: { type: 'relay' | 'valve'; value: 0 | 1 },
+    @Request() req: any,
+  ) {
+    this.adminService.sendCommand(deviceId, body.type, body.value);
+    void this.auditLogService.log(this.adminEmail(req), 'SEND_COMMAND', 'device', deviceId, body as any);
+    return { sent: true, deviceId, type: body.type, value: body.value };
+  }
+
+  @Post('command')
+  async sendCommandAll(
+    @Body() body: { type: 'relay' | 'valve'; value: 0 | 1 },
+    @Request() req: any,
+  ) {
+    const result = await this.adminService.sendCommandToAll(body.type, body.value);
+    void this.auditLogService.log(this.adminEmail(req), 'SEND_COMMAND_ALL', 'device', null, body as any);
+    return result;
+  }
+
+  // ── OTA firmware update ───────────────────────────────────────────────────
+
+  @Post('ota/:deviceId')
+  async pushOta(
+    @Param('deviceId') deviceId: string,
+    @Body() body: { version: string; binaryLink: string; updateNow?: boolean },
+    @Request() req: any,
+  ) {
+    this.adminService.pushOtaToDevice(deviceId, body.version, body.binaryLink, body.updateNow ?? true);
+    void this.auditLogService.log(this.adminEmail(req), 'OTA_PUSH', 'device', deviceId, body as any);
+    return { pushed: [deviceId] };
+  }
+
+  @Post('ota')
+  async pushOtaAll(
+    @Body() body: { version: string; binaryLink: string; updateNow?: boolean },
+    @Request() req: any,
+  ) {
+    const result = await this.adminService.pushOtaToAll(body.version, body.binaryLink, body.updateNow ?? true);
+    void this.auditLogService.log(this.adminEmail(req), 'OTA_PUSH_ALL', 'device', null, body as any);
+    return result;
+  }
+
   // ── Tariffs ───────────────────────────────────────────────────────────────
 
   @Get('tariff')

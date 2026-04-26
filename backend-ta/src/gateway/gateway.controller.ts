@@ -105,7 +105,7 @@ export class GatewayController {
     @CurrentUser() user: JwtPayload,
   ) {
     assertUnitAccess(user, unitNo);
-    return this.gatewayService.setRelayByUnitNo(unitNo, Boolean(body.status));
+    return this.gatewayService.setRelayByUnitNo(unitNo, Boolean(body.status), user.sub);
   }
 
   @Post('mobile/:unitNo/valve')
@@ -115,6 +115,6 @@ export class GatewayController {
     @CurrentUser() user: JwtPayload,
   ) {
     assertUnitAccess(user, unitNo);
-    return this.gatewayService.setValveByUnitNo(unitNo, Boolean(body.status));
+    return this.gatewayService.setValveByUnitNo(unitNo, Boolean(body.status), user.sub);
   }
 }

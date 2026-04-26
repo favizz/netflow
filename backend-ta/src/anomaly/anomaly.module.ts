@@ -5,6 +5,7 @@ import { ClientsModule, Transport } from '@nestjs/microservices';
 import { Anomaly } from './entities/anomaly.entity';
 import { UnitModule } from '../unit/unit.module';
 import { AnomalyService } from './anomaly.service';
+import { NotificationModule } from '../notification/notification.module';
 
 @Module({
   imports: [
@@ -12,6 +13,7 @@ import { AnomalyService } from './anomaly.service';
     // UnitModule exports UnitService + TypeOrmModule (includes MeterReading repository)
     UnitModule,
     TypeOrmModule.forFeature([Anomaly]),
+    NotificationModule,
     ClientsModule.registerAsync([
       {
         name: 'MQTT_CLIENT',
@@ -19,7 +21,7 @@ import { AnomalyService } from './anomaly.service';
         useFactory: (configService: ConfigService) => ({
           transport: Transport.MQTT,
           options: {
-            url: configService.get<string>('MQTT_BROKER_URL') || 'mqtt://localhost:1883',
+            url: configService.get<string>('MQTT_BROKER_URL'),
             username: configService.get<string>('MQTT_USERNAME') || undefined,
             password: configService.get<string>('MQTT_PASSWORD') || undefined,
             serializer: {

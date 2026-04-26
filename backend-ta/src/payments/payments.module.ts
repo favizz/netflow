@@ -1,17 +1,20 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { BullModule } from '@nestjs/bullmq';
 import { UnitModule } from '../unit/unit.module';
 import { Transaction } from './entities/transaction.entity';
 import { PaymentsController } from './payments.controller';
 import { PaymentsService } from './payments.service';
+import { PaymentExpiryProcessor, PAYMENT_EXPIRY_QUEUE } from './payment-expiry.processor';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Transaction]),
     UnitModule,
+    BullModule.registerQueue({ name: PAYMENT_EXPIRY_QUEUE }),
   ],
   controllers: [PaymentsController],
-  providers: [PaymentsService],
+  providers: [PaymentsService, PaymentExpiryProcessor],
   exports: [PaymentsService],
 })
 export class PaymentsModule {}

@@ -1,7 +1,7 @@
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL as string;
 
 export const MQTT_CONFIG = {
-    brokerUrl: import.meta.env.VITE_MQTT_BROKER_URL || 'ws://localhost:8083/mqtt',
+    brokerUrl: import.meta.env.VITE_MQTT_BROKER_URL as string,
     options: {
         username: import.meta.env.VITE_MQTT_USERNAME || '',
         password: import.meta.env.VITE_MQTT_PASSWORD || '',

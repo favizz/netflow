@@ -59,15 +59,16 @@ export class GatewayService {
     return this.paymentsService.listTransactionsForUnit(unitNo);
   }
 
-  async setRelayByUnitNo(unitNo: string, on: boolean) {
+  async setRelayByUnitNo(unitNo: string, on: boolean, actorEmail?: string) {
     const unit = await this.unitService.findByUnitNo(unitNo);
-    await this.unitService.setRelayStatus(unit.id, on);
+    await this.unitService.setRelayStatus(unit.id, on, actorEmail);
     this.mqttClient.emit(`device/${unit.device_id}/command`, encodeCommand('relay', on ? 1 : 0));
     return { relayStatus: on };
   }
 
-  async setValveByUnitNo(unitNo: string, open: boolean) {
+  async setValveByUnitNo(unitNo: string, open: boolean, actorEmail?: string) {
     const unit = await this.unitService.findByUnitNo(unitNo);
+    await this.unitService.setValveStatus(unit.id, open, actorEmail);
     this.mqttClient.emit(`device/${unit.device_id}/command`, encodeCommand('valve', open ? 1 : 0));
     return { valveStatus: open };
   }

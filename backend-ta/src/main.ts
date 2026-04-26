@@ -6,13 +6,27 @@ import { AppModule } from './app.module';
 const compression = require('compression');
 import helmet from 'helmet';
 
+// Suppress raw ioredis reconnect noise — BullMQ inline fallback handles these
+process.on('uncaughtException', (err: NodeJS.ErrnoException) => {
+  if (err.code === 'ECONNRESET' || err.code === 'ECONNREFUSED') return;
+  console.error('[FATAL] Uncaught exception:', err);
+  process.exit(1);
+});
+process.on('unhandledRejection', (reason: unknown) => {
+  const code = (reason as NodeJS.ErrnoException)?.code;
+  if (code === 'ECONNRESET' || code === 'ECONNREFUSED') return;
+  if (reason instanceof AggregateError) return;
+  console.error('[FATAL] Unhandled rejection:', reason);
+});
+
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   // ── Security headers ────────────────────────────────────────────────────────
   app.use(helmet({
-    crossOriginEmbedderPolicy: false, // allow WebSocket MQTT from browser
-    contentSecurityPolicy: false,     // configured per-environment in Nginx
+    crossOriginEmbedderPolicy: false,                          // allow WebSocket MQTT from browser
+    contentSecurityPolicy: false,                              // configured per-environment in Nginx
+    crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' }, // allow Google OAuth popup postMessage
   }));
 
   // ── Response compression (gzip) ─────────────────────────────────────────────
@@ -20,7 +34,7 @@ async function bootstrap() {
 
   // ── CORS ────────────────────────────────────────────────────────────────────
   app.enableCors({
-    origin: process.env.CORS_ORIGIN?.split(',') || ['http://localhost:5173', 'http://localhost:3000'],
+    origin: process.env.CORS_ORIGIN!.split(','),
     credentials: true,
   });
 
@@ -33,10 +47,62 @@ async function bootstrap() {
     }),
   );
 
-  // ── Prometheus metrics endpoint ──────────────────────────────────────────────
-  // Simple built-in metrics without prom-client dependency.
-  // Replace with @willsoto/nestjs-prometheus for production-grade metrics.
+  // ── Health check + Prometheus metrics ───────────────────────────────────────
   const startTime = Date.now();
+
+  // GET /health — checks all downstream dependencies, returns 200 OK or 503
+  app.getHttpAdapter().get('/health', async (_req: any, res: any) => {
+    const checks: Record<string, { ok: boolean; latencyMs?: number; error?: string }> = {};
+
+    // MySQL
+    try {
+      const t0 = Date.now();
+      const ds = app.get('DataSource', { strict: false });
+      await ds?.query('SELECT 1');
+      checks.mysql = { ok: true, latencyMs: Date.now() - t0 };
+    } catch (e: any) {
+      checks.mysql = { ok: false, error: e.message };
+    }
+
+    // Redis (ioredis via BullMQ)
+    try {
+      const t0 = Date.now();
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const Redis = require('ioredis');
+      const r = new Redis({
+        host: process.env.REDIS_HOST || 'localhost',
+        port: Number(process.env.REDIS_PORT || 6379),
+        password: process.env.REDIS_PASSWORD || undefined,
+        connectTimeout: 2000,
+        lazyConnect: true,
+      });
+      await r.connect();
+      await r.ping();
+      await r.quit();
+      checks.redis = { ok: true, latencyMs: Date.now() - t0 };
+    } catch (e: any) {
+      checks.redis = { ok: false, error: 'ECONNREFUSED' };
+    }
+
+    // ML service
+    try {
+      const t0 = Date.now();
+      const resp = await fetch(`${process.env.ML_SERVICE_URL}/health`);
+      checks.ml = { ok: resp.ok, latencyMs: Date.now() - t0 };
+    } catch (e: any) {
+      checks.ml = { ok: false, error: 'unreachable' };
+    }
+
+    const allOk = Object.values(checks).every(c => c.ok);
+    res.status(allOk ? 200 : 503).json({
+      status:    allOk ? 'ok' : 'degraded',
+      uptime_s:  ((Date.now() - startTime) / 1000).toFixed(1),
+      checks,
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  // GET /metrics — Prometheus-compatible process metrics
   app.getHttpAdapter().get('/metrics', (_req: any, res: any) => {
     const mem = process.memoryUsage();
     res.setHeader('Content-Type', 'text/plain; version=0.0.4');
@@ -71,7 +137,7 @@ async function bootstrap() {
   app.connectMicroservice<MicroserviceOptions>({
     transport: Transport.MQTT,
     options: {
-      url: process.env.MQTT_BROKER_URL || 'mqtt://localhost:1883',
+      url: process.env.MQTT_BROKER_URL,
       username: process.env.MQTT_USERNAME || undefined,
       password: process.env.MQTT_PASSWORD || undefined,
     },
@@ -81,7 +147,7 @@ async function bootstrap() {
   await app.listen(Number(process.env.PORT || 5000));
 
   console.log(`NetFlow backend listening on :${process.env.PORT || 5000}`);
-  console.log(`MQTT connected to ${process.env.MQTT_BROKER_URL || 'mqtt://localhost:1883'}`);
+  console.log(`MQTT connected to ${process.env.MQTT_BROKER_URL}`);
 }
 
 void bootstrap();

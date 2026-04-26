@@ -1,4 +1,4 @@
-export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined) || 'http://localhost:5000';
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL as string;
 const ACCESS_TOKEN_KEY = 'mobile_access_token';
 const REFRESH_TOKEN_KEY = 'mobile_refresh_token';
 

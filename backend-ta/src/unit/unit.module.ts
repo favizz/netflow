@@ -7,9 +7,15 @@ import { UnitService } from './unit.service';
 import { TariffModule } from '../tariff/tariff.module';
 import { ConfigModule } from '@nestjs/config';
 import { AdminJwtGuard } from '../common/guards/admin-jwt.guard';
+import { AuditLogModule } from '../audit-log/audit-log.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Unit, MeterReading]), TariffModule, ConfigModule],
+  imports: [
+    TypeOrmModule.forFeature([Unit, MeterReading]),
+    TariffModule,
+    ConfigModule,
+    AuditLogModule,
+  ],
   controllers: [UnitController],
   providers: [UnitService, AdminJwtGuard],
   exports: [TypeOrmModule, UnitService],

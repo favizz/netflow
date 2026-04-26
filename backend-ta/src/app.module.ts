@@ -4,6 +4,10 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { BullModule } from '@nestjs/bullmq';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { HttpModule } from '@nestjs/axios';
+import { BullBoardModule } from '@bull-board/nestjs';
+import { ExpressAdapter } from '@bull-board/express';
+import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
+import { ScheduleModule } from '@nestjs/schedule';
 
 import { AdminModule } from './admin/admin.module';
 import { AnomalyModule } from './anomaly/anomaly.module';
@@ -16,11 +20,14 @@ import { AuthModule } from './auth/auth.module';
 import { TariffModule } from './tariff/tariff.module';
 import { AuditLogModule } from './audit-log/audit-log.module';
 import { MlModule } from './ml/ml.module';
+import { RetentionModule } from './retention/retention.module';
 
 @Module({
   imports: [
     // ── Config ───────────────────────────────────────────────────────────────
     ConfigModule.forRoot({ isGlobal: true, envFilePath: '../.env' }),
+
+    ScheduleModule.forRoot(),
 
     // ── Database ─────────────────────────────────────────────────────────────
     TypeOrmModule.forRootAsync({
@@ -54,10 +61,29 @@ import { MlModule } from './ml/ml.module';
           port: cfg.get<number>('REDIS_PORT', 6379),
           password: cfg.get('REDIS_PASSWORD') || undefined,
           maxRetriesPerRequest: null, // required for BullMQ
+          lazyConnect: true,          // don't connect on startup — connect on first use
+          enableOfflineQueue: false,  // fail fast so DeviceController catch() fires immediately
+          retryStrategy: (times: number) => times > 3 ? null : Math.min(times * 500, 2000),
         },
       }),
       inject: [ConfigService],
     }),
+
+    BullBoardModule.forRoot({
+      route: '/admin/queues',
+      adapter: ExpressAdapter,
+    }),
+
+    BullBoardModule.forFeature(
+      {
+        name: 'telemetry',
+        adapter: BullMQAdapter,
+      },
+      {
+        name: 'payment-expiry',
+        adapter: BullMQAdapter,
+      },
+    ),
 
     // ── Rate limiting (per-IP) ────────────────────────────────────────────────
     ThrottlerModule.forRootAsync({
@@ -77,7 +103,7 @@ import { MlModule } from './ml/ml.module';
     HttpModule.registerAsync({
       imports: [ConfigModule],
       useFactory: (cfg: ConfigService) => ({
-        baseURL: cfg.get('ML_SERVICE_URL', 'http://localhost:8000'),
+        baseURL: cfg.get('ML_SERVICE_URL'),
         timeout: 5_000,
       }),
       inject: [ConfigService],
@@ -95,6 +121,7 @@ import { MlModule } from './ml/ml.module';
     TariffModule,
     AuditLogModule,
     MlModule,
+    RetentionModule,
   ],
 })
 export class AppModule {}

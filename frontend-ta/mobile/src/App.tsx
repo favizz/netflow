@@ -274,48 +274,34 @@ function NotificationsPage({ anomalies }: { anomalies: AnomalyItem[] }) {
             const isInfo     = a.severity === "info"
             const colorWrap  = isCritical
               ? "bg-status-critical/8 border-status-critical/25"
-              : isInfo 
+              : isInfo
               ? "bg-primary/8 border-primary/25"
               : "bg-status-warn/8 border-status-warn/25"
-            const colorIcon  = isCritical 
-              ? "text-status-critical" 
-              : isInfo 
-              ? "text-primary" 
+            const colorIcon  = isCritical
+              ? "text-status-critical"
+              : isInfo
+              ? "text-primary"
               : "text-status-warn"
             const colorBadge = isCritical
               ? "bg-status-critical text-white"
               : isInfo
               ? "bg-primary/15 text-primary"
               : "bg-status-warn/15 text-status-warn"
-
             const badgeLabel = isCritical ? "Kritis" : isInfo ? "Info" : "Peringatan"
 
             return (
-              <div key={idx} className={`rounded-2xl border p-4 space-y-2 ${colorWrap}`}>
-                {/* Top row: icon + label + badge */}
-                <div className="flex items-center gap-2">
-                  <meta.Icon size={18} className={`flex-shrink-0 ${colorIcon}`} />
-                  <span className={`text-sm font-semibold ${colorIcon}`}>{meta.label}</span>
-                  <span className={`ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${colorBadge}`}>
+              <div key={idx} className={`rounded-2xl border px-4 py-3 ${colorWrap}`}>
+                {/* Line 1: icon + label + badge + time */}
+                <div className="flex items-center gap-2 min-w-0">
+                  <meta.Icon size={14} className={`flex-shrink-0 ${colorIcon}`} />
+                  <span className={`text-sm font-semibold truncate flex-1 ${colorIcon}`}>{meta.label}</span>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase shrink-0 ${colorBadge}`}>
                     {badgeLabel}
                   </span>
+                  <span className="text-[10px] text-muted-foreground/60 shrink-0">{formatTimeAgo(a.detectedAt)}</span>
                 </div>
-
-                {/* Message */}
-                <p className="text-sm text-foreground leading-snug">{a.message}</p>
-
-                {/* Action hint */}
-                {meta.action && (
-                  <div className="flex gap-1.5 items-start pt-0.5">
-                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide shrink-0 mt-0.5">
-                      Tindakan:
-                    </span>
-                    <p className="text-xs text-muted-foreground leading-snug">{meta.action}</p>
-                  </div>
-                )}
-
-                {/* Timestamp */}
-                <p className="text-[11px] text-muted-foreground/60">{formatTimeAgo(a.detectedAt)}</p>
+                {/* Line 2: message (single line) */}
+                <p className="text-xs text-foreground truncate mt-1 leading-snug">{a.message}</p>
               </div>
             )
           })}

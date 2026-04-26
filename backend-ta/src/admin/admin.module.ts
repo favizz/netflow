@@ -31,7 +31,7 @@ import { CalibrationSetting } from './entities/calibration-setting.entity';
         useFactory: (configService: ConfigService) => ({
           transport: Transport.MQTT,
           options: {
-            url: configService.get<string>('MQTT_BROKER_URL') || 'mqtt://localhost:1883',
+            url: configService.get<string>('MQTT_BROKER_URL'),
             username: configService.get<string>('MQTT_USERNAME') || undefined,
             password: configService.get<string>('MQTT_PASSWORD') || undefined,
             serializer: {

@@ -1,73 +1,88 @@
 -- TA-Flowmeter Demo Seed
--- Run after 01-schema.sql. Docker entrypoint handles ordering automatically.
+-- Run after 01-schema.sql.
+-- Usage: mysql -u <user> -p < db-init/02-seed-demo.sql
 
 USE ta_db;
 
 -- -----------------------------------------
--- 1. TARIFFS (global config — no FK to units)
+-- 1. BUILDINGS (3 demo towers)
+--    Building id=1 'DEFAULT' already exists from schema.
 -- -----------------------------------------
 
-INSERT INTO tariffs (utility_type, price_per_unit, effective_date)
-VALUES
-  ('electricity', 1444.70, '2024-01-01'),
+INSERT IGNORE INTO buildings (id, code, name, address, floors) VALUES
+  (2, 'TOWER-A', 'Tower A', 'Jl. Pahlawan No. 1, Bandung', 3),
+  (3, 'TOWER-B', 'Tower B', 'Jl. Pahlawan No. 2, Bandung', 3),
+  (4, 'TOWER-C', 'Tower C', 'Jl. Pahlawan No. 3, Bandung', 2);
+
+-- -----------------------------------------
+-- 2. TARIFFS
+--    2024 baseline already seeded by 01-schema.sql (INSERT IGNORE).
+--    Only add the 2025 rate revision here.
+-- -----------------------------------------
+
+INSERT IGNORE INTO tariffs (utility_type, price_per_unit, effective_date) VALUES
   ('electricity', 1500.00, '2025-01-01'),
-  ('water',       5000.00, '2024-01-01'),
   ('water',       5500.00, '2025-01-01');
 
 -- -----------------------------------------
--- 2. RESIDENTS (18 residents + 1 admin)
+-- 3. RESIDENTS (18 residents + 1 admin)
 -- -----------------------------------------
 
-INSERT INTO residents (email, name, role) VALUES
-  ('izza.diasputra10@gmail.com',          'System Admin',       'admin'),
-  ('18222070@std.stei.itb.ac.id',  'Budi Santoso',       'resident'),
-  ('rina.hapsari@gmail.com',       'Rina Hapsari',       'resident'),
-  ('dedi.kurniawan@yahoo.com',     'Dedi Kurniawan',     'resident'),
-  ('siti.rahayu@gmail.com',        'Siti Rahayu',        'resident'),
-  ('ahmad.fauzi@outlook.com',      'Ahmad Fauzi',        'resident'),
-  ('dewi.permata@gmail.com',       'Dewi Permata',       'resident'),
-  ('hendra.susanto@gmail.com',     'Hendra Susanto',     'resident'),
-  ('maya.lestari@hotmail.com',     'Maya Lestari',       'resident'),
-  ('rizki.pratama@gmail.com',      'Rizki Pratama',      'resident'),
-  ('novia.anggraini@gmail.com',    'Novia Anggraini',    'resident'),
-  ('fajar.nugroho@gmail.com',      'Fajar Nugroho',      'resident'),
-  ('ayu.rahmawati@gmail.com',      'Ayu Rahmawati',      'resident'),
-  ('dian.safitri@gmail.com',       'Dian Safitri',       'resident'),
-  ('bagas.wicaksono@gmail.com',    'Bagas Wicaksono',    'resident'),
-  ('laras.anggraini@gmail.com',    'Laras Anggraini',    'resident'),
-  ('kevin.abadi@gmail.com',        'Kevin Abadi',        'resident'),
-  ('nina.suryani@gmail.com',       'Nina Suryani',       'resident'),
-  ('yusuf.hakim@gmail.com',        'Yusuf Hakim',        'resident');
+INSERT IGNORE INTO residents (email, name, role) VALUES
+  ('izza.diasputra10@gmail.com', 'System Admin',     'admin'),
+  ('18222070@std.stei.itb.ac.id', 'Budi Santoso',    'resident'),
+  ('rina.hapsari@gmail.com',      'Rina Hapsari',    'resident'),
+  ('dedi.kurniawan@yahoo.com',    'Dedi Kurniawan',  'resident'),
+  ('siti.rahayu@gmail.com',       'Siti Rahayu',     'resident'),
+  ('ahmad.fauzi@outlook.com',     'Ahmad Fauzi',     'resident'),
+  ('dewi.permata@gmail.com',      'Dewi Permata',    'resident'),
+  ('hendra.susanto@gmail.com',    'Hendra Susanto',  'resident'),
+  ('maya.lestari@hotmail.com',    'Maya Lestari',    'resident'),
+  ('rizki.pratama@gmail.com',     'Rizki Pratama',   'resident'),
+  ('novia.anggraini@gmail.com',   'Novia Anggraini', 'resident'),
+  ('fajar.nugroho@gmail.com',     'Fajar Nugroho',   'resident'),
+  ('ayu.rahmawati@gmail.com',     'Ayu Rahmawati',   'resident'),
+  ('dian.safitri@gmail.com',      'Dian Safitri',    'resident'),
+  ('bagas.wicaksono@gmail.com',   'Bagas Wicaksono', 'resident'),
+  ('laras.anggraini@gmail.com',   'Laras Anggraini', 'resident'),
+  ('kevin.abadi@gmail.com',       'Kevin Abadi',     'resident'),
+  ('nina.suryani@gmail.com',      'Nina Suryani',    'resident'),
+  ('yusuf.hakim@gmail.com',       'Yusuf Hakim',     'resident');
 
 -- -----------------------------------------
--- 3. UNITS (20 units across towers A, B, C)
+-- 4. UNITS (20 units across 3 towers)
+--    A-* → building_id=2 (Tower A)
+--    B-* → building_id=3 (Tower B)
+--    C-* → building_id=4 (Tower C)
 -- -----------------------------------------
 
-INSERT INTO units (unit_no, device_id, resident_email, balance, relay_status, valve_status, last_energy_reading, last_water_reading)
-VALUES
-  ('A-101', 'DEV-A-101', '18222070@std.stei.itb.ac.id', 150000.00, 1, 1, 0, 0),
-  ('A-102', 'DEV-A-102', '18222070@std.stei.itb.ac.id',  12000.00, 1, 1, 0, 0),
-  ('A-103', 'DEV-A-103', 'rina.hapsari@gmail.com',        75000.00, 1, 1, 0, 0),
-  ('A-201', 'DEV-A-201', 'dedi.kurniawan@yahoo.com',     200000.00, 1, 1, 0, 0),
-  ('A-202', 'DEV-A-202', 'siti.rahayu@gmail.com',         95000.00, 1, 1, 0, 0),
-  ('A-203', 'DEV-A-203', 'ahmad.fauzi@outlook.com',       30000.00, 1, 1, 0, 0),
-  ('A-301', 'DEV-A-301', 'dewi.permata@gmail.com',       175000.00, 1, 1, 0, 0),
-  ('A-302', 'DEV-A-302', NULL,                             50000.00, 1, 1, 0, 0),
-  ('B-101', 'DEV-B-101', 'hendra.susanto@gmail.com',     120000.00, 1, 1, 0, 0),
-  ('B-102', 'DEV-B-102', 'maya.lestari@hotmail.com',      45000.00, 1, 1, 0, 0),
-  ('B-103', 'DEV-B-103', 'rizki.pratama@gmail.com',       88000.00, 1, 1, 0, 0),
-  ('B-201', 'DEV-B-201', 'novia.anggraini@gmail.com',    250000.00, 1, 1, 0, 0),
-  ('B-202', 'DEV-B-202', 'fajar.nugroho@gmail.com',        5000.00, 0, 0, 0, 0),
-  ('B-203', 'DEV-B-203', NULL,                             60000.00, 1, 1, 0, 0),
-  ('B-301', 'DEV-B-301', 'ayu.rahmawati@gmail.com',      140000.00, 1, 1, 0, 0),
-  ('C-101', 'DEV-C-101', 'dian.safitri@gmail.com',        70000.00, 1, 1, 0, 0),
-  ('C-102', 'DEV-C-102', 'bagas.wicaksono@gmail.com',    100000.00, 1, 1, 0, 0),
-  ('C-103', 'DEV-C-103', 'laras.anggraini@gmail.com',     35000.00, 1, 1, 0, 0),
-  ('C-201', 'DEV-C-201', 'kevin.abadi@gmail.com',        180000.00, 1, 1, 0, 0),
-  ('C-202', 'DEV-C-202', NULL,                             80000.00, 1, 1, 0, 0);
+INSERT IGNORE INTO units (building_id, unit_no, device_id, resident_email, balance, relay_status, valve_status, last_energy_reading, last_water_reading) VALUES
+  -- Tower A
+  (2, 'A-101', 'DEV-A-101', '18222070@std.stei.itb.ac.id', 150000.00, 1, 1, 0, 0),
+  (2, 'A-102', 'DEV-A-102', '18222070@std.stei.itb.ac.id',  12000.00, 1, 1, 0, 0),
+  (2, 'A-103', 'DEV-A-103', 'rina.hapsari@gmail.com',        75000.00, 1, 1, 0, 0),
+  (2, 'A-201', 'DEV-A-201', 'dedi.kurniawan@yahoo.com',     200000.00, 1, 1, 0, 0),
+  (2, 'A-202', 'DEV-A-202', 'siti.rahayu@gmail.com',         95000.00, 1, 1, 0, 0),
+  (2, 'A-203', 'DEV-A-203', 'ahmad.fauzi@outlook.com',       30000.00, 1, 1, 0, 0),
+  (2, 'A-301', 'DEV-A-301', 'dewi.permata@gmail.com',       175000.00, 1, 1, 0, 0),
+  (2, 'A-302', 'DEV-A-302', NULL,                             50000.00, 1, 1, 0, 0),
+  -- Tower B
+  (3, 'B-101', 'DEV-B-101', 'hendra.susanto@gmail.com',     120000.00, 1, 1, 0, 0),
+  (3, 'B-102', 'DEV-B-102', 'maya.lestari@hotmail.com',      45000.00, 1, 1, 0, 0),
+  (3, 'B-103', 'DEV-B-103', 'rizki.pratama@gmail.com',       88000.00, 1, 1, 0, 0),
+  (3, 'B-201', 'DEV-B-201', 'novia.anggraini@gmail.com',    250000.00, 1, 1, 0, 0),
+  (3, 'B-202', 'DEV-B-202', 'fajar.nugroho@gmail.com',        5000.00, 0, 0, 0, 0),
+  (3, 'B-203', 'DEV-B-203', NULL,                             60000.00, 1, 1, 0, 0),
+  (3, 'B-301', 'DEV-B-301', 'ayu.rahmawati@gmail.com',      140000.00, 1, 1, 0, 0),
+  -- Tower C
+  (4, 'C-101', 'DEV-C-101', 'dian.safitri@gmail.com',        70000.00, 1, 1, 0, 0),
+  (4, 'C-102', 'DEV-C-102', 'bagas.wicaksono@gmail.com',    100000.00, 1, 1, 0, 0),
+  (4, 'C-103', 'DEV-C-103', 'laras.anggraini@gmail.com',     35000.00, 1, 1, 0, 0),
+  (4, 'C-201', 'DEV-C-201', 'kevin.abadi@gmail.com',        180000.00, 1, 1, 0, 0),
+  (4, 'C-202', 'DEV-C-202', NULL,                             80000.00, 1, 1, 0, 0);
 
 -- -----------------------------------------
--- 4. METER READINGS (30 days x hourly per device, 5 devices for demo speed)
+-- 5. METER READINGS (30 days × hourly per device, 5 devices)
 -- -----------------------------------------
 
 -- DEV-A-101
@@ -161,10 +176,10 @@ FROM (
 ) seq;
 
 -- -----------------------------------------
--- 5. PAYMENT TRANSACTIONS
+-- 6. PAYMENT TRANSACTIONS
 -- -----------------------------------------
 
-INSERT INTO transactions (id, unit_id, unit_no, amount_rp, method, status, gateway_reference, created_at, confirmed_at) VALUES
+INSERT IGNORE INTO transactions (id, unit_id, unit_no, amount_rp, method, status, gateway_reference, created_at, confirmed_at) VALUES
   ('TRX-001', (SELECT id FROM units WHERE unit_no='A-101'), 'A-101', 200000.00, 'qris',     'success', 'PG-100001', DATE_SUB(NOW(), INTERVAL 88 DAY), DATE_SUB(NOW(), INTERVAL 88 DAY) + INTERVAL 5  MINUTE),
   ('TRX-002', (SELECT id FROM units WHERE unit_no='A-101'), 'A-101', 150000.00, 'transfer', 'success', 'PG-100002', DATE_SUB(NOW(), INTERVAL 65 DAY), DATE_SUB(NOW(), INTERVAL 65 DAY) + INTERVAL 12 MINUTE),
   ('TRX-003', (SELECT id FROM units WHERE unit_no='A-101'), 'A-101', 100000.00, 'ewallet',  'success', 'PG-100003', DATE_SUB(NOW(), INTERVAL 47 DAY), DATE_SUB(NOW(), INTERVAL 47 DAY) + INTERVAL 2  MINUTE),
@@ -180,3 +195,15 @@ INSERT INTO transactions (id, unit_id, unit_no, amount_rp, method, status, gatew
   ('TRX-013', (SELECT id FROM units WHERE unit_no='C-101'), 'C-101', 300000.00, 'transfer', 'success', 'PG-100013', DATE_SUB(NOW(), INTERVAL 45 DAY), DATE_SUB(NOW(), INTERVAL 45 DAY) + INTERVAL 10 MINUTE),
   ('TRX-014', (SELECT id FROM units WHERE unit_no='C-101'), 'C-101', 150000.00, 'qris',     'success', 'PG-100014', DATE_SUB(NOW(), INTERVAL 10 DAY), DATE_SUB(NOW(), INTERVAL 10 DAY) + INTERVAL 3  MINUTE),
   ('TRX-015', (SELECT id FROM units WHERE unit_no='A-201'), 'A-201', 250000.00, 'transfer', 'success', 'PG-100015', DATE_SUB(NOW(), INTERVAL 55 DAY), DATE_SUB(NOW(), INTERVAL 55 DAY) + INTERVAL 8  MINUTE);
+
+-- -----------------------------------------
+-- 7. DEMO ANOMALIES (showcase all detection types)
+-- -----------------------------------------
+
+INSERT IGNORE INTO anomalies (device_id, type, severity, description, action_taken, ml_score, created_at) VALUES
+  ('DEV-B-202', 'low_balance',        'warning',  'Balance below Rp 10.000 threshold',              'Relay cut off automatically',         NULL,   DATE_SUB(NOW(), INTERVAL 2  DAY)),
+  ('DEV-A-103', 'voltage_anomaly',    'warning',  'Voltage 198V — below ±10% of 220V nominal',      'Monitoring; no relay action taken',   NULL,   DATE_SUB(NOW(), INTERVAL 5  DAY)),
+  ('DEV-B-101', 'usage_spike',        'warning',  'Energy 3× above 7-day average in 1 hour',        'Flagged for resident review',         NULL,   DATE_SUB(NOW(), INTERVAL 8  DAY)),
+  ('DEV-C-101', 'ml_anomaly',         'warning',  'Isolation Forest score 0.82 — statistical outlier','Rule-based checks normal; ML flagged',0.8200, DATE_SUB(NOW(), INTERVAL 3  DAY)),
+  ('DEV-A-201', 'sensor_malfunction', 'critical', 'Water flow sensor returning null for 15+ minutes','Device rebooted via MQTT command',    NULL,   DATE_SUB(NOW(), INTERVAL 12 DAY)),
+  ('DEV-A-102', 'low_balance',        'warning',  'Balance Rp 12.000 — approaching zero',           'Resident notified',                   NULL,   DATE_SUB(NOW(), INTERVAL 1  DAY));

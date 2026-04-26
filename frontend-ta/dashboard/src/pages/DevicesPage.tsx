@@ -22,7 +22,7 @@ export default function DevicesPage() {
         setIsLoading(true);
         Promise.all([
             fetchApi('/unit'),
-            fetchApi('/unit/connectivity').catch(() => ({ onlineUnitsList: [], offlineUnitsList: [] }))
+            fetchApi('/unit/connectivity').catch(() => ({ units: [] }))
         ])
             .then(([units, conn]) => {
                 // conn.units is the per-unit connectivity array from /unit/connectivity
@@ -45,7 +45,19 @@ export default function DevicesPage() {
             .finally(() => setIsLoading(false));
     }, []);
 
-    useEffect(() => { loadData(); }, [loadData]);
+    useEffect(() => {
+        loadData();
+        const interval = setInterval(loadData, 30_000);
+        return () => clearInterval(interval);
+    }, [loadData]);
+
+    const handleCommand = async (deviceId: string, type: 'relay' | 'valve', value: 0 | 1) => {
+        await fetchApi(`/admin/command/${deviceId}`, {
+            method: 'POST',
+            body: JSON.stringify({ type, value }),
+        });
+        loadData();
+    };
 
     const handleDelete = async () => {
         if (!deleteConfirm) return;
@@ -87,6 +99,7 @@ export default function DevicesPage() {
                     initialFilter={initialFilter}
                     onEdit={(item) => setEditTarget(item)}
                     onDelete={(item) => setDeleteConfirm(item)}
+                    onCommand={handleCommand}
                 />
             )}
 

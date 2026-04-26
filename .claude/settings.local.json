@@ -38,7 +38,27 @@
       "Bash(xargs cat *)",
       "Bash(npm view *)",
       "Bash(npm run *)",
-      "Bash(npm test *)"
+      "Bash(npm test *)",
+      "Bash(winget search *)",
+      "Bash(winget install *)",
+      "Bash(sc query *)",
+      "Bash(net start *)",
+      "Bash(winget uninstall *)",
+      "PowerShell(Start-Process powershell -ArgumentList \"-Command winget install Memurai.MemuraiDeveloper --accept-package-agreements --accept-source-agreements\" -Verb RunAs -Wait -PassThru | Select-Object ExitCode)",
+      "Bash(\"C:\\\\Program Files\\\\Memurai\\\\memurai-cli.exe\" ping)",
+      "Bash(redis-cli ping *)",
+      "Bash(wsl *)",
+      "Bash(docker run *)",
+      "PowerShell(docker info *)",
+      "Bash(docker exec redis-stack *)",
+      "Bash(docker stop *)",
+      "Bash(docker rm *)",
+      "Bash(pip --version)",
+      "Bash(python *)",
+      "Bash(python main.py)",
+      "Bash(curl -s http://localhost:8000/health)",
+      "Bash(netstat -ano)",
+      "Bash(where redis-server *)"
     ]
   }
 }

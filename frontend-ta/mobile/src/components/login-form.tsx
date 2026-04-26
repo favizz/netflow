@@ -4,11 +4,12 @@ import { useState, useEffect } from "react"
 import { GoogleLogin } from "@react-oauth/google"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Home } from "lucide-react"
 import { useTheme } from "next-themes"
 
 const isDev = !import.meta.env.VITE_GOOGLE_CLIENT_ID ||
-  (import.meta.env.VITE_GOOGLE_CLIENT_ID as string).startsWith('replace-')
+  (import.meta.env.VITE_GOOGLE_CLIENT_ID as string).startsWith('replace-') ||
+  window.location.hostname === 'localhost' || 
+  window.location.hostname === '127.0.0.1'
 
 const DEV_EMAIL = '18222070@std.stei.itb.ac.id'
 
@@ -51,11 +52,13 @@ export default function LoginForm({ onGoogleLogin, onDevLogin }: LoginFormProps)
         <div className="p-8 md:p-10 space-y-8">
           <div className="text-center space-y-3">
             <div className="flex justify-center mb-6">
-              <div className="bg-primary text-primary-foreground p-4 rounded-2xl shadow-md rotate-3 hover:rotate-0 transition-transform duration-300">
-                <Home size={40} />
-              </div>
+              <img
+                src="/netflow-logo-icon.png"
+                alt="NETFLOW"
+                className="h-20 w-20 object-contain"
+              />
             </div>
-            <h1 className="text-4xl font-extrabold text-slate-900 dark:text-white tracking-tight">Penghuni</h1>
+            <h1 className="text-4xl font-extrabold text-slate-900 dark:text-white tracking-tight">NETFLOW</h1>
             <p className="text-base text-slate-500 dark:text-slate-400">Manajemen Utilitas Apartemen Anda</p>
           </div>
 

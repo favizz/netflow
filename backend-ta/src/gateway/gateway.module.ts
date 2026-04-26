@@ -22,7 +22,7 @@ import { GatewayService } from './gateway.service';
         useFactory: (configService: ConfigService) => ({
           transport: Transport.MQTT,
           options: {
-            url: configService.get<string>('MQTT_BROKER_URL') || 'mqtt://localhost:1883',
+            url: configService.get<string>('MQTT_BROKER_URL'),
             // If the caller already encoded a Buffer (custom binary frame),
             // pass it through unchanged; otherwise fall back to JSON.
             serializer: {

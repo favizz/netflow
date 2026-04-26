@@ -1,5 +1,5 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
-import { Logger } from '@nestjs/common';
+import { Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { DeviceService } from './device.service';
 
@@ -18,11 +18,20 @@ export const TELEMETRY_QUEUE = 'telemetry';
 @Processor(TELEMETRY_QUEUE, {
   concurrency: Number(process.env.TELEMETRY_QUEUE_CONCURRENCY || 10),
 })
-export class TelemetryProcessor extends WorkerHost {
+export class TelemetryProcessor extends WorkerHost implements OnApplicationBootstrap {
   private readonly logger = new Logger(TelemetryProcessor.name);
 
   constructor(private readonly deviceService: DeviceService) {
     super();
+  }
+
+  // Runs after all onModuleInit hooks — worker is guaranteed to exist here.
+  onApplicationBootstrap() {
+    // Absorb Worker-level Redis errors so they don't crash the process.
+    // When Redis is unavailable, DeviceController falls back to inline processing.
+    this.worker?.on('error', (err: Error) => {
+      this.logger.warn(`BullMQ worker error (Redis unavailable, inline fallback active): ${err.message}`);
+    });
   }
 
   async process(job: Job): Promise<void> {

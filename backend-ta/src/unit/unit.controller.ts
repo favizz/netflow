@@ -13,6 +13,8 @@ import { AdminJwtGuard } from '../common/guards/admin-jwt.guard';
 import { CreateUnitDto } from './dto/create-unit.dto';
 import { UpdateUnitDto } from './dto/update-unit.dto';
 import { UnitService } from './unit.service';
+import { CurrentUser } from '../auth/current-user.decorator';
+import { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
 
 @Controller('unit')
 export class UnitController {
@@ -58,8 +60,14 @@ export class UnitController {
 
   @UseGuards(AdminJwtGuard)
   @Patch(':id/relay')
-  relay(@Param('id') id: string, @Body() body: { relayStatus: boolean }) {
-    return this.unitService.setRelayStatus(+id, Boolean(body.relayStatus));
+  relay(@Param('id') id: string, @Body() body: { relayStatus: boolean }, @CurrentUser() user: JwtPayload) {
+    return this.unitService.setRelayStatus(+id, Boolean(body.relayStatus), user.sub);
+  }
+
+  @UseGuards(AdminJwtGuard)
+  @Patch(':id/valve')
+  valve(@Param('id') id: string, @Body() body: { valveStatus: boolean }, @CurrentUser() user: JwtPayload) {
+    return this.unitService.setValveStatus(+id, Boolean(body.valveStatus), user.sub);
   }
 
   @Get(':unitNo/notifications')

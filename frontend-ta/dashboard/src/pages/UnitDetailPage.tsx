@@ -5,6 +5,7 @@ import { ArrowLeft, Power, Droplets, Zap, FileText, ChevronDown, ChevronUp, Wifi
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, AreaChart, Area } from "recharts";
 import { cn } from "@/lib/utils";
 import mqtt from "mqtt";
+import { decode as msgpackDecode } from "@msgpack/msgpack";
 import { fetchApi } from "@/lib/api";
 
 function encodeCommand(type: 'relay' | 'valve', value: 0 | 1): Uint8Array {
@@ -49,7 +50,7 @@ interface IoTPayload {
 }
 
 const MQTT_CONFIG = {
-    brokerUrl: import.meta.env.VITE_MQTT_BROKER_URL || 'ws://localhost:8083/mqtt',
+    brokerUrl: import.meta.env.VITE_MQTT_BROKER_URL as string,
     options: {
         clientId: 'ta-dashboard-' + Math.random().toString(16).substring(2, 10),
         username: import.meta.env.VITE_MQTT_USERNAME || '',
@@ -111,7 +112,7 @@ export default function UnitDetailPage() {
             .then(conn => {
                 setUnitInfo((prev: any) => {
                     if (!prev) return prev;
-                    const isOnline = Array.isArray(conn.onlineUnitsList) && conn.onlineUnitsList.some((u: any) => u.device_id === prev.meterSerial);
+                    const isOnline = Array.isArray(conn.units) && conn.units.some((u: any) => u.online && u.deviceId === prev.meterSerial);
                     return { ...prev, status: isOnline ? "Online" : "Offline", lastUpdate: "Live Data" };
                 });
             })
@@ -142,7 +143,6 @@ export default function UnitDetailPage() {
 
         client.on('connect', () => {
             setIsConnected(true);
-            setUnitInfo((prev: any) => ({ ...prev, status: "Online" }));
             client.subscribe([telemetryTopic], (err) => {
                 if (err) console.error("Subscription error:", err);
             });
@@ -153,10 +153,26 @@ export default function UnitDetailPage() {
             const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
             try {
-                const parsed = decodeTelemetry(message);
-                if (!parsed) { console.warn(`Telemetry frame too short: ${message.length}B`); return; }
+                let parsed: IoTPayload | null = null;
+                
+                // Try MessagePack first (standard for v2 / mobile)
+                try {
+                    const decoded = msgpackDecode(new Uint8Array(message)) as any;
+                    if (decoded && (decoded.p !== undefined || decoded.wf !== undefined)) {
+                        parsed = decoded;
+                    }
+                } catch {
+                    // Fallback to legacy fixed-length binary
+                    parsed = decodeTelemetry(new Uint8Array(message));
+                }
+
+                if (!parsed) { 
+                    console.warn(`Could not decode telemetry frame: ${message.length}B`); 
+                    return; 
+                }
 
                 if (topic === telemetryTopic) {
+                    setUnitInfo((prev: any) => prev?.status !== "Online" ? { ...prev, status: "Online" } : prev);
                     setEnergyStats({
                         total_kwh: parsed.et ?? energyStats.total_kwh,
                         active_power_w: parsed.p ?? 0,
@@ -173,16 +189,17 @@ export default function UnitDetailPage() {
                     setWaterStats({ total_m3: parsed.wt ?? waterStats.total_m3, flow_rate_lpm: parsed.wf ?? 0 });
                     if (parsed.vs !== undefined) setWaterState(parsed.vs === 1);
 
+                    const rawLabel = parsed.et !== undefined ? 'MsgPack' : 'Binary 21B';
                     setLiveLogs(prev => [{
                         timestamp: now.toISOString(),
-                        value: parsed.p ?? 0,
+                        value: parsed?.p ?? 0,
                         unit: 'W',
-                        rawPayload: `[Binary 21B] et:${parsed.et} p:${parsed.p} v:${parsed.v} c:${parsed.c} wf:${parsed.wf} wt:${parsed.wt} rs:${parsed.rs} vs:${parsed.vs}`,
-                        details: parsed,
+                        rawPayload: `[${rawLabel}] et:${parsed?.et} p:${parsed?.p} v:${parsed?.v} c:${parsed?.c} wf:${parsed?.wf} wt:${parsed?.wt} rs:${parsed?.rs} vs:${parsed?.vs}`,
+                        details: parsed!,
                     }, ...prev.slice(0, 49)]);
                 }
             } catch (err) {
-                console.warn("Failed to decode telemetry payload:", err);
+                console.warn("Failed to process telemetry payload:", err);
             }
         });
 

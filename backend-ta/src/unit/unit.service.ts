@@ -10,6 +10,7 @@ import { UpdateUnitDto } from './dto/update-unit.dto';
 import { Unit } from './entities/unit.entity';
 import { MeterReading } from '../device/entities/device.entity';
 import { TariffService } from '../tariff/tariff.service';
+import { AuditLogService } from '../audit-log/audit-log.service';
 
 @Injectable()
 export class UnitService {
@@ -19,6 +20,7 @@ export class UnitService {
     @InjectRepository(MeterReading)
     private readonly meterRepo: Repository<MeterReading>,
     private readonly tariffService: TariffService,
+    private readonly auditLogService: AuditLogService,
   ) {}
 
   async create(createUnitDto: CreateUnitDto) {
@@ -87,10 +89,40 @@ export class UnitService {
     return this.unitRepo.save(unit);
   }
 
-  async setRelayStatus(id: number, relayStatus: boolean) {
+  async setRelayStatus(id: number, relayStatus: boolean, actorEmail?: string) {
     const unit = await this.findOne(id);
     unit.relay_status = relayStatus;
-    return this.unitRepo.save(unit);
+    const saved = await this.unitRepo.save(unit);
+
+    if (actorEmail) {
+      void this.auditLogService.log(
+        actorEmail,
+        'REMOTE_ACTUATION',
+        'unit',
+        id.toString(),
+        { type: 'relay', value: relayStatus, unit_no: unit.unit_no },
+      );
+    }
+
+    return saved;
+  }
+
+  async setValveStatus(id: number, valveStatus: boolean, actorEmail?: string) {
+    const unit = await this.findOne(id);
+    unit.valve_status = valveStatus;
+    const saved = await this.unitRepo.save(unit);
+
+    if (actorEmail) {
+      void this.auditLogService.log(
+        actorEmail,
+        'REMOTE_ACTUATION',
+        'unit',
+        id.toString(),
+        { type: 'valve', value: valveStatus, unit_no: unit.unit_no },
+      );
+    }
+
+    return saved;
   }
 
   async getOwnerDashboard(unitNo: string) {
@@ -130,29 +162,43 @@ export class UnitService {
 
   async getTowerConnectivity(tower?: string) {
     const units = await this.unitRepo.find({ order: { unit_no: 'ASC' } });
-    const filtered = tower ? units.filter((u) => u.unit_no.startsWith(`${tower.toUpperCase()}-`)) : units;
+    const filtered = tower
+      ? units.filter((u) => u.unit_no.startsWith(`${tower.toUpperCase()}-`))
+      : units;
 
-    const rows = await Promise.all(
-      filtered.map(async (u) => {
-        const latest = await this.meterRepo.findOne({
-          where: { device_id: u.device_id },
-          order: { time: 'DESC' },
-        });
+    const deviceIds = filtered.map((u) => u.device_id).filter(Boolean);
 
-        const lastTelemetryAt = latest?.time ? new Date(latest.time).toISOString() : null;
-        const online = lastTelemetryAt
-          ? Date.now() - new Date(lastTelemetryAt).getTime() <= 5 * 60 * 1000
-          : false;
+    // Single query: latest telemetry timestamp per device (replaces N+1)
+    const latestMap = new Map<string, Date>();
+    if (deviceIds.length > 0) {
+      const latestReadings: { device_id: string; last_time: string }[] =
+        await this.meterRepo
+          .createQueryBuilder('mr')
+          .select('mr.device_id', 'device_id')
+          .addSelect('MAX(mr.time)', 'last_time')
+          .where('mr.device_id IN (:...deviceIds)', { deviceIds })
+          .groupBy('mr.device_id')
+          .getRawMany();
 
-        return {
-          unitNo: u.unit_no,
-          deviceId: u.device_id,
-          online,
-          relayStatus: u.relay_status,
-          lastTelemetryAt,
-        };
-      }),
-    );
+      for (const row of latestReadings) {
+        if (row.last_time) latestMap.set(row.device_id, new Date(row.last_time));
+      }
+    }
+
+    const now = Date.now();
+    const rows = filtered.map((u) => {
+      const lastTime = latestMap.get(u.device_id);
+      const lastTelemetryAt = lastTime ? lastTime.toISOString() : null;
+      const online = lastTime ? now - lastTime.getTime() <= 5 * 60 * 1000 : false;
+
+      return {
+        unitNo: u.unit_no,
+        deviceId: u.device_id,
+        online,
+        relayStatus: u.relay_status,
+        lastTelemetryAt,
+      };
+    });
 
     const onlineCount = rows.filter((r) => r.online).length;
 

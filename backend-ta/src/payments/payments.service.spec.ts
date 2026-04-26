@@ -3,9 +3,11 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
 import { NotFoundException, UnauthorizedException } from '@nestjs/common';
 import * as crypto from 'crypto';
+import { getQueueToken } from '@nestjs/bullmq';
 import { PaymentsService } from './payments.service';
 import { Transaction } from './entities/transaction.entity';
 import { UnitService } from '../unit/unit.service';
+import { PAYMENT_EXPIRY_QUEUE } from './payment-expiry.processor';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -66,6 +68,7 @@ describe('PaymentsService', () => {
         PaymentsService,
         { provide: getRepositoryToken(Transaction), useValue: txRepo },
         { provide: UnitService, useValue: unitService },
+        { provide: getQueueToken(PAYMENT_EXPIRY_QUEUE), useValue: { add: jest.fn().mockResolvedValue(undefined) } },
         {
           provide: ConfigService,
           useValue: {

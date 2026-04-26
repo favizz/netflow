@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
     LayoutDashboard,
@@ -7,6 +8,7 @@ import {
     Users,
     ScrollText,
     SlidersHorizontal,
+    HelpCircle,
     LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -19,6 +21,7 @@ const navigation = [
     { name: "Users", href: "/users", icon: Users },
     { name: "Logs", href: "/logs", icon: ScrollText },
     { name: "Control Center", href: "/control-center", icon: SlidersHorizontal },
+    { name: "FAQ", href: "/faq", icon: HelpCircle },
 ];
 
 export function Sidebar() {
@@ -88,7 +91,7 @@ export function Sidebar() {
                 </div>
             </div>
 
-            {showLogoutModal && (
+            {showLogoutModal && createPortal(
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
                     <div className="w-full max-w-sm rounded-lg bg-white dark:bg-gray-800 shadow-xl ring-1 ring-gray-900/5 dark:ring-gray-700 p-6">
                         <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Sign out</h3>
@@ -110,7 +113,8 @@ export function Sidebar() {
                             </button>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </>
     );

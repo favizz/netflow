@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
-import { Zap, Droplets, Wifi, WifiOff, Radio, CalendarDays, TrendingDown } from "lucide-react"
+import { Zap, Droplets, Wifi, WifiOff, Radio, CalendarDays, TrendingDown, AlertTriangle } from "lucide-react"
 import mqtt from "mqtt"
 import { decode as msgpackDecode } from "@msgpack/msgpack"
 import { toast } from "sonner"
@@ -147,41 +147,96 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
   // ── MQTT (Live only) ─────────────────────────────────────────────────────
   useEffect(() => {
     if (period !== "live") {
-      mqttRef.current?.end(true)
-      mqttRef.current = null
+      if (mqttRef.current) {
+        mqttRef.current.end(true)
+        mqttRef.current = null
+      }
       setMqttConnected(false)
       setLiveData([])
       return
     }
 
-    const topic = MQTT_CONFIG.telemetryTopic(unitId)
+    const deviceId = `DEV-${unitId}`
+    const topic = MQTT_CONFIG.telemetryTopic(deviceId)
+    
+    console.log(`[MQTT] Connecting to ${MQTT_CONFIG.brokerUrl} for topic ${topic}`)
+    
     const client = mqtt.connect(MQTT_CONFIG.brokerUrl, {
       username: MQTT_CONFIG.username || undefined,
       password: MQTT_CONFIG.password || undefined,
       clientId: `dash_${Math.random().toString(16).slice(2, 10)}`,
       reconnectPeriod: 5000,
+      connectTimeout: 10000,
     })
     mqttRef.current = client
 
-    client.on("connect", () => { setMqttConnected(true); client.subscribe(topic) })
-    client.on("offline",  () => setMqttConnected(false))
-    client.on("error",    () => setMqttConnected(false))
-    client.on("reconnect",() => setMqttConnected(false))
-
-    client.on("message", (_t, msg) => {
-      try {
-        // Prefer MessagePack binary; fall back to JSON string
-        let p: Record<string, any>;
-        try {
-          p = msgpackDecode(msg) as Record<string, any>;
-        } catch {
-          p = JSON.parse(msg.toString());
+    client.on("connect", () => {
+      console.log("[MQTT] Connected successfully")
+      setMqttConnected(true)
+      client.subscribe(topic, (err) => {
+        if (err) {
+          console.error("[MQTT] Subscribe error:", err)
+          toast.error("Gagal berlangganan data live")
+        } else {
+          console.log(`[MQTT] Subscribed to ${topic}`)
         }
+      })
+    })
+
+    client.on("offline",  () => {
+      console.warn("[MQTT] Went offline")
+      setMqttConnected(false)
+    })
+
+    client.on("error", (err) => {
+      console.error("[MQTT] Connection error:", err)
+      setMqttConnected(false)
+      toast.error(`MQTT Error: ${err.message}`)
+    })
+
+    client.on("reconnect", () => {
+      console.log("[MQTT] Attempting to reconnect...")
+    })
+
+    client.on("message", (t, msg) => {
+      if (t !== topic) return
+      try {
+        let p: Record<string, any> | null = null
+        const uint8 = new Uint8Array(msg)
+
+        // 1. Try MessagePack
+        try {
+          const decoded = msgpackDecode(uint8) as Record<string, any>
+          if (decoded && typeof decoded === 'object') p = decoded
+        } catch { /* not msgpack */ }
+
+        // 2. Try 21-byte custom binary frame
+        if (!p && uint8.length >= 21) {
+          const view = new DataView(uint8.buffer, uint8.byteOffset, uint8.byteLength)
+          p = {
+            et: view.getUint32(0, false) / 100,
+            p:  view.getUint16(4, false) / 10,
+            v:  view.getUint16(6, false) / 10,
+            c:  view.getUint16(8, false) / 1000,
+            wf: view.getUint16(10, false) / 100,
+            wt: view.getUint32(12, false) / 1000,
+            rs: uint8[20] & 1,
+            vs: (uint8[20] >> 1) & 1,
+          }
+        }
+
+        // 3. Try JSON
+        if (!p) {
+          try { p = JSON.parse(new TextDecoder().decode(uint8)) } catch { /* not json */ }
+        }
+
+        if (!p) { console.warn("[MQTT] Could not decode frame:", uint8.length, "B"); return }
+
         const now = new Date()
-        const watts    = Number(p?.p ?? 0)
-        const flowRate = Number(p?.wf ?? 0)
-        const et       = Number(p?.et ?? 0)
-        const wt       = Number(p?.wt ?? 0)
+        const watts    = Number(p.p ?? p.active_power_w ?? 0)
+        const flowRate = Number(p.wf ?? p.flow_rate_lpm ?? 0)
+        const et       = Number(p.et ?? p.total_energy_kwh ?? 0)
+        const wt       = Number(p.wt ?? p.total_volume_m3 ?? 0)
 
         setLiveData((prev) => {
           const last = prev[prev.length - 1]
@@ -196,10 +251,17 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
           const next = [...prev, point]
           return next.length > 60 ? next.slice(-60) : next
         })
-      } catch { /* malformed */ }
+      } catch (err) {
+        console.error("[MQTT] Message processing error:", err)
+      }
     })
 
-    return () => { client.end(true); setMqttConnected(false) }
+    return () => {
+      console.log("[MQTT] Cleaning up connection")
+      client.end(true)
+      setMqttConnected(false)
+      mqttRef.current = null
+    }
   }, [period, unitId])
 
   // ── Derived ───────────────────────────────────────────────────────────────
@@ -313,35 +375,38 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
       </div>
 
       {/* ML Forecast card */}
-      {forecast && (
-        <div className="bg-card border border-border rounded-2xl p-4 flex items-center gap-4">
-          <div className={`p-2.5 rounded-xl ${forecast.estimatedDaysRemaining <= 3 ? "bg-status-critical/10" : "bg-primary/10"}`}>
-            {forecast.estimatedDaysRemaining <= 3
-              ? <TrendingDown size={20} className="text-status-critical" />
-              : <CalendarDays size={20} className="text-primary" />
-            }
+      {forecast && (() => {
+        const days = forecast.estimatedDaysRemaining
+        const fStatus: BalanceStatus =
+          days <= 0 ? "terputus" :
+          days <= 3 ? "kritis"   :
+          days <= 7 ? "kurang"   : "aman"
+        const { textColor, bgColor, borderColor } = STATUS_MAP[fStatus]
+        const ForecastIcon = fStatus === "aman" ? CalendarDays : fStatus === "kurang" ? AlertTriangle : TrendingDown
+        return (
+          <div className={`border rounded-2xl p-4 flex items-center gap-4 ${bgColor} ${borderColor}`}>
+            <div className={`p-2.5 rounded-xl bg-card/80`}>
+              <ForecastIcon size={20} className={textColor} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs text-muted-foreground">Estimasi Saldo Habis</p>
+              <p className={`text-xl font-bold leading-tight ${textColor}`}>
+                {days <= 0 ? "Habis" : `${days.toFixed(1)} hari`}
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Rp {forecast.dailyCostRp.toLocaleString("id-ID", { maximumFractionDigits: 0 })}/hari · {forecast.avgDailyKwh.toFixed(2)} kWh rata-rata
+              </p>
+            </div>
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
+              forecast.confidence === 'high'   ? "bg-primary/15 text-primary" :
+              forecast.confidence === 'medium' ? "bg-status-warn/15 text-status-warn" :
+                                                 "bg-muted text-muted-foreground"
+            }`}>
+              {forecast.confidence === 'high' ? "Tinggi" : forecast.confidence === 'medium' ? "Sedang" : "Rendah"}
+            </span>
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-xs text-muted-foreground">Estimasi Saldo Habis</p>
-            <p className={`text-xl font-bold leading-tight ${forecast.estimatedDaysRemaining <= 3 ? "text-status-critical" : "text-foreground"}`}>
-              {forecast.estimatedDaysRemaining <= 0
-                ? "Habis"
-                : `${forecast.estimatedDaysRemaining.toFixed(1)} hari`
-              }
-            </p>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Rp {forecast.dailyCostRp.toLocaleString("id-ID", { maximumFractionDigits: 0 })}/hari · {forecast.avgDailyKwh.toFixed(2)} kWh rata-rata
-            </p>
-          </div>
-          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
-            forecast.confidence === 'high'   ? "bg-primary/15 text-primary" :
-            forecast.confidence === 'medium' ? "bg-status-warn/15 text-status-warn" :
-                                               "bg-muted text-muted-foreground"
-          }`}>
-            {forecast.confidence === 'high' ? "Tinggi" : forecast.confidence === 'medium' ? "Sedang" : "Rendah"}
-          </span>
-        </div>
-      )}
+        )
+      })()}
 
       {/* Konsumsi card */}
       <div className="bg-card border border-border rounded-2xl p-4 space-y-4">
