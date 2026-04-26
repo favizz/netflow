@@ -1,6 +1,7 @@
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { MicroserviceOptions, Transport } from '@nestjs/microservices';
+import { DataSource } from 'typeorm';
 import { AppModule } from './app.module';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const compression = require('compression');
@@ -52,53 +53,87 @@ async function bootstrap() {
 
   // GET /health — checks all downstream dependencies, returns 200 OK or 503
   app.getHttpAdapter().get('/health', async (_req: any, res: any) => {
-    const checks: Record<string, { ok: boolean; latencyMs?: number; error?: string }> = {};
+    const checks: Record<string, { ok: boolean; latencyMs?: number }> = {};
 
-    // MySQL
-    try {
-      const t0 = Date.now();
-      const ds = app.get('DataSource', { strict: false });
-      await ds?.query('SELECT 1');
-      checks.mysql = { ok: true, latencyMs: Date.now() - t0 };
-    } catch (e: any) {
-      checks.mysql = { ok: false, error: e.message };
-    }
+    await Promise.all([
+      // Database (MySQL)
+      (async () => {
+        try {
+          const t0 = Date.now();
+          const ds = app.get(DataSource);
+          await ds.query('SELECT 1');
+          checks.database = { ok: true, latencyMs: Date.now() - t0 };
+        } catch {
+          checks.database = { ok: false };
+        }
+      })(),
 
-    // Redis (ioredis via BullMQ)
-    try {
-      const t0 = Date.now();
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const Redis = require('ioredis');
-      const r = new Redis({
-        host: process.env.REDIS_HOST || 'localhost',
-        port: Number(process.env.REDIS_PORT || 6379),
-        password: process.env.REDIS_PASSWORD || undefined,
-        connectTimeout: 2000,
-        lazyConnect: true,
-      });
-      await r.connect();
-      await r.ping();
-      await r.quit();
-      checks.redis = { ok: true, latencyMs: Date.now() - t0 };
-    } catch (e: any) {
-      checks.redis = { ok: false, error: 'ECONNREFUSED' };
-    }
+      // Redis
+      (async () => {
+        try {
+          const t0 = Date.now();
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const Redis = require('ioredis');
+          const r = new Redis({
+            host: process.env.REDIS_HOST || 'localhost',
+            port: Number(process.env.REDIS_PORT || 6379),
+            password: process.env.REDIS_PASSWORD || undefined,
+            connectTimeout: 2000,
+            lazyConnect: true,
+          });
+          await r.connect();
+          await r.ping();
+          await r.quit();
+          checks.redis = { ok: true, latencyMs: Date.now() - t0 };
+        } catch {
+          checks.redis = { ok: false };
+        }
+      })(),
 
-    // ML service
-    try {
-      const t0 = Date.now();
-      const resp = await fetch(`${process.env.ML_SERVICE_URL}/health`);
-      checks.ml = { ok: resp.ok, latencyMs: Date.now() - t0 };
-    } catch (e: any) {
-      checks.ml = { ok: false, error: 'unreachable' };
-    }
+      // MQTT broker (TCP reachability)
+      new Promise<void>((resolve) => {
+        const mqttUrl = process.env.MQTT_BROKER_URL ?? '';
+        const match = mqttUrl.match(/^mqtts?:\/\/([^/:]+):?(\d+)?/);
+        const host = match?.[1] ?? 'localhost';
+        const port = parseInt(match?.[2] ?? '1883', 10);
+        const t0 = Date.now();
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const sock = require('net').connect({ host, port, timeout: 2000 }, () => {
+          sock.destroy();
+          checks.mqtt = { ok: true, latencyMs: Date.now() - t0 };
+          resolve();
+        });
+        sock.on('timeout', () => { sock.destroy(); checks.mqtt = { ok: false }; resolve(); });
+        sock.on('error', () => { checks.mqtt = { ok: false }; resolve(); });
+      }),
 
-    const allOk = Object.values(checks).every(c => c.ok);
-    res.status(allOk ? 200 : 503).json({
-      status:    allOk ? 'ok' : 'degraded',
+      // ML service
+      (async () => {
+        try {
+          const t0 = Date.now();
+          const resp = await fetch(`${process.env.ML_SERVICE_URL}/health`);
+          checks.ml = { ok: resp.ok, latencyMs: Date.now() - t0 };
+        } catch {
+          checks.ml = { ok: false };
+        }
+      })(),
+
+      // SMTP (config-only check — no connection attempt needed)
+      (async () => {
+        const configured = !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
+        checks.smtp = { ok: configured };
+      })(),
+    ]);
+
+    const critical = !checks.database?.ok || !checks.mqtt?.ok;
+    const degraded = !checks.redis?.ok || !checks.ml?.ok;
+    const overall = critical ? 'critical' : degraded ? 'degraded' : 'healthy';
+
+    res.status(overall === 'healthy' ? 200 : 503).json({
+      overall,
       uptime_s:  ((Date.now() - startTime) / 1000).toFixed(1),
       checks,
-      timestamp: new Date().toISOString(),
+      checkedAt: new Date().toISOString(),
     });
   });
 

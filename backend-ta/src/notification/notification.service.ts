@@ -36,7 +36,7 @@ export class NotificationService {
     if (this.transporter && email) {
       try {
         await this.transporter.sendMail({
-          from: this.configService.get<string>('SMTP_FROM', '"NetFlow System" <noreply@netflow.io>'),
+          from: this.configService.get<string>('SMTP_FROM'),
           to: email,
           subject,
           text: message,

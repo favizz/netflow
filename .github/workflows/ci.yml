@@ -188,3 +188,52 @@ jobs:
 
       - name: Verify ML service image
         run: docker compose run --rm ml-service python -c "import sklearn, numpy, fastapi; print('deps OK')"
+
+  # ── Auto-deploy to server (push to main only, after all checks pass) ─────────
+  deploy:
+    name: Deploy to server
+    runs-on: ubuntu-latest
+    needs: [backend, ml-service, dashboard, mobile]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - name: SSH deploy
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          port: ${{ secrets.DEPLOY_PORT }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_KEY }}
+          script_stop: true
+          script: |
+            set -e
+            cd ~/TA-Flowmeter
+            git pull origin main
+
+            # Backend
+            cd backend-ta
+            npm ci
+            npm run build
+            pm2 restart netflow-backend || pm2 start "node dist/main" --name netflow-backend
+            cd ..
+
+            # ML service
+            cd ml-service
+            pip3 install -r requirements.txt -q
+            pm2 restart netflow-ml || pm2 start "uvicorn main:app --host 127.0.0.1 --port 8000" --name netflow-ml --interpreter none
+            cd ..
+
+            # Dashboard (builds with server's .env for VITE_ production URLs)
+            cd frontend-ta/dashboard
+            pnpm install --frozen-lockfile
+            pnpm build
+            cd ../..
+
+            # Mobile
+            cd frontend-ta/mobile
+            pnpm install --frozen-lockfile
+            pnpm build
+            cd ../..
+
+            pm2 save
+            echo "Deploy complete"

@@ -74,35 +74,6 @@ export default function LoginPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleDevLogin = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const BASE_URL = import.meta.env.VITE_API_BASE_URL as string;
-      const res = await fetch(`${BASE_URL}/auth/dev-login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: 'izza.diasputra10@gmail.com' }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data?.message || 'Dev login failed.');
-      }
-      const data = await res.json();
-      localStorage.setItem('admin-token', data.accessToken);
-      navigate('/');
-    } catch (err: any) {
-      setError(err.message || 'Dev login failed.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const isDev = !GOOGLE_CLIENT_ID || 
-    GOOGLE_CLIENT_ID.startsWith('replace-') || 
-    window.location.hostname === 'localhost' || 
-    window.location.hostname === '127.0.0.1';
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-[color-mix(in_oklch,var(--primary)_10%,transparent)] via-background to-[color-mix(in_oklch,var(--primary)_5%,transparent)] flex items-center justify-center p-4">
       <div className="w-full max-w-md shadow-lg ring-1 ring-[var(--card-border)] bg-[var(--card)]/80 backdrop-blur-xl rounded-2xl">
@@ -123,7 +94,7 @@ export default function LoginPage() {
 
           {/* Sign-in area */}
           <div className="flex flex-col items-center gap-4 pt-2">
-            {!GOOGLE_CLIENT_ID && !isDev && (
+            {!GOOGLE_CLIENT_ID && (
               <div className="w-full rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-xs text-amber-700">
                 Google Sign-In is not configured. Set{' '}
                 <code className="font-mono font-medium">VITE_GOOGLE_CLIENT_ID</code> to enable it.
@@ -142,17 +113,7 @@ export default function LoginPage() {
                 <span className="text-sm text-muted-text">Verifying...</span>
               </div>
             ) : (
-              <>
-                <div ref={buttonRef} className="flex justify-center w-full" />
-                {isDev && (
-                  <button
-                    onClick={() => void handleDevLogin()}
-                    className="mt-4 w-full py-2 px-4 rounded-xl border border-dashed border-amber-400 text-amber-700 text-sm font-semibold hover:bg-amber-50 transition-colors"
-                  >
-                    [Dev] Login as Admin (izza.diasputra10@gmail.com)
-                  </button>
-                )}
-              </>
+              <div ref={buttonRef} className="flex justify-center w-full" />
             )}
           </div>
 
