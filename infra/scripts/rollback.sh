@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Manual rollback — run on server when you need to undo the last deploy.
 # Usage:
-#   ./scripts/rollback.sh            # rolls back to the commit saved by deploy.sh
-#   ./scripts/rollback.sh <sha>      # rolls back to a specific commit
+#   ./infra/scripts/rollback.sh            # rolls back to the commit saved by deploy.sh
+#   ./infra/scripts/rollback.sh <sha>      # rolls back to a specific commit
 set -euo pipefail
 
 REPO_DIR="${HOME}/TA-Flowmeter"
@@ -17,7 +17,7 @@ if [[ -z "$TARGET" ]]; then
     log "Using saved rollback point: ${TARGET:0:8}"
   else
     log "ERROR: No commit given and no saved rollback point found."
-    log "Usage: bash scripts/rollback.sh [commit-sha]"
+    log "Usage: bash infra/scripts/rollback.sh [commit-sha]"
     log "       git log --oneline -10   # to find a target SHA"
     exit 1
   fi

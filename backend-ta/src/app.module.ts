@@ -38,7 +38,7 @@ import { RetentionModule } from './retention/retention.module';
         port: cfg.get<number>('DB_PORT', 3306),
         username: cfg.get('DB_USER', 'root'),
         password: cfg.get('DB_PASS', ''),
-        database: cfg.get('DB_NAME', 'ta_db'),
+        database: cfg.get('DB_NAME', 'srusun-ta252601002'),
         autoLoadEntities: true,
         synchronize: false,
         // Connection pool tuned for 10 k+ concurrent units

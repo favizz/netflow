@@ -3,8 +3,7 @@
 -- For fresh installs:  mysql -u <user> -p < db-init/01-schema.sql
 -- For upgrades:        mysql -u <user> -p < db-init/03-migration-v2.sql
 
-CREATE DATABASE IF NOT EXISTS ta_db;
-USE ta_db;
+USE `srusun-ta252601002`;
 
 -- -----------------------------------------
 -- 1. BUILDINGS  (multi-tenant root)
@@ -286,7 +285,9 @@ INSERT IGNORE INTO legend_transaction_status VALUES
 --     Partitions are pre-defined through 2027; p_future catches anything beyond.
 --     New partitions can be added manually via ALTER TABLE ... REORGANIZE.
 -- -----------------------------------------
-SET GLOBAL event_scheduler = ON;
+-- NOTE: Run this as MySQL root (requires SUPER privilege) — not in this script:
+--   SET GLOBAL event_scheduler = ON;
+--   Or ask server admin: sudo mysql -e "SET GLOBAL event_scheduler = ON;"
 
 -- Delete meter readings older than 1 year; fires daily at 03:00.
 CREATE EVENT IF NOT EXISTS cleanup_old_partitions

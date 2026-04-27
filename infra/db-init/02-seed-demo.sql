@@ -2,7 +2,7 @@
 -- Run after 01-schema.sql.
 -- Usage: mysql -u <user> -p < db-init/02-seed-demo.sql
 
-USE ta_db;
+USE `srusun-ta252601002`;
 
 -- -----------------------------------------
 -- 1. BUILDINGS (3 demo towers)

@@ -186,4 +186,4 @@ jobs:
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_KEY }}
           script_stop: true
-          script: bash ~/TA-Flowmeter/scripts/deploy.sh
+          script: bash ~/TA-Flowmeter/infra/scripts/deploy.sh

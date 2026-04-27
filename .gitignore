@@ -84,15 +84,5 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 # ── Vercel ────────────────────────────────────
 .vercel
 
-# ── AI / local context files ──────────────────
-.claude/
-.antigravity/
-ai_guidance/
-ui_idea/
-CLAUDE.md
-AGENTS.md
-commit_history.md
-temp.md
-dbnotes.md
-backup_iot.sql
-listen.js
+# ── Local dev context (not for repo) ──────────
+dev/
