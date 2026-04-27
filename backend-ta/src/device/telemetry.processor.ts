@@ -56,5 +56,5 @@ export class TelemetryProcessor extends WorkerHost implements OnApplicationBoots
 }
 
 function decodeBinaryPayload(buf: Buffer): Record<string, unknown> {
-  return decodeTelemetry(buf) as Record<string, unknown>;
+  return decodeTelemetry(buf) as unknown as Record<string, unknown>;
 }

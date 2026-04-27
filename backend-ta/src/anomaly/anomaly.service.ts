@@ -4,7 +4,7 @@ import { ClientProxy } from '@nestjs/microservices';
 import { Repository, IsNull } from 'typeorm';
 import { MeterReading } from '../device/entities/device.entity';
 import { UnitService } from '../unit/unit.service';
-import type { AnomalyItem } from './anomaly.types';
+import type { AnomalyItem, AnomalyType } from './anomaly.types';
 import { Anomaly } from './entities/anomaly.entity';
 import { encodeCommand } from '../common/binary-codec';
 import { NotificationService } from '../notification/notification.service';
@@ -141,7 +141,7 @@ export class AnomalyService implements OnModuleInit {
 
       // Mark resolved
       for (const active of activeAnomalies) {
-        if (!computedTypes.includes(active.type as string)) {
+        if (!computedTypes.includes(active.type as AnomalyType)) {
           active.resolved_at = new Date();
           await this.anomalyRepo.save(active);
         }

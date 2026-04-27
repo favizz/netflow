@@ -199,7 +199,7 @@ export class AdminController {
   @Post('tariff')
   async createTariff(@Body() dto: CreateTariffDto, @Request() req: AdminRequest) {
     const result = await this.tariffService.create(dto);
-    void this.auditLogService.log(this.adminEmail(req), 'CREATE', 'tariff', result.id, dto as Record<string, unknown>);
+    void this.auditLogService.log(this.adminEmail(req), 'CREATE', 'tariff', result.id, dto as unknown as Record<string, unknown>);
     return result;
   }
 
@@ -210,7 +210,7 @@ export class AdminController {
     @Request() req: AdminRequest,
   ) {
     const result = await this.tariffService.update(id, dto);
-    void this.auditLogService.log(this.adminEmail(req), 'UPDATE', 'tariff', id, dto as Record<string, unknown>);
+    void this.auditLogService.log(this.adminEmail(req), 'UPDATE', 'tariff', id, dto as unknown as Record<string, unknown>);
     return result;
   }
 

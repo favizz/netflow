@@ -8,7 +8,6 @@ import helmet from 'helmet';
 import Redis from 'ioredis';
 import * as net from 'net';
 import type { Request, Response } from 'express';
-import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 
 // Suppress raw ioredis reconnect noise — BullMQ inline fallback handles these
 process.on('uncaughtException', (err: NodeJS.ErrnoException) => {
@@ -159,16 +158,19 @@ async function bootstrap() {
     ].join('\n'));
   });
 
-  // ── Swagger API docs ─────────────────────────────────────────────────────────
-  /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
-  const swaggerConfig = new DocumentBuilder()
-    .setTitle('NetFlow API')
-    .setDescription('Smart Prepaid Metering System — v2 (scale edition)')
-    .setVersion('2.0')
-    .addBearerAuth()
-    .build();
-  SwaggerModule.setup('api/docs', app, SwaggerModule.createDocument(app, swaggerConfig));
-  /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
+  // ── Swagger API docs (optional — install @nestjs/swagger to enable) ─────────
+  try {
+    /* eslint-disable @typescript-eslint/no-require-imports, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
+    const { DocumentBuilder, SwaggerModule } = require('@nestjs/swagger');
+    const swaggerConfig = new DocumentBuilder()
+      .setTitle('NetFlow API')
+      .setDescription('Smart Prepaid Metering System — v2 (scale edition)')
+      .setVersion('2.0')
+      .addBearerAuth()
+      .build();
+    SwaggerModule.setup('api/docs', app, SwaggerModule.createDocument(app, swaggerConfig));
+    /* eslint-enable @typescript-eslint/no-require-imports, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
+  } catch { /* @nestjs/swagger not installed — API docs disabled */ }
 
   // ── MQTT microservice ────────────────────────────────────────────────────────
   app.connectMicroservice<MicroserviceOptions>({
