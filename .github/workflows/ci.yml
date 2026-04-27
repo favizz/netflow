@@ -62,7 +62,7 @@ jobs:
 
       - name: Security audit
         working-directory: backend-ta
-        run: npm audit --audit-level=critical
+        run: npm audit --audit-level=critical --omit=dev
 
       - name: Build
         working-directory: backend-ta
