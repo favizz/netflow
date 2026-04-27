@@ -37,6 +37,7 @@ rollback() {
 # ── Pull latest code ────────────────────────────────────────────────────────
 cd "$REPO_DIR"
 log "Pulling origin/main..."
+git reset --hard HEAD
 git pull origin main
 
 # ── Backend ─────────────────────────────────────────────────────────────────
