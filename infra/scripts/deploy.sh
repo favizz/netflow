@@ -28,7 +28,7 @@ rollback() {
   cd "$REPO_DIR/backend-ta"
   npm ci --silent
   npm run build
-  pm2 restart netflow-backend
+  pm2 restart netflow-backend --update-env
   pm2 save
   log "Rolled back. Check logs: pm2 logs netflow-backend --lines 50"
   exit 1
@@ -45,7 +45,7 @@ log "Building backend..."
 cd backend-ta
 npm ci --silent
 npm run build
-pm2 restart netflow-backend 2>/dev/null \
+pm2 restart netflow-backend --update-env 2>/dev/null \
   || pm2 start "node dist/main.js" --name netflow-backend
 cd ..
 
@@ -53,7 +53,7 @@ cd ..
 log "Starting ML service..."
 cd ml-service
 pip3 install -r requirements.txt -q
-pm2 restart netflow-ml 2>/dev/null \
+pm2 restart netflow-ml --update-env 2>/dev/null \
   || pm2 start "uvicorn main:app --host 127.0.0.1 --port 8000" \
        --name netflow-ml --interpreter none \
        --cwd "${REPO_DIR}/ml-service"
