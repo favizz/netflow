@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Req, Res, UnauthorizedException } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Res, UnauthorizedException } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { ConfigService } from '@nestjs/config';
 import { InitiateTopupDto } from './dto/initiate-topup.dto';
@@ -18,9 +18,7 @@ export class PaymentsController {
   }
 
   @Post('webhook/callback')
-  callback(@Body() dto: PaymentWebhookDto, @Req() _req: Request) {
-    // For Demo purposes
-    // this.assertWebhookSource(_req);
+  callback(@Body() dto: PaymentWebhookDto) {
     return this.paymentsService.handleWebhook(dto);
   }
 

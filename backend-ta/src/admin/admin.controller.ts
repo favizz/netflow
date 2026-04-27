@@ -2,11 +2,11 @@ import {
   Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Request, UseGuards,
 } from '@nestjs/common';
 import type { Request as ExpressRequest } from 'express';
+import { AdminJwtGuard } from '../common/guards/admin-jwt.guard';
 
 interface AdminRequest extends ExpressRequest {
   user?: { sub?: string };
 }
-import { AdminJwtGuard } from '../common/guards/admin-jwt.guard';
 import { UpdateAdminAccessDto } from './dto/update-admin-access.dto';
 import { AdminService, CalibrationSettings } from './admin.service';
 import { ResidentsService } from '../residents/residents.service';
@@ -129,7 +129,7 @@ export class AdminController {
   @Patch('settings')
   async updateSettings(@Body() body: Partial<CalibrationSettings>, @Request() req: AdminRequest) {
     const result = this.adminService.updateSettings(body);
-    void this.auditLogService.log(this.adminEmail(req), 'UPDATE_SETTINGS', 'calibration', null, body as any);
+    void this.auditLogService.log(this.adminEmail(req), 'UPDATE_SETTINGS', 'calibration', null, body as Record<string, unknown>);
     return result;
   }
 
@@ -162,7 +162,7 @@ export class AdminController {
     @Request() req: AdminRequest,
   ) {
     const result = await this.adminService.sendCommandToAll(body.type, body.value);
-    void this.auditLogService.log(this.adminEmail(req), 'SEND_COMMAND_ALL', 'device', null, body as any);
+    void this.auditLogService.log(this.adminEmail(req), 'SEND_COMMAND_ALL', 'device', null, body as Record<string, unknown>);
     return result;
   }
 
@@ -185,7 +185,7 @@ export class AdminController {
     @Request() req: AdminRequest,
   ) {
     const result = await this.adminService.pushOtaToAll(body.version, body.binaryLink, body.updateNow ?? true);
-    void this.auditLogService.log(this.adminEmail(req), 'OTA_PUSH_ALL', 'device', null, body as any);
+    void this.auditLogService.log(this.adminEmail(req), 'OTA_PUSH_ALL', 'device', null, body as Record<string, unknown>);
     return result;
   }
 
@@ -199,7 +199,7 @@ export class AdminController {
   @Post('tariff')
   async createTariff(@Body() dto: CreateTariffDto, @Request() req: AdminRequest) {
     const result = await this.tariffService.create(dto);
-    void this.auditLogService.log(this.adminEmail(req), 'CREATE', 'tariff', result.id, dto as any);
+    void this.auditLogService.log(this.adminEmail(req), 'CREATE', 'tariff', result.id, dto as Record<string, unknown>);
     return result;
   }
 
@@ -210,7 +210,7 @@ export class AdminController {
     @Request() req: AdminRequest,
   ) {
     const result = await this.tariffService.update(id, dto);
-    void this.auditLogService.log(this.adminEmail(req), 'UPDATE', 'tariff', id, dto as any);
+    void this.auditLogService.log(this.adminEmail(req), 'UPDATE', 'tariff', id, dto as Record<string, unknown>);
     return result;
   }
 
@@ -235,7 +235,7 @@ export class AdminController {
       'CLIENT_ERROR',
       'frontend',
       null,
-      { message: body.message, stack: body.stack, url: body.url } as any,
+      { message: body.message, stack: body.stack, url: body.url } as Record<string, unknown>,
       'failure',
     );
   }

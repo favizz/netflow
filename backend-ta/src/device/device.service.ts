@@ -20,7 +20,7 @@ export class DeviceService {
   ) {}
 
   async saveSensorData(payload: any) {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
     const deviceId: string | undefined = payload?._deviceId || payload?.dev_id || payload?.device_id;
     if (!deviceId) return;
 
@@ -127,17 +127,15 @@ export class DeviceService {
     }
 
     if (savedUnit) {
-      void this.anomalyService
-        .checkOnTelemetry(
-          deviceId,
-          savedUnit.unit_no,
-          power,
-          waterFlow,
-          voltage,
-          Number(savedUnit.balance),
-          savedUnit.relay_status,
-        )
-        .catch(() => {});
+      this.anomalyService.checkOnTelemetry(
+        deviceId,
+        savedUnit.unit_no,
+        power,
+        waterFlow,
+        voltage,
+        Number(savedUnit.balance),
+        savedUnit.relay_status,
+      );
     }
   }
 

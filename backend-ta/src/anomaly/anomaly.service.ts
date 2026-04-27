@@ -66,7 +66,7 @@ export class AnomalyService implements OnModuleInit {
     return this.anomalyCache.get(unitNo) ?? [];
   }
 
-  async checkOnTelemetry(
+  checkOnTelemetry(
     deviceId: string,
     unitNo: string,
     power: number | null,
@@ -74,7 +74,7 @@ export class AnomalyService implements OnModuleInit {
     voltage: number | null,
     balance: number,
     relayStatus: boolean,
-  ): Promise<void> {
+  ): void {
     try {
       const pw = power ?? 0;
       const vv = voltage ?? 0;

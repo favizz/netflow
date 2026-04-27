@@ -125,10 +125,10 @@ async function bootstrap() {
       })(),
 
       // SMTP (config-only check — no connection attempt needed)
-      (() => {
+      Promise.resolve().then(() => {
         const configured = !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
         checks.smtp = { ok: configured };
-      })(),
+      }),
     ]);
 
     const critical = !checks.database?.ok || !checks.mqtt?.ok;
@@ -160,6 +160,7 @@ async function bootstrap() {
   });
 
   // ── Swagger API docs ─────────────────────────────────────────────────────────
+  /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
   const swaggerConfig = new DocumentBuilder()
     .setTitle('NetFlow API')
     .setDescription('Smart Prepaid Metering System — v2 (scale edition)')
@@ -167,6 +168,7 @@ async function bootstrap() {
     .addBearerAuth()
     .build();
   SwaggerModule.setup('api/docs', app, SwaggerModule.createDocument(app, swaggerConfig));
+  /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
 
   // ── MQTT microservice ────────────────────────────────────────────────────────
   app.connectMicroservice<MicroserviceOptions>({

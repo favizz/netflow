@@ -38,14 +38,16 @@ export class TelemetryProcessor extends WorkerHost implements OnApplicationBoots
   async process(job: Job): Promise<void> {
     try {
       // Binary payloads were base64-encoded before queuing to survive JSON serialization.
+      /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
       const payload = job.data;
       if (payload?._isBuffer && typeof payload._data === 'string') {
-        const buf = Buffer.from(payload._data, 'base64');
-        (buf as any)._deviceId = payload._deviceId;
-        await this.deviceService.saveSensorData({ ...decodeBinaryPayload(buf), _deviceId: payload._deviceId });
+        const buf = Buffer.from(payload._data as string, 'base64');
+        const deviceId = payload._deviceId as string;
+        await this.deviceService.saveSensorData({ ...decodeBinaryPayload(buf), _deviceId: deviceId });
       } else {
         await this.deviceService.saveSensorData(payload);
       }
+      /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
     } catch (err) {
       this.logger.error(`Telemetry job ${job.id} failed: ${(err as Error).message}`);
       throw err; // BullMQ retries on throw
