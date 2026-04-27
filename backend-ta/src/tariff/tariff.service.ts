@@ -23,7 +23,7 @@ export class TariffService {
   async findCurrent(utilityType: 'electricity' | 'water'): Promise<number> {
     const today = new Date().toISOString().split('T')[0];
     const tariff = await this.repo.findOne({
-      where: { utility_type: utilityType, effective_date: LessThanOrEqual(today) as any },
+      where: { utility_type: utilityType, effective_date: LessThanOrEqual(today) },
       order: { effective_date: 'DESC' },
     });
     if (!tariff) return utilityType === 'electricity' ? 1444.7 : 5000;

@@ -1,6 +1,7 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { Job } from 'bullmq';
+import { decodeTelemetry } from '../common/binary-codec';
 import { DeviceService } from './device.service';
 
 export const TELEMETRY_QUEUE = 'telemetry';
@@ -53,8 +54,5 @@ export class TelemetryProcessor extends WorkerHost implements OnApplicationBoots
 }
 
 function decodeBinaryPayload(buf: Buffer): Record<string, unknown> {
-  // Reuse binary-codec decoder by importing inline to avoid circular deps.
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const { decodeTelemetry } = require('../common/binary-codec');
   return decodeTelemetry(buf) as Record<string, unknown>;
 }

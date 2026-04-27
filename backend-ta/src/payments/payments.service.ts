@@ -13,8 +13,8 @@ import { Queue } from 'bullmq';
 import { UnitService } from '../unit/unit.service';
 import { Transaction } from './entities/transaction.entity';
 import { InitiateTopupDto } from './dto/initiate-topup.dto';
-import { PaymentWebhookDto } from './dto/payment-webhook.dto';
 import { PAYMENT_EXPIRY_QUEUE } from './payment-expiry.processor';
+import { createHash } from 'crypto';
 
 const PAYMENT_EXPIRY_MS = 30 * 60 * 1_000; // 30 minutes
 
@@ -38,7 +38,7 @@ export class PaymentsService {
     const isProd = this.configService.get<string>('MIDTRANS_IS_PRODUCTION') === 'true';
     const serverKey = this.configService.get<string>('MIDTRANS_SERVER_KEY');
     
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-unsafe-assignment
     const midtransClient = require('midtrans-client');
     const coreApi = new midtransClient.CoreApi({
         isProduction: isProd,
@@ -242,7 +242,6 @@ export class PaymentsService {
     const grossAmount = payload.gross_amount;
     const signatureKey = payload.signature_key;
 
-    const createHash = require('crypto').createHash;
     const hash = createHash('sha512').update(orderId + statusCode + grossAmount + serverKey).digest('hex');
 
     if (hash !== signatureKey) {

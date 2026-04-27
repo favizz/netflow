@@ -20,6 +20,7 @@ export class DeviceService {
   ) {}
 
   async saveSensorData(payload: any) {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     const deviceId: string | undefined = payload?._deviceId || payload?.dev_id || payload?.device_id;
     if (!deviceId) return;
 

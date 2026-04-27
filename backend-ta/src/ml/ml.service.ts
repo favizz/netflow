@@ -38,6 +38,16 @@ export interface ModelInfo {
   history: Array<{ timestamp: number; sample_count: number; source: string }>;
 }
 
+interface MlModelInfoResponse {
+  model_fitted: boolean;
+  sample_count: number;
+  source: string;
+  trained_at: number;
+  threshold: number;
+  feature_names: string[];
+  history: Array<{ timestamp: number; sample_count: number; source: string }>;
+}
+
 @Injectable()
 export class MlService implements OnModuleInit {
   private readonly logger = new Logger(MlService.name);
@@ -80,7 +90,7 @@ export class MlService implements OnModuleInit {
     return this.scoreUnit(deviceId);
   }
 
-  async getAllScores(): Promise<AnomalyScore[]> {
+  getAllScores(): AnomalyScore[] {
     return [...this.scoreCache.values()];
   }
 
@@ -88,7 +98,7 @@ export class MlService implements OnModuleInit {
     if (!this.mlAvailable) return null;
     try {
       const { data } = await firstValueFrom(
-        this.http.get<any>('/model/info'),
+        this.http.get<MlModelInfoResponse>('/model/info'),
       );
       return {
         modelFitted:  data.model_fitted,
@@ -97,7 +107,7 @@ export class MlService implements OnModuleInit {
         trainedAt:    data.trained_at,
         threshold:    data.threshold,
         featureNames: data.feature_names,
-        history:      data.history ?? [],
+        history:      data.history,
       };
     } catch {
       return null;

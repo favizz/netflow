@@ -3,9 +3,12 @@ import { NestFactory } from '@nestjs/core';
 import { MicroserviceOptions, Transport } from '@nestjs/microservices';
 import { DataSource } from 'typeorm';
 import { AppModule } from './app.module';
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const compression = require('compression');
+import compression from 'compression';
 import helmet from 'helmet';
+import Redis from 'ioredis';
+import * as net from 'net';
+import type { Request, Response } from 'express';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 
 // Suppress raw ioredis reconnect noise — BullMQ inline fallback handles these
 process.on('uncaughtException', (err: NodeJS.ErrnoException) => {
@@ -57,7 +60,7 @@ async function bootstrap() {
   try { dataSource = app.get(DataSource); } catch { /* DB unavailable at boot */ }
 
   // GET /health — checks all downstream dependencies, returns 200 OK or 503
-  app.getHttpAdapter().get('/health', async (_req: any, res: any) => {
+  app.getHttpAdapter().get('/health', async (_req: Request, res: Response) => {
     const checks: Record<string, { ok: boolean; latencyMs?: number }> = {};
 
     await Promise.all([
@@ -77,8 +80,6 @@ async function bootstrap() {
       (async () => {
         try {
           const t0 = Date.now();
-          // eslint-disable-next-line @typescript-eslint/no-require-imports
-          const Redis = require('ioredis');
           const r = new Redis({
             host: process.env.REDIS_HOST || 'localhost',
             port: Number(process.env.REDIS_PORT || 6379),
@@ -102,12 +103,12 @@ async function bootstrap() {
         const host = match?.[1] ?? 'localhost';
         const port = parseInt(match?.[2] ?? '1883', 10);
         const t0 = Date.now();
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const sock = require('net').connect({ host, port, timeout: 2000 }, () => {
+        const sock = net.createConnection({ host, port }, () => {
           sock.destroy();
           checks.mqtt = { ok: true, latencyMs: Date.now() - t0 };
           resolve();
         });
+        sock.setTimeout(2000);
         sock.on('timeout', () => { sock.destroy(); checks.mqtt = { ok: false }; resolve(); });
         sock.on('error', () => { checks.mqtt = { ok: false }; resolve(); });
       }),
@@ -124,7 +125,7 @@ async function bootstrap() {
       })(),
 
       // SMTP (config-only check — no connection attempt needed)
-      (async () => {
+      (() => {
         const configured = !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
         checks.smtp = { ok: configured };
       })(),
@@ -143,7 +144,7 @@ async function bootstrap() {
   });
 
   // GET /metrics — Prometheus-compatible process metrics
-  app.getHttpAdapter().get('/metrics', (_req: any, res: any) => {
+  app.getHttpAdapter().get('/metrics', (_req: Request, res: Response) => {
     const mem = process.memoryUsage();
     res.setHeader('Content-Type', 'text/plain; version=0.0.4');
     res.send([
@@ -159,19 +160,13 @@ async function bootstrap() {
   });
 
   // ── Swagger API docs ─────────────────────────────────────────────────────────
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { DocumentBuilder, SwaggerModule } = require('@nestjs/swagger');
-    const config = new DocumentBuilder()
-      .setTitle('NetFlow API')
-      .setDescription('Smart Prepaid Metering System — v2 (scale edition)')
-      .setVersion('2.0')
-      .addBearerAuth()
-      .build();
-    SwaggerModule.setup('api/docs', app, SwaggerModule.createDocument(app, config));
-  } catch {
-    // @nestjs/swagger not installed — skip
-  }
+  const swaggerConfig = new DocumentBuilder()
+    .setTitle('NetFlow API')
+    .setDescription('Smart Prepaid Metering System — v2 (scale edition)')
+    .setVersion('2.0')
+    .addBearerAuth()
+    .build();
+  SwaggerModule.setup('api/docs', app, SwaggerModule.createDocument(app, swaggerConfig));
 
   // ── MQTT microservice ────────────────────────────────────────────────────────
   app.connectMicroservice<MicroserviceOptions>({

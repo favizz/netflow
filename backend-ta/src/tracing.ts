@@ -10,7 +10,7 @@
  *   OTEL_TRACES_EXPORTER=console                        → stdout (dev/test)
  */
 
-/* eslint-disable @typescript-eslint/no-require-imports */
+/* eslint-disable @typescript-eslint/no-require-imports, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
 
 const serviceName  = process.env.OTEL_SERVICE_NAME ?? 'netflow-backend';
 const otlpEndpoint = process.env.OTEL_EXPORTER_OTLP_ENDPOINT;

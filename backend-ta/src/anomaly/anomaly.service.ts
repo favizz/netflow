@@ -141,7 +141,7 @@ export class AnomalyService implements OnModuleInit {
 
       // Mark resolved
       for (const active of activeAnomalies) {
-        if (!computedTypes.includes(active.type as any)) {
+        if (!computedTypes.includes(active.type as string)) {
           active.resolved_at = new Date();
           await this.anomalyRepo.save(active);
         }

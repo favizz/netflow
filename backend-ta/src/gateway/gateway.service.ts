@@ -31,11 +31,11 @@ export class GatewayService {
     
     // Get last 5 successful transactions
     const successfulTxs = txs
-      .filter((tx: any) => tx.status === 'success')
-      .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .filter((tx) => tx.status === 'success')
+      .sort((a, b) => new Date(b.createdAt ?? '').getTime() - new Date(a.createdAt ?? '').getTime())
       .slice(0, 5);
-      
-    const topupNotifs = successfulTxs.map((tx: any) => ({
+
+    const topupNotifs = successfulTxs.map((tx) => ({
       anomalyType: 'topup_success',
       severity: 'info',
       target: 'resident',
@@ -44,7 +44,7 @@ export class GatewayService {
       detectedAt: tx.confirmedAt || tx.createdAt,
     }));
     
-    return [...topupNotifs, ...anomalies].sort((a: any, b: any) => new Date(b.detectedAt).getTime() - new Date(a.detectedAt).getTime());
+    return [...topupNotifs, ...anomalies].sort((a, b) => new Date(b.detectedAt).getTime() - new Date(a.detectedAt).getTime());
   }
 
   getMobileTrends(unitNo: string, period: 'daily' | 'monthly') {

@@ -18,9 +18,9 @@ export class PaymentsController {
   }
 
   @Post('webhook/callback')
-  callback(@Body() dto: PaymentWebhookDto, @Req() req: Request) {
+  callback(@Body() dto: PaymentWebhookDto, @Req() _req: Request) {
     // For Demo purposes
-    // this.assertWebhookSource(req);
+    // this.assertWebhookSource(_req);
     return this.paymentsService.handleWebhook(dto);
   }
 

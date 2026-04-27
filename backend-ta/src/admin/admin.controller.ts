@@ -1,6 +1,11 @@
 import {
   Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Request, UseGuards,
 } from '@nestjs/common';
+import type { Request as ExpressRequest } from 'express';
+
+interface AdminRequest extends ExpressRequest {
+  user?: { sub?: string };
+}
 import { AdminJwtGuard } from '../common/guards/admin-jwt.guard';
 import { UpdateAdminAccessDto } from './dto/update-admin-access.dto';
 import { AdminService, CalibrationSettings } from './admin.service';
@@ -27,8 +32,8 @@ export class AdminController {
     private readonly auditLogService: AuditLogService,
   ) {}
 
-  private adminEmail(req: any): string {
-    return req?.user?.sub ?? 'unknown';
+  private adminEmail(req: AdminRequest): string {
+    return req.user?.sub ?? 'unknown';
   }
 
   // ── Admin accounts ────────────────────────────────────────────────────────
@@ -42,7 +47,7 @@ export class AdminController {
   async updateAccess(
     @Param('email') email: string,
     @Body() payload: UpdateAdminAccessDto,
-    @Request() req: any,
+    @Request() req: AdminRequest,
   ) {
     const role = payload.enabled === false ? 'resident' : 'admin';
     const result = await this.residentsService.setRole(email, role as 'resident' | 'admin');
@@ -79,14 +84,14 @@ export class AdminController {
   }
 
   @Post('residents')
-  async createResident(@Body() dto: CreateResidentDto, @Request() req: any) {
+  async createResident(@Body() dto: CreateResidentDto, @Request() req: AdminRequest) {
     const result = await this.residentsService.create(dto.email, dto.name);
     void this.auditLogService.log(this.adminEmail(req), 'CREATE', 'resident', dto.email, { name: dto.name });
     return result;
   }
 
   @Delete('residents/:email')
-  async removeResident(@Param('email') email: string, @Request() req: any) {
+  async removeResident(@Param('email') email: string, @Request() req: AdminRequest) {
     await this.residentsService.remove(email);
     void this.auditLogService.log(this.adminEmail(req), 'DELETE', 'resident', email);
     return { deleted: true };
@@ -96,7 +101,7 @@ export class AdminController {
   async assignUnit(
     @Param('email') email: string,
     @Param('unitId', ParseIntPipe) unitId: number,
-    @Request() req: any,
+    @Request() req: AdminRequest,
   ) {
     const result = await this.unitService.setResidentEmail(unitId, email);
     void this.auditLogService.log(this.adminEmail(req), 'ASSIGN_UNIT', 'unit', unitId, { email });
@@ -107,7 +112,7 @@ export class AdminController {
   async unassignUnit(
     @Param('email') email: string,
     @Param('unitId', ParseIntPipe) unitId: number,
-    @Request() req: any,
+    @Request() req: AdminRequest,
   ) {
     const result = await this.unitService.setResidentEmail(unitId, null);
     void this.auditLogService.log(this.adminEmail(req), 'UNASSIGN_UNIT', 'unit', unitId, { email });
@@ -122,7 +127,7 @@ export class AdminController {
   }
 
   @Patch('settings')
-  async updateSettings(@Body() body: Partial<CalibrationSettings>, @Request() req: any) {
+  async updateSettings(@Body() body: Partial<CalibrationSettings>, @Request() req: AdminRequest) {
     const result = this.adminService.updateSettings(body);
     void this.auditLogService.log(this.adminEmail(req), 'UPDATE_SETTINGS', 'calibration', null, body as any);
     return result;
@@ -141,20 +146,20 @@ export class AdminController {
   // ── Direct device command (relay / valve) ────────────────────────────────
 
   @Post('command/:deviceId')
-  async sendCommand(
+  sendCommand(
     @Param('deviceId') deviceId: string,
     @Body() body: { type: 'relay' | 'valve'; value: 0 | 1 },
-    @Request() req: any,
+    @Request() req: AdminRequest,
   ) {
     this.adminService.sendCommand(deviceId, body.type, body.value);
-    void this.auditLogService.log(this.adminEmail(req), 'SEND_COMMAND', 'device', deviceId, body as any);
+    void this.auditLogService.log(this.adminEmail(req), 'SEND_COMMAND', 'device', deviceId, body as Record<string, unknown>);
     return { sent: true, deviceId, type: body.type, value: body.value };
   }
 
   @Post('command')
   async sendCommandAll(
     @Body() body: { type: 'relay' | 'valve'; value: 0 | 1 },
-    @Request() req: any,
+    @Request() req: AdminRequest,
   ) {
     const result = await this.adminService.sendCommandToAll(body.type, body.value);
     void this.auditLogService.log(this.adminEmail(req), 'SEND_COMMAND_ALL', 'device', null, body as any);
@@ -164,20 +169,20 @@ export class AdminController {
   // ── OTA firmware update ───────────────────────────────────────────────────
 
   @Post('ota/:deviceId')
-  async pushOta(
+  pushOta(
     @Param('deviceId') deviceId: string,
     @Body() body: { version: string; binaryLink: string; updateNow?: boolean },
-    @Request() req: any,
+    @Request() req: AdminRequest,
   ) {
     this.adminService.pushOtaToDevice(deviceId, body.version, body.binaryLink, body.updateNow ?? true);
-    void this.auditLogService.log(this.adminEmail(req), 'OTA_PUSH', 'device', deviceId, body as any);
+    void this.auditLogService.log(this.adminEmail(req), 'OTA_PUSH', 'device', deviceId, body as Record<string, unknown>);
     return { pushed: [deviceId] };
   }
 
   @Post('ota')
   async pushOtaAll(
     @Body() body: { version: string; binaryLink: string; updateNow?: boolean },
-    @Request() req: any,
+    @Request() req: AdminRequest,
   ) {
     const result = await this.adminService.pushOtaToAll(body.version, body.binaryLink, body.updateNow ?? true);
     void this.auditLogService.log(this.adminEmail(req), 'OTA_PUSH_ALL', 'device', null, body as any);
@@ -192,7 +197,7 @@ export class AdminController {
   }
 
   @Post('tariff')
-  async createTariff(@Body() dto: CreateTariffDto, @Request() req: any) {
+  async createTariff(@Body() dto: CreateTariffDto, @Request() req: AdminRequest) {
     const result = await this.tariffService.create(dto);
     void this.auditLogService.log(this.adminEmail(req), 'CREATE', 'tariff', result.id, dto as any);
     return result;
@@ -202,7 +207,7 @@ export class AdminController {
   async updateTariff(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: Partial<Pick<CreateTariffDto, 'price_per_unit' | 'effective_date'>>,
-    @Request() req: any,
+    @Request() req: AdminRequest,
   ) {
     const result = await this.tariffService.update(id, dto);
     void this.auditLogService.log(this.adminEmail(req), 'UPDATE', 'tariff', id, dto as any);
@@ -210,7 +215,7 @@ export class AdminController {
   }
 
   @Delete('tariff/:id')
-  async deleteTariff(@Param('id', ParseIntPipe) id: number, @Request() req: any) {
+  async deleteTariff(@Param('id', ParseIntPipe) id: number, @Request() req: AdminRequest) {
     const result = await this.tariffService.remove(id);
     void this.auditLogService.log(this.adminEmail(req), 'DELETE', 'tariff', id);
     return result;
@@ -224,7 +229,7 @@ export class AdminController {
   }
 
   @Post('client-error')
-  logClientError(@Body() body: { message?: string; stack?: string; url?: string }, @Request() req: any) {
+  logClientError(@Body() body: { message?: string; stack?: string; url?: string }, @Request() req: AdminRequest) {
     return this.auditLogService.log(
       this.adminEmail(req),
       'CLIENT_ERROR',
