@@ -8,6 +8,9 @@ export NVM_DIR="${HOME}/.nvm"
 # shellcheck source=/dev/null
 [[ -s "$NVM_DIR/nvm.sh" ]] && source "$NVM_DIR/nvm.sh"
 
+# Add user local bin to PATH (uvicorn, fastapi, etc. installed here via pip)
+export PATH="${HOME}/.local/bin:${PATH}"
+
 REPO_DIR="${HOME}/TA-Flowmeter"
 HEALTH_URL="http://localhost:5000/health"
 PREV_COMMIT_FILE="/tmp/netflow_prev_commit"
