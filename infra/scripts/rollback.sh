@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+# Load nvm so npm/node 24 is available in non-interactive SSH sessions
+export NVM_DIR="${HOME}/.nvm"
+# shellcheck source=/dev/null
+[[ -s "$NVM_DIR/nvm.sh" ]] && source "$NVM_DIR/nvm.sh"
+
 # Manual rollback — run on server when you need to undo the last deploy.
 # Usage:
 #   ./infra/scripts/rollback.sh            # rolls back to the commit saved by deploy.sh

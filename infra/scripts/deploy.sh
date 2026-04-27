@@ -3,6 +3,11 @@
 # Pulls latest, rebuilds all services, smoke-tests, and auto-rolls back on failure.
 set -euo pipefail
 
+# Load nvm so npm/node 24 is available in non-interactive SSH sessions
+export NVM_DIR="${HOME}/.nvm"
+# shellcheck source=/dev/null
+[[ -s "$NVM_DIR/nvm.sh" ]] && source "$NVM_DIR/nvm.sh"
+
 REPO_DIR="${HOME}/TA-Flowmeter"
 HEALTH_URL="http://localhost:5000/health"
 PREV_COMMIT_FILE="/tmp/netflow_prev_commit"
