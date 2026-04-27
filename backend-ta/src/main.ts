@@ -51,6 +51,11 @@ async function bootstrap() {
   // ── Health check + Prometheus metrics ───────────────────────────────────────
   const startTime = Date.now();
 
+  // Capture DataSource once at bootstrap — app.get() inside an Express handler
+  // runs outside the NestJS resolution context and throws UnknownElementException.
+  let dataSource: DataSource | null = null;
+  try { dataSource = app.get(DataSource); } catch { /* DB unavailable at boot */ }
+
   // GET /health — checks all downstream dependencies, returns 200 OK or 503
   app.getHttpAdapter().get('/health', async (_req: any, res: any) => {
     const checks: Record<string, { ok: boolean; latencyMs?: number }> = {};
@@ -58,10 +63,10 @@ async function bootstrap() {
     await Promise.all([
       // Database (MySQL)
       (async () => {
+        if (!dataSource) { checks.database = { ok: false }; return; }
         try {
           const t0 = Date.now();
-          const ds = app.get(DataSource);
-          await ds.query('SELECT 1');
+          await dataSource.query('SELECT 1');
           checks.database = { ok: true, latencyMs: Date.now() - t0 };
         } catch {
           checks.database = { ok: false };
