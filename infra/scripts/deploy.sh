@@ -54,7 +54,8 @@ cd ml-service
 pip3 install -r requirements.txt -q
 pm2 restart netflow-ml 2>/dev/null \
   || pm2 start "uvicorn main:app --host 127.0.0.1 --port 8000" \
-       --name netflow-ml --interpreter none
+       --name netflow-ml --interpreter none \
+       --cwd "${REPO_DIR}/ml-service"
 cd ..
 
 # ── Frontends (static builds — nginx serves the dist/ folders) ───────────────
