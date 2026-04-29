@@ -185,6 +185,8 @@ export default function ControlCenterPage() {
     const [otaBinaryLink, setOtaBinaryLink] = useState('');
     const [otaVersion, setOtaVersion] = useState('');
     const [otaPending, setOtaPending] = useState(false);
+    const [lastOtaLink, setLastOtaLink] = useState(() => localStorage.getItem('ota_last_link') ?? '');
+    const [lastOtaVersion, setLastOtaVersion] = useState(() => localStorage.getItem('ota_last_version') ?? '');
 
     const isDirty = useMemo(
         () => JSON.stringify(config) !== JSON.stringify(serverConfig),
@@ -281,6 +283,12 @@ export default function ControlCenterPage() {
                 body: JSON.stringify({ version: otaVersion, binaryLink: otaBinaryLink, updateNow: true }),
             });
             addLog('ok', `✓ OTA pushed to ${Array.isArray(res?.pushed) ? res.pushed.length : '?'} device(s)`);
+            localStorage.setItem('ota_last_link', otaBinaryLink);
+            localStorage.setItem('ota_last_version', otaVersion);
+            setLastOtaLink(otaBinaryLink);
+            setLastOtaVersion(otaVersion);
+            setOtaBinaryLink('');
+            setOtaVersion('');
         } catch (err: any) {
             addLog('err', `✗ OTA push failed: ${err.message}`);
         } finally {
@@ -490,14 +498,14 @@ export default function ControlCenterPage() {
                     <div className="sm:col-span-3">
                         <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Binary Link (URL to .bin)</label>
                         <input type="url" value={otaBinaryLink} onChange={e => setOtaBinaryLink(e.target.value)}
-                            placeholder="https://raw.githubusercontent.com/.../firmware.bin"
+                            placeholder={lastOtaLink || "https://raw.githubusercontent.com/.../firmware.bin"}
                             maxLength={500}
                             className="block w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-1.5 text-sm text-gray-900 dark:text-gray-100 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary" />
                     </div>
                     <div>
                         <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Version</label>
                         <input type="text" value={otaVersion} onChange={e => setOtaVersion(e.target.value)}
-                            placeholder="1.2.0"
+                            placeholder={lastOtaVersion || "1.2.0"}
                             maxLength={20}
                             pattern="\d+\.\d+\.\d+"
                             title="Semantic version format: 1.2.0"

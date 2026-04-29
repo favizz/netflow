@@ -100,11 +100,12 @@ export default function App() {
     } else if (result.units.length > 0) {
       const sel = await api.selectUnit(result.units[0].id)
       setUserUnit(sel.unitNo!); setAvailableUnits(sel.units); setIsLoggedIn(true)
+    } else {
+      throw new Error(JSON.stringify({ message: 'Akun belum memiliki unit yang terdaftar. Hubungi administrator.' }))
     }
   }
 
   const handleGoogleLogin = async (c: string) => { await applyLoginResult(await api.googleLogin(c)) }
-  const handleDevLogin    = async (e: string) => { await applyLoginResult(await api.devLogin(e)) }
   const handleSelectUnit  = async (unitId: number) => {
     const r = await api.selectUnit(unitId)
     if (!r.unitNo) throw new Error("Unit selection failed")
@@ -117,7 +118,7 @@ export default function App() {
   }
 
   if (!isLoggedIn) {
-    return <LoginForm onGoogleLogin={handleGoogleLogin} onDevLogin={handleDevLogin} />
+    return <LoginForm onGoogleLogin={handleGoogleLogin} />
   }
 
   return (

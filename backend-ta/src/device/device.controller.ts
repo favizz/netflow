@@ -4,6 +4,7 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { DeviceService } from './device.service';
 import { TELEMETRY_QUEUE } from './telemetry.processor';
+import { AuditLogService } from '../audit-log/audit-log.service';
 
 /**
  * MQTT ingestion controller.
@@ -22,7 +23,28 @@ export class DeviceController {
   constructor(
     @InjectQueue(TELEMETRY_QUEUE) private readonly telemetryQueue: Queue,
     private readonly deviceService: DeviceService,
+    private readonly auditLogService: AuditLogService,
   ) {}
+
+  @MessagePattern('device/+/ota_ack')
+  handleOtaAck(@Payload() data: unknown, @Ctx() ctx: MqttContext): void {
+    const topic = ctx.getTopic();
+    const deviceId = topic.split('/')[1] ?? 'unknown';
+
+    let ack: { status?: string; version?: string; error?: number } = {};
+    try {
+      const raw = Buffer.isBuffer(data)
+        ? (data as Buffer).toString('utf8')
+        : JSON.stringify(data);
+      ack = JSON.parse(raw) as typeof ack;
+    } catch {
+      ack = { status: 'unknown' };
+    }
+
+    const result = ack.status === 'ok' ? 'success' : ack.status === 'noop' ? 'info' : 'failure';
+    this.logger.log(`OTA ACK [${deviceId}] → ${JSON.stringify(ack)}`);
+    void this.auditLogService.log(`device:${deviceId}`, 'OTA_ACK', 'device', deviceId, ack as Record<string, unknown>, result);
+  }
 
   @MessagePattern('device/+/data')
   async handleSensorData(@Payload() data: any, @Ctx() ctx: MqttContext) {

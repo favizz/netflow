@@ -11,6 +11,7 @@ import { MeterReading } from './entities/device.entity';
 import { Unit } from '../unit/entities/unit.entity';
 import { AnomalyModule } from '../anomaly/anomaly.module';
 import { TariffModule } from '../tariff/tariff.module';
+import { AuditLogModule } from '../audit-log/audit-log.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { TariffModule } from '../tariff/tariff.module';
     ConfigModule,
     TariffModule,
     AnomalyModule,
+    AuditLogModule,
 
     // Telemetry ingestion queue backed by Redis
     BullModule.registerQueue({ name: TELEMETRY_QUEUE }),

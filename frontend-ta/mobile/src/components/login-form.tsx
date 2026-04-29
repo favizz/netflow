@@ -1,39 +1,40 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { GoogleLogin } from "@react-oauth/google"
+import { useState, useEffect, useRef } from "react"
 import { Card } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
 import { useTheme } from "next-themes"
 
-const isDev = !import.meta.env.VITE_GOOGLE_CLIENT_ID ||
-  (import.meta.env.VITE_GOOGLE_CLIENT_ID as string).startsWith('replace-') ||
-  window.location.hostname === 'localhost' || 
-  window.location.hostname === '127.0.0.1'
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string
 
-const DEV_EMAIL = '18222070@std.stei.itb.ac.id'
+declare global {
+  interface Window {
+    google?: {
+      accounts: {
+        id: {
+          initialize: (config: object) => void
+          renderButton: (element: HTMLElement, config: object) => void
+        }
+      }
+    }
+  }
+}
 
 interface LoginFormProps {
   onGoogleLogin: (credential: string) => Promise<void>
-  onDevLogin: (email: string) => Promise<void>
 }
 
-export default function LoginForm({ onGoogleLogin, onDevLogin }: LoginFormProps) {
+export default function LoginForm({ onGoogleLogin }: LoginFormProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
-  const { theme } = useTheme()
-  const [mounted, setMounted] = useState(false)
+  const { resolvedTheme } = useTheme()
+  const buttonRef = useRef<HTMLDivElement>(null)
+  const initializedRef = useRef(false)
 
-  // Use useEffect to ensure the theme is loaded from the client to prevent hydration mismatch
-  useEffect(() => {
-    setMounted(true)
-  }, [])
-
-  const withLoading = async (fn: () => Promise<void>) => {
+  const handleCredential = async (response: { credential: string }) => {
     setIsLoading(true)
     setError("")
     try {
-      await fn()
+      await onGoogleLogin(response.credential)
     } catch (err) {
       const raw = err instanceof Error ? err.message : "Login gagal"
       const parsed = (() => { try { return JSON.parse(raw) as { message?: string } } catch { return null } })()
@@ -43,8 +44,34 @@ export default function LoginForm({ onGoogleLogin, onDevLogin }: LoginFormProps)
     }
   }
 
-  // Fallback default if theme hasn't mounted yet
-  const googleTheme = mounted && theme === "dark" ? "filled_black" : "outline"
+  useEffect(() => {
+    const init = () => {
+      if (!window.google || !buttonRef.current || !GOOGLE_CLIENT_ID || initializedRef.current) return
+      initializedRef.current = true
+      window.google.accounts.id.initialize({
+        client_id: GOOGLE_CLIENT_ID,
+        callback: handleCredential,
+      })
+      window.google.accounts.id.renderButton(buttonRef.current, {
+        theme: resolvedTheme === "dark" ? "filled_black" : "outline",
+        size: "large",
+        shape: "pill",
+        text: "continue_with",
+        width: buttonRef.current.offsetWidth || 320,
+        locale: "id",
+      })
+    }
+
+    if (window.google) {
+      init()
+    } else {
+      const interval = setInterval(() => {
+        if (window.google) { clearInterval(interval); init() }
+      }, 100)
+      return () => clearInterval(interval)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resolvedTheme])
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-secondary/5 flex items-center justify-center p-4">
@@ -53,7 +80,7 @@ export default function LoginForm({ onGoogleLogin, onDevLogin }: LoginFormProps)
           <div className="text-center space-y-3">
             <div className="flex justify-center mb-6">
               <img
-                src="/netflow-logo-icon.png"
+                src={`${import.meta.env.BASE_URL}netflow-logo-icon.png`}
                 alt="NETFLOW"
                 className="h-20 w-20 object-contain"
               />
@@ -64,50 +91,26 @@ export default function LoginForm({ onGoogleLogin, onDevLogin }: LoginFormProps)
 
           <div className="flex flex-col items-center gap-4 pt-2">
             {isLoading && (
-              <p className="text-sm text-slate-500 mb-2">Memproses...</p>
+              <div className="flex items-center gap-2 py-3">
+                <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                <span className="text-sm text-slate-500">Memproses...</span>
+              </div>
             )}
 
-            {isDev ? (
-              <Button
-                variant="outline"
-                className="h-14 w-full max-w-xs text-base font-semibold border-dashed border-amber-400 text-amber-700 hover:bg-amber-50"
-                onClick={() => void withLoading(() => onDevLogin(DEV_EMAIL))}
-              >
-                [Dev] Masuk sebagai {DEV_EMAIL}
-              </Button>
-            ) : (
-              <div className="w-full flex justify-center mt-2 mix-blend-normal">
-                {mounted && (
-                  <GoogleLogin
-                    onSuccess={(response) => {
-                      if (response.credential) {
-                        void withLoading(() => onGoogleLogin(response.credential!))
-                      }
-                    }}
-                    onError={() => setError("Login dengan Google gagal. Coba lagi.")}
-                    theme={googleTheme}
-                    size="large"
-                    shape="pill"
-                    text="continue_with"
-                    width="320"
-                    locale="id"
-                  />
-                )}
-              </div>
+            {!isLoading && (
+              <div ref={buttonRef} className="flex justify-center w-full max-w-xs" />
             )}
 
             {error && (
               <p className="text-sm text-destructive text-center mt-2 font-medium">{error}</p>
             )}
 
-            {!isDev && (
-              <div className="w-full border-t border-slate-200 dark:border-slate-800 mt-4 pt-6 text-center text-[12px] text-slate-400 dark:text-slate-500">
-                By continuing, you confirm you are 18 or over and agree to our{" "}
-                <a href="#" className="underline hover:text-slate-900 dark:hover:text-slate-300">Privacy Policy</a>{" "}
-                and{" "}
-                <a href="#" className="underline hover:text-slate-900 dark:hover:text-slate-300">Terms of Use</a>.
-              </div>
-            )}
+            <div className="w-full border-t border-slate-200 dark:border-slate-800 mt-4 pt-6 text-center text-[12px] text-slate-400 dark:text-slate-500">
+              By continuing, you confirm you are 18 or over and agree to our{" "}
+              <a href="#" className="underline hover:text-slate-900 dark:hover:text-slate-300">Privacy Policy</a>{" "}
+              and{" "}
+              <a href="#" className="underline hover:text-slate-900 dark:hover:text-slate-300">Terms of Use</a>.
+            </div>
           </div>
         </div>
       </Card>
