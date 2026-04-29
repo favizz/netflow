@@ -1,5 +1,5 @@
-import { HelpCircle, ChevronDown, ChevronUp } from "lucide-react";
-import { useState } from "react";
+import { HelpCircle, ChevronDown, ChevronUp, Search } from "lucide-react";
+import { useState, useMemo } from "react";
 
 type FAQItem = {
     question: string;
@@ -80,7 +80,7 @@ const FAQ_DATA: FAQSection[] = [
             },
             {
                 question: "Where can I see all payment history?",
-                answer: "The Transactions page lists all token purchases across all units, filterable by date and unit number.",
+                answer: "The Transactions page lists all token purchases across all units, filterable by status and payment method.",
             },
         ],
     },
@@ -119,7 +119,7 @@ const FAQ_DATA: FAQSection[] = [
         items: [
             {
                 question: "How does anomaly detection work?",
-                answer: "Telemetry data is sent to an external Python ML service after each reading. The ML service returns an anomaly score and classification (Normal, Warning, Critical). Anomalies are stored and surfaced on the Overview page.",
+                answer: "The system uses a two-layer detection approach. The rule-based layer checks 11 conditions in real time (low balance, voltage out of range, MCB trip, water leak, sensor malfunction, etc.). The statistical ML layer computes a Z-score across power, voltage, current, and water flow using the last 30 days of historical readings — readings with a Z-score above 2.5 are flagged as anomalies. Both layers run in-process without any external dependency.",
             },
             {
                 question: "Who gets notified about anomalies?",
@@ -160,23 +160,52 @@ const FAQ_DATA: FAQSection[] = [
     },
 ];
 
-function AccordionItem({ item }: { item: FAQItem }) {
+// ── Highlight matching text like a stabilo marker ──────────────────────────
+function Highlight({ text, query }: { text: string; query: string }) {
+    if (!query.trim()) return <>{text}</>;
+    const q = query.toLowerCase();
+    const lower = text.toLowerCase();
+    const parts: Array<{ chunk: string; match: boolean }> = [];
+    let idx = 0;
+    let found = lower.indexOf(q, idx);
+    while (found !== -1) {
+        if (found > idx) parts.push({ chunk: text.slice(idx, found), match: false });
+        parts.push({ chunk: text.slice(found, found + q.length), match: true });
+        idx = found + q.length;
+        found = lower.indexOf(q, idx);
+    }
+    if (idx < text.length) parts.push({ chunk: text.slice(idx), match: false });
+    return (
+        <>
+            {parts.map((p, i) =>
+                p.match ? (
+                    <mark key={i} className="bg-yellow-200 dark:bg-yellow-500/40 text-yellow-900 dark:text-yellow-100 rounded-sm px-0.5 not-italic">
+                        {p.chunk}
+                    </mark>
+                ) : p.chunk
+            )}
+        </>
+    );
+}
+
+function AccordionItem({ item, query, forceOpen }: { item: FAQItem; query: string; forceOpen: boolean }) {
     const [open, setOpen] = useState(false);
+    const isOpen = forceOpen || open;
     return (
         <div className="border-b border-gray-100 dark:border-gray-700 last:border-0">
             <button
                 onClick={() => setOpen((o) => !o)}
                 className="flex w-full items-start justify-between gap-4 py-4 text-left text-sm font-medium text-gray-900 dark:text-gray-100 hover:text-primary dark:hover:text-primary transition-colors"
             >
-                <span>{item.question}</span>
-                {open
+                <span><Highlight text={item.question} query={query} /></span>
+                {isOpen
                     ? <ChevronUp className="mt-0.5 h-4 w-4 shrink-0 text-gray-400" />
                     : <ChevronDown className="mt-0.5 h-4 w-4 shrink-0 text-gray-400" />
                 }
             </button>
-            {open && (
+            {isOpen && (
                 <p className="pb-4 text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
-                    {item.answer}
+                    <Highlight text={item.answer} query={query} />
                 </p>
             )}
         </div>
@@ -184,6 +213,23 @@ function AccordionItem({ item }: { item: FAQItem }) {
 }
 
 export default function FAQPage() {
+    const [search, setSearch] = useState("");
+
+    const visibleSections = useMemo(() => {
+        const q = search.toLowerCase().trim();
+        if (!q) return FAQ_DATA.map(s => ({ ...s, items: s.items }));
+        return FAQ_DATA
+            .map(section => ({
+                ...section,
+                items: section.items.filter(
+                    item =>
+                        item.question.toLowerCase().includes(q) ||
+                        item.answer.toLowerCase().includes(q)
+                ),
+            }))
+            .filter(s => s.items.length > 0);
+    }, [search]);
+
     return (
         <div className="space-y-6">
             <div>
@@ -196,8 +242,24 @@ export default function FAQPage() {
                 </p>
             </div>
 
+            {/* Search */}
+            <div className="relative max-w-sm">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400 dark:text-gray-500" />
+                <input
+                    type="text"
+                    value={search}
+                    onChange={e => setSearch(e.target.value)}
+                    placeholder="Search questions and answers..."
+                    className="h-9 w-full rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 pl-9 pr-4 text-sm text-gray-900 dark:text-white outline-none focus:border-primary focus:ring-1 focus:ring-primary placeholder:text-gray-400 dark:placeholder:text-gray-500"
+                />
+            </div>
+
+            {visibleSections.length === 0 && (
+                <p className="text-sm text-gray-400 dark:text-gray-500">No results for &ldquo;{search}&rdquo;.</p>
+            )}
+
             <div className="space-y-4">
-                {FAQ_DATA.map((section) => (
+                {visibleSections.map((section) => (
                     <div
                         key={section.title}
                         className="rounded-lg bg-white dark:bg-gray-900 shadow-sm ring-1 ring-gray-900/5 dark:ring-gray-700 px-5"
@@ -206,7 +268,12 @@ export default function FAQPage() {
                             {section.title}
                         </h2>
                         {section.items.map((item) => (
-                            <AccordionItem key={item.question} item={item} />
+                            <AccordionItem
+                                key={item.question}
+                                item={item}
+                                query={search}
+                                forceOpen={!!search.trim()}
+                            />
                         ))}
                     </div>
                 ))}

@@ -61,7 +61,6 @@ export default function InventoryPage() {
             <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Asset Inventory</h1>
-                    <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Manage smart meters and tenant units.</p>
                 </div>
                 <button
                     onClick={() => setIsAddOpen(true)}

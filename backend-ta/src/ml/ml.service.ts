@@ -1,9 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { firstValueFrom } from 'rxjs';
 import { MeterReading } from '../device/entities/device.entity';
 import { Unit } from '../unit/entities/unit.entity';
 import { UnitService } from '../unit/unit.service';
@@ -38,13 +36,18 @@ export interface ModelInfo {
   history: Array<{ timestamp: number; sample_count: number; source: string }>;
 }
 
-interface MlModelInfoResponse {
-  model_fitted: boolean;
-  sample_count: number;
-  source: string;
-  trained_at: number;
-  threshold: number;
-  feature_names: string[];
+interface FeatureStats {
+  mean: number;
+  std: number;
+}
+
+interface ModelStats {
+  power: FeatureStats;
+  voltage: FeatureStats;
+  current: FeatureStats;
+  water_flow: FeatureStats;
+  sampleCount: number;
+  trainedAt: number;
   history: Array<{ timestamp: number; sample_count: number; source: string }>;
 }
 
@@ -53,9 +56,14 @@ export class MlService implements OnModuleInit {
   private readonly logger = new Logger(MlService.name);
   private readonly scoreCache = new Map<string, AnomalyScore>();
   private mlAvailable = false;
+  private modelStats: ModelStats | null = null;
+
+  // Z-score above this threshold → anomaly flag
+  private static readonly ANOMALY_THRESHOLD = 2.5;
+  // Minimum sample count before the model is considered fitted
+  private static readonly MIN_SAMPLES = 20;
 
   constructor(
-    private readonly http: HttpService,
     private readonly cfg: ConfigService,
     @InjectRepository(MeterReading)
     private readonly meterRepo: Repository<MeterReading>,
@@ -66,7 +74,7 @@ export class MlService implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
-    await this.checkMlAvailability();
+    await this.initModel();
 
     const scoringIntervalSec = this.cfg.get<number>('ML_SCORING_INTERVAL_SECONDS', 300);
     if (scoringIntervalSec > 0 && this.mlAvailable) {
@@ -75,7 +83,7 @@ export class MlService implements OnModuleInit {
 
     // Retrain daily with real field data (runs 1 min after startup to avoid boot congestion)
     const retrainingIntervalSec = this.cfg.get<number>('ML_RETRAINING_INTERVAL_SECONDS', 86_400);
-    if (retrainingIntervalSec > 0 && this.mlAvailable) {
+    if (retrainingIntervalSec > 0) {
       setTimeout(() => {
         void this.retrainWithFieldData();
         setInterval(() => void this.retrainWithFieldData(), retrainingIntervalSec * 1_000);
@@ -94,37 +102,26 @@ export class MlService implements OnModuleInit {
     return [...this.scoreCache.values()];
   }
 
-  async getModelInfo(): Promise<ModelInfo | null> {
-    if (!this.mlAvailable) return null;
-    try {
-      const { data } = await firstValueFrom(
-        this.http.get<MlModelInfoResponse>('/model/info'),
-      );
-      return {
-        modelFitted:  data.model_fitted,
-        sampleCount:  data.sample_count,
-        source:       data.source,
-        trainedAt:    data.trained_at,
-        threshold:    data.threshold,
-        featureNames: data.feature_names,
-        history:      data.history,
-      };
-    } catch {
-      return null;
-    }
+  getModelInfo(): ModelInfo | null {
+    if (!this.mlAvailable || !this.modelStats) return null;
+    return {
+      modelFitted:  true,
+      sampleCount:  this.modelStats.sampleCount,
+      source:       'in-process-zscore',
+      trainedAt:    this.modelStats.trainedAt,
+      threshold:    MlService.ANOMALY_THRESHOLD,
+      featureNames: ['power', 'voltage', 'current', 'water_flow'],
+      history:      this.modelStats.history,
+    };
   }
 
   /**
-   * Pull recent readings for all units and retrain the Isolation Forest.
+   * Pull recent readings for all units and recompute feature statistics.
    * Called daily by the scheduler. Also callable manually via admin endpoint.
+   * Uses Z-score (Gaussian) statistical model — no external service required.
    */
   async retrainWithFieldData(): Promise<{ samplesCollected: number; status: string }> {
-    if (!this.mlAvailable) {
-      return { samplesCollected: 0, status: 'ml_unavailable' };
-    }
-
     try {
-      // Collect last 30 days of readings across all units (capped at 50k rows for memory)
       const rows: Array<{ power: string; voltage: string; current: string; water_flow: string }> =
         await this.meterRepo.query(
           `SELECT power, voltage, current, water_flow
@@ -135,8 +132,8 @@ export class MlService implements OnModuleInit {
            LIMIT 50000`,
         );
 
-      if (rows.length < 20) {
-        this.logger.warn(`ML retraining skipped — only ${rows.length} readings available (need ≥ 20)`);
+      if (rows.length < MlService.MIN_SAMPLES) {
+        this.logger.warn(`ML retraining skipped — only ${rows.length} readings available (need ≥ ${MlService.MIN_SAMPLES})`);
         return { samplesCollected: rows.length, status: 'insufficient_data' };
       }
 
@@ -147,13 +144,20 @@ export class MlService implements OnModuleInit {
         water_flow: parseFloat(r.water_flow) || 0,
       }));
 
-      await firstValueFrom(
-        this.http.post('/train', { features, source: 'field' }),
-      );
-
+      const stats = this.computeFeatureStats(features);
+      const prev = this.modelStats;
+      this.modelStats = {
+        ...stats,
+        sampleCount: rows.length,
+        trainedAt:   Date.now(),
+        history: [
+          ...(prev?.history ?? []).slice(-9),
+          { timestamp: Date.now(), sample_count: rows.length, source: 'field' },
+        ],
+      };
+      this.mlAvailable = true;
+      this.scoreCache.clear();
       this.logger.log(`ML model retrained on ${rows.length} real readings`);
-      this.scoreCache.clear(); // invalidate stale scores
-
       return { samplesCollected: rows.length, status: 'trained' };
     } catch (err) {
       this.logger.warn(`ML retraining failed: ${(err as Error).message}`);
@@ -180,24 +184,6 @@ export class MlService implements OnModuleInit {
       confidence = stats.readingDays >= 7 ? 'high' : stats.readingDays >= 3 ? 'medium' : 'low';
     }
 
-    if (this.mlAvailable) {
-      try {
-        const { data } = await firstValueFrom(
-          this.http.post<{ days_remaining: number }>('/predict/depletion', {
-            balance_rp:    balance,
-            avg_daily_kwh: stats.avgDailyKwh,
-            avg_daily_m3:  stats.avgDailyM3,
-            tariff_elec:   elecTariff,
-            tariff_water:  waterTariff,
-          }),
-        );
-        estimatedDaysRemaining = data.days_remaining;
-        confidence = 'high';
-      } catch {
-        // ML unavailable — use rule-based estimate
-      }
-    }
-
     return {
       unitNo,
       balanceRp:              balance,
@@ -221,8 +207,17 @@ export class MlService implements OnModuleInit {
 
   // ── Private ────────────────────────────────────────────────────────────────
 
+  private async initModel(): Promise<void> {
+    const result = await this.retrainWithFieldData();
+    if (result.status === 'trained') {
+      this.logger.log(`In-process ML model ready — ${result.samplesCollected} samples, Z-score threshold ${MlService.ANOMALY_THRESHOLD}`);
+    } else {
+      this.logger.warn(`ML model deferred — ${result.status} (${result.samplesCollected} samples). Will retry after first retraining interval.`);
+    }
+  }
+
   private async scoreUnit(deviceId: string): Promise<AnomalyScore | null> {
-    if (!this.mlAvailable) return null;
+    if (!this.mlAvailable || !this.modelStats) return null;
 
     try {
       const unit = await this.unitRepo.findOne({ where: { device_id: deviceId } });
@@ -236,21 +231,18 @@ export class MlService implements OnModuleInit {
       if (readings.length < 5) return null;
 
       const features = readings.map(r => ({
-        power:      r.power      ?? 0,
-        voltage:    r.voltage    ?? 220,
-        current:    r.current    ?? 0,
-        water_flow: r.water_flow ?? 0,
+        power:      Number(r.power)      || 0,
+        voltage:    Number(r.voltage)    || 220,
+        current:    Number(r.current)    || 0,
+        water_flow: Number(r.water_flow) || 0,
       }));
 
-      const { data } = await firstValueFrom(
-        this.http.post<{ score: number; is_anomaly: boolean }>('/predict/anomaly', { features }),
-      );
-
+      const { score, isAnomaly } = this.computeScore(features);
       const result: AnomalyScore = {
         deviceId,
         unitNo:    unit.unit_no,
-        score:     data.score,
-        isAnomaly: data.is_anomaly,
+        score,
+        isAnomaly,
         scoredAt:  new Date().toISOString(),
       };
 
@@ -259,6 +251,48 @@ export class MlService implements OnModuleInit {
     } catch {
       return null;
     }
+  }
+
+  /**
+   * Score a window of readings using per-feature Z-score.
+   * Score = 95th-percentile of max-Z across all readings in the window.
+   * Reason: 95th percentile is robust to individual noisy readings while
+   * still detecting sustained deviations.
+   */
+  private computeScore(features: Array<{ power: number; voltage: number; current: number; water_flow: number }>): { score: number; isAnomaly: boolean } {
+    if (!this.modelStats) return { score: 0, isAnomaly: false };
+    const s = this.modelStats;
+
+    const perReadingMax = features.map(f => Math.max(
+      this.zScore(f.power,      s.power),
+      this.zScore(f.voltage,    s.voltage),
+      this.zScore(f.current,    s.current),
+      this.zScore(f.water_flow, s.water_flow),
+    ));
+
+    const sorted = [...perReadingMax].sort((a, b) => a - b);
+    const p95idx = Math.floor(sorted.length * 0.95);
+    const score = parseFloat((sorted[p95idx] ?? sorted[sorted.length - 1]).toFixed(4));
+    return { score, isAnomaly: score > MlService.ANOMALY_THRESHOLD };
+  }
+
+  private zScore(value: number, stats: FeatureStats): number {
+    if (stats.std < 0.001) return 0;
+    return Math.abs((value - stats.mean) / stats.std);
+  }
+
+  private computeFeatureStats(
+    features: Array<{ power: number; voltage: number; current: number; water_flow: number }>,
+  ): Pick<ModelStats, 'power' | 'voltage' | 'current' | 'water_flow'> {
+    const keys = ['power', 'voltage', 'current', 'water_flow'] as const;
+    const result = {} as Record<typeof keys[number], FeatureStats>;
+    for (const k of keys) {
+      const vals = features.map(f => f[k]);
+      const mean = vals.reduce((s, v) => s + v, 0) / vals.length;
+      const variance = vals.reduce((s, v) => s + (v - mean) ** 2, 0) / vals.length;
+      result[k] = { mean, std: Math.sqrt(variance) };
+    }
+    return result;
   }
 
   private async get7DayStats(deviceId: string) {
@@ -283,16 +317,5 @@ export class MlService implements OnModuleInit {
       avgDailyM3:  totalM3  / rows.length,
       readingDays: rows.length,
     };
-  }
-
-  private async checkMlAvailability(): Promise<void> {
-    try {
-      await firstValueFrom(this.http.get('/health'));
-      this.mlAvailable = true;
-      this.logger.log(`ML service reachable at ${this.cfg.get('ML_SERVICE_URL')}`);
-    } catch {
-      this.mlAvailable = false;
-      this.logger.warn('ML service not reachable — rule-based anomaly detection only.');
-    }
   }
 }
