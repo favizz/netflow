@@ -18,6 +18,8 @@ const ACTION_CATEGORY: Record<string, string> = {
     TOKEN_PURCHASE: 'Transactions',
     ANOMALY: 'Anomaly',
     CLIENT_ERROR: 'System Error',
+    OTA_PUSH: 'Firmware',
+    OTA_ACK: 'Firmware',
 };
 
 function deriveCategory(action: string): string {
@@ -27,7 +29,7 @@ function deriveCategory(action: string): string {
     return 'Other';
 }
 
-const CATEGORIES = ['All', 'User Management', 'Unit Management', 'Calibration', 'Tariff', 'Transactions', 'Anomaly', 'System Error', 'Other'];
+const CATEGORIES = ['All', 'User Management', 'Unit Management', 'Calibration', 'Tariff', 'Transactions', 'Anomaly', 'Firmware', 'System Error', 'Other'];
 const RESULTS = ['All', 'success', 'failure', 'info'];
 
 const RESULT_STYLE: Record<string, string> = {
