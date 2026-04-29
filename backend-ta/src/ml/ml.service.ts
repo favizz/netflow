@@ -102,11 +102,7 @@ export class MlService implements OnModuleInit {
     return [...this.scoreCache.values()];
   }
 
-<<<<<<< HEAD
   getModelInfo(): ModelInfo | null {
-=======
-  async getModelInfo(): Promise<ModelInfo | null> {
->>>>>>> 482885c5cbd5c464b595ed7e5b547f72c416672a
     if (!this.mlAvailable || !this.modelStats) return null;
     return {
       modelFitted:  true,
