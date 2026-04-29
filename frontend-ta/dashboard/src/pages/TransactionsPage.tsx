@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import { ChevronLeft, ChevronRight, Search, Filter, ChevronDown } from "lucide-react";
 import { fetchApi } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -24,12 +24,56 @@ const STATUS_STYLE: Record<string, string> = {
     failed:  "bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 ring-red-600/20",
 };
 
+const STATUS_OPTIONS = ["All", "success", "pending", "failed"] as const;
+const METHOD_OPTIONS = ["All", "qris", "transfer", "ewallet"] as const;
+
 const PAGE_SIZE = 10;
+
+function FilterDropdown<T extends string>({ label, options, value, onChange }: {
+    label: string;
+    options: readonly T[];
+    value: T;
+    onChange: (v: T) => void;
+}) {
+    const [open, setOpen] = useState(false);
+    const display = value === "All" ? label : (METHOD_LABEL[value] ?? value);
+    return (
+        <div className="relative">
+            <button
+                onClick={() => setOpen(o => !o)}
+                className="flex items-center space-x-2 rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600"
+            >
+                <Filter className="h-4 w-4" />
+                <span className="capitalize">{display}</span>
+                <ChevronDown className="h-4 w-4 ml-1" />
+            </button>
+            {open && (
+                <div className="absolute right-0 mt-2 min-w-[160px] rounded-md bg-white dark:bg-gray-800 py-1 shadow-lg ring-1 ring-black ring-opacity-5 dark:ring-gray-600 z-10">
+                    {options.map(o => (
+                        <button
+                            key={o}
+                            onClick={() => { onChange(o); setOpen(false); }}
+                            className={cn(
+                                "block w-full px-4 py-2 text-left text-sm capitalize hover:bg-gray-50 dark:hover:bg-gray-700",
+                                value === o ? "text-primary font-medium" : "text-gray-700 dark:text-gray-300"
+                            )}
+                        >
+                            {o === "All" ? "All" : (METHOD_LABEL[o] ?? o)}
+                        </button>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
 
 export default function TransactionsPage() {
     const [transactions, setTransactions] = useState<Tx[]>([]);
     const [loading, setLoading] = useState(true);
     const [page, setPage] = useState(1);
+    const [search, setSearch] = useState("");
+    const [statusFilter, setStatusFilter] = useState<typeof STATUS_OPTIONS[number]>("All");
+    const [methodFilter, setMethodFilter] = useState<typeof METHOD_OPTIONS[number]>("All");
 
     useEffect(() => {
         fetchApi('/admin/transactions')
@@ -43,20 +87,53 @@ export default function TransactionsPage() {
                     status: tx.status,
                 })));
             })
-            .catch(console.error)
+            .catch(() => {})
             .finally(() => setLoading(false));
     }, []);
 
-    const totalPages = Math.max(1, Math.ceil(transactions.length / PAGE_SIZE));
-    const pageData = transactions.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-    const start = transactions.length === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
-    const end = Math.min(page * PAGE_SIZE, transactions.length);
+    const filtered = useMemo(() => {
+        const q = search.toLowerCase();
+        return transactions.filter(tx => {
+            const matchSearch = !q || tx.id.toLowerCase().includes(q) || (tx.unitNo ?? '').toLowerCase().includes(q);
+            const matchStatus = statusFilter === "All" || tx.status === statusFilter;
+            const matchMethod = methodFilter === "All" || tx.method === methodFilter;
+            return matchSearch && matchStatus && matchMethod;
+        });
+    }, [transactions, search, statusFilter, methodFilter]);
+
+    const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+    const pageData = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+    const start = filtered.length === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+    const end = Math.min(page * PAGE_SIZE, filtered.length);
+
+    const resetPage = () => setPage(1);
 
     return (
         <div className="space-y-6">
             <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Transaction Logs</h1>
 
             <div className="rounded-lg bg-white dark:bg-gray-800 shadow-sm ring-1 ring-gray-900/5 dark:ring-gray-700 overflow-hidden">
+                {/* Filter header — same pattern as InventoryTable */}
+                <div className="border-b border-gray-200 dark:border-gray-700 px-6 py-4">
+                    <div className="flex flex-col space-y-4 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
+                        <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">Payment History</h2>
+                        <div className="flex space-x-3">
+                            <div className="relative">
+                                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400 dark:text-gray-500" />
+                                <input
+                                    type="text"
+                                    value={search}
+                                    onChange={e => { setSearch(e.target.value); resetPage(); }}
+                                    placeholder="Search ID or unit..."
+                                    className="h-9 w-56 rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 pl-9 pr-4 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary placeholder:text-gray-400 dark:placeholder:text-gray-500"
+                                />
+                            </div>
+                            <FilterDropdown label="Status" options={STATUS_OPTIONS} value={statusFilter} onChange={v => { setStatusFilter(v); resetPage(); }} />
+                            <FilterDropdown label="Method" options={METHOD_OPTIONS} value={methodFilter} onChange={v => { setMethodFilter(v); resetPage(); }} />
+                        </div>
+                    </div>
+                </div>
+
                 <table className="w-full text-left text-sm text-gray-500 dark:text-gray-400">
                     <thead className="bg-gray-50 dark:bg-gray-800/60 text-xs uppercase text-gray-700 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700">
                         <tr>
@@ -76,10 +153,10 @@ export default function TransactionsPage() {
                                 </td>
                             </tr>
                         )}
-                        {!loading && transactions.length === 0 && (
+                        {!loading && filtered.length === 0 && (
                             <tr>
                                 <td colSpan={6} className="px-6 py-8 text-center text-gray-400 dark:text-gray-500">
-                                    No transactions available.
+                                    No transactions found.
                                 </td>
                             </tr>
                         )}
@@ -110,7 +187,7 @@ export default function TransactionsPage() {
                 {/* Pagination */}
                 <div className="flex items-center justify-between border-t border-gray-200 dark:border-gray-700 px-6 py-4">
                     <div className="text-sm text-gray-500 dark:text-gray-400">
-                        {transactions.length === 0 ? "No results" : `Showing ${start}–${end} of ${transactions.length}`}
+                        {filtered.length === 0 ? "No results" : `Showing ${start}–${end} of ${filtered.length}`}
                     </div>
                     <div className="flex items-center space-x-2">
                         <button

@@ -162,7 +162,7 @@ export default function LogsPage() {
                         System Logs
                     </h1>
                     <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                        Audit trail of admin actions and system events. {filtered.length} entries.
+                        Audit trail of admin actions and system events.
                     </p>
                 </div>
                 <a
@@ -176,22 +176,29 @@ export default function LogsPage() {
                 </a>
             </div>
 
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:flex-wrap">
-                <div className="relative flex-1 min-w-[200px] max-w-sm">
-                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" />
-                    <input
-                        type="text"
-                        value={search}
-                        onChange={e => { setSearch(e.target.value); setPage(0); }}
-                        placeholder="Search logs..."
-                        className="h-9 w-full rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 pl-9 pr-4 text-sm text-gray-900 dark:text-white outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-                    />
-                </div>
-                <FilterDropdown label="Category" options={CATEGORIES} value={filterCategory} onChange={v => { setFilterCategory(v); setPage(0); }} />
-                <FilterDropdown label="Result" options={RESULTS} value={filterResult} onChange={v => { setFilterResult(v); setPage(0); }} />
-            </div>
-
             <div className="rounded-lg bg-white dark:bg-gray-900 shadow-sm ring-1 ring-gray-900/5 dark:ring-gray-700 overflow-hidden">
+                {/* Filter header — same pattern as InventoryTable */}
+                <div className="border-b border-gray-200 dark:border-gray-700 px-6 py-4">
+                    <div className="flex flex-col space-y-4 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
+                        <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">
+                            Audit Trail <span className="ml-2 text-xs font-normal text-gray-400 dark:text-gray-500">{filtered.length} entries</span>
+                        </h2>
+                        <div className="flex space-x-3">
+                            <div className="relative">
+                                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400 dark:text-gray-500" />
+                                <input
+                                    type="text"
+                                    value={search}
+                                    onChange={e => { setSearch(e.target.value); setPage(0); }}
+                                    placeholder="Search logs..."
+                                    className="h-9 w-56 rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 pl-9 pr-4 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary placeholder:text-gray-400 dark:placeholder:text-gray-500"
+                                />
+                            </div>
+                            <FilterDropdown label="Category" options={CATEGORIES} value={filterCategory} onChange={v => { setFilterCategory(v); setPage(0); }} />
+                            <FilterDropdown label="Result" options={RESULTS} value={filterResult} onChange={v => { setFilterResult(v); setPage(0); }} />
+                        </div>
+                    </div>
+                </div>
                 <div className="overflow-x-auto">
                     <table className="w-full text-left text-sm text-gray-500 dark:text-gray-400">
                         <thead className="bg-gray-50 dark:bg-gray-800 text-xs uppercase text-gray-700 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">

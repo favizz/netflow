@@ -1,6 +1,5 @@
 import { Module } from '@nestjs/common';
-import { HttpModule } from '@nestjs/axios';
-import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { MlService } from './ml.service';
 import { MlController } from './ml.controller';
@@ -13,14 +12,6 @@ import { TariffModule } from '../tariff/tariff.module';
   imports: [
     ConfigModule,
     TypeOrmModule.forFeature([MeterReading, Unit]),
-    HttpModule.registerAsync({
-      imports: [ConfigModule],
-      useFactory: (cfg: ConfigService) => ({
-        baseURL: cfg.get('ML_SERVICE_URL'),
-        timeout: 8_000,
-      }),
-      inject: [ConfigService],
-    }),
     UnitModule,
     TariffModule,
   ],
