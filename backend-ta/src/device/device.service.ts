@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
@@ -10,6 +10,7 @@ import { TariffService } from '../tariff/tariff.service';
 
 @Injectable()
 export class DeviceService {
+  private readonly logger = new Logger(DeviceService.name);
   constructor(
     @InjectRepository(MeterReading)
     private readonly meterRepo: Repository<MeterReading>,
@@ -96,7 +97,7 @@ export class DeviceService {
           const cloudBalance = Number(unit.balance);
           const diff = Math.abs(cloudBalance - incomingBalance);
           if (diff > 500) {
-            console.warn(`[SECURITY] Balance mismatch on ${deviceId}: edge Rp ${incomingBalance} vs cloud Rp ${cloudBalance}`);
+            this.logger.warn(`Balance mismatch on ${deviceId}: edge Rp ${incomingBalance} vs cloud Rp ${cloudBalance}`);
           } else {
             unit.balance = incomingBalance;
           }

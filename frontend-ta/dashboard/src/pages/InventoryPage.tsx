@@ -35,7 +35,7 @@ export default function InventoryPage() {
                 }));
                 setData(mapped);
             })
-            .catch(console.error)
+            .catch(() => {})
             .finally(() => setIsLoading(false));
     }, []);
 

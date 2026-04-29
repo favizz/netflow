@@ -158,9 +158,7 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
 
     const deviceId = `DEV-${unitId}`
     const topic = MQTT_CONFIG.telemetryTopic(deviceId)
-    
-    console.log(`[MQTT] Connecting to ${MQTT_CONFIG.brokerUrl} for topic ${topic}`)
-    
+
     const client = mqtt.connect(MQTT_CONFIG.brokerUrl, {
       username: MQTT_CONFIG.username || undefined,
       password: MQTT_CONFIG.password || undefined,
@@ -171,31 +169,17 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
     mqttRef.current = client
 
     client.on("connect", () => {
-      console.log("[MQTT] Connected successfully")
       setMqttConnected(true)
       client.subscribe(topic, (err) => {
-        if (err) {
-          console.error("[MQTT] Subscribe error:", err)
-          toast.error("Gagal berlangganan data live")
-        } else {
-          console.log(`[MQTT] Subscribed to ${topic}`)
-        }
+        if (err) toast.error("Gagal berlangganan data live")
       })
     })
 
-    client.on("offline",  () => {
-      console.warn("[MQTT] Went offline")
-      setMqttConnected(false)
-    })
+    client.on("offline",  () => { setMqttConnected(false) })
 
     client.on("error", (err) => {
-      console.error("[MQTT] Connection error:", err)
       setMqttConnected(false)
       toast.error(`MQTT Error: ${err.message}`)
-    })
-
-    client.on("reconnect", () => {
-      console.log("[MQTT] Attempting to reconnect...")
     })
 
     client.on("message", (t, msg) => {
@@ -230,7 +214,7 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
           try { p = JSON.parse(new TextDecoder().decode(uint8)) } catch { /* not json */ }
         }
 
-        if (!p) { console.warn("[MQTT] Could not decode frame:", uint8.length, "B"); return }
+        if (!p) return
 
         const now = new Date()
         const watts    = Number(p.p ?? p.active_power_w ?? 0)
@@ -251,13 +235,10 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
           const next = [...prev, point]
           return next.length > 60 ? next.slice(-60) : next
         })
-      } catch (err) {
-        console.error("[MQTT] Message processing error:", err)
-      }
+      } catch { /* malformed frame */ }
     })
 
     return () => {
-      console.log("[MQTT] Cleaning up connection")
       client.end(true)
       setMqttConnected(false)
       mqttRef.current = null

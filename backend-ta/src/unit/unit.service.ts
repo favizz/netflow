@@ -12,6 +12,9 @@ import { MeterReading } from '../device/entities/device.entity';
 import { TariffService } from '../tariff/tariff.service';
 import { AuditLogService } from '../audit-log/audit-log.service';
 
+const ONLINE_THRESHOLD_MS = 5 * 60 * 1000;
+const LOW_BALANCE_THRESHOLD_RP = 20_000;
+
 @Injectable()
 export class UnitService {
   constructor(
@@ -140,7 +143,7 @@ export class UnitService {
 
     const lastTelemetryAt = latest?.time ? new Date(latest.time).toISOString() : null;
     const online = lastTelemetryAt
-      ? Date.now() - new Date(lastTelemetryAt).getTime() <= 5 * 60 * 1000
+      ? Date.now() - new Date(lastTelemetryAt).getTime() <= ONLINE_THRESHOLD_MS
       : false;
 
     return {
@@ -189,7 +192,7 @@ export class UnitService {
     const rows = filtered.map((u) => {
       const lastTime = latestMap.get(u.device_id);
       const lastTelemetryAt = lastTime ? lastTime.toISOString() : null;
-      const online = lastTime ? now - lastTime.getTime() <= 5 * 60 * 1000 : false;
+      const online = lastTime ? now - lastTime.getTime() <= ONLINE_THRESHOLD_MS : false;
 
       return {
         unitNo: u.unit_no,
@@ -215,7 +218,7 @@ export class UnitService {
     const unit = await this.findByUnitNo(unitNo);
     const notifications: Array<{ type: 'warning' | 'error' | 'info'; message: string; timestamp: string }> = [];
 
-    if (Number(unit.balance) <= 20000) {
+    if (Number(unit.balance) <= LOW_BALANCE_THRESHOLD_RP) {
       notifications.push({
         type: 'warning',
         message: 'Saldo hampir habis. Lakukan top-up untuk menghindari cut-off.',
@@ -237,7 +240,7 @@ export class UnitService {
     });
 
     const online = latest?.time
-      ? Date.now() - new Date(latest.time).getTime() <= 5 * 60 * 1000
+      ? Date.now() - new Date(latest.time).getTime() <= ONLINE_THRESHOLD_MS
       : false;
 
     if (!online) {

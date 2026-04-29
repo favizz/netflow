@@ -66,6 +66,9 @@ export function EditUnitModal({ unit, onClose, onSuccess }: EditUnitModalProps) 
                             type="text"
                             value={deviceId}
                             onChange={(e) => setDeviceId(e.target.value)}
+                            maxLength={30}
+                            pattern="[A-Za-z0-9_\-]{3,30}"
+                            title="3–30 alphanumeric characters, hyphens, or underscores"
                             className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                         />
                     </div>

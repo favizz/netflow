@@ -41,7 +41,7 @@ export default function DevicesPage() {
                 }));
                 setData(mapped);
             })
-            .catch(console.error)
+            .catch(() => {})
             .finally(() => setIsLoading(false));
     }, []);
 

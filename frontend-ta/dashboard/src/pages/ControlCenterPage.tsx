@@ -203,7 +203,7 @@ export default function ControlCenterPage() {
                 setElecTariff(sorted('electricity')[0] ?? null);
                 setWaterTariff(sorted('water')[0] ?? null);
             })
-            .catch(console.error);
+            .catch((err: any) => addLog('err', `Failed to load tariffs: ${err.message}`));
     }, []);
 
     useEffect(() => {
@@ -491,12 +491,16 @@ export default function ControlCenterPage() {
                         <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Binary Link (URL to .bin)</label>
                         <input type="url" value={otaBinaryLink} onChange={e => setOtaBinaryLink(e.target.value)}
                             placeholder="https://raw.githubusercontent.com/.../firmware.bin"
+                            maxLength={500}
                             className="block w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-1.5 text-sm text-gray-900 dark:text-gray-100 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary" />
                     </div>
                     <div>
                         <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Version</label>
                         <input type="text" value={otaVersion} onChange={e => setOtaVersion(e.target.value)}
                             placeholder="1.2.0"
+                            maxLength={20}
+                            pattern="\d+\.\d+\.\d+"
+                            title="Semantic version format: 1.2.0"
                             className="block w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-1.5 text-sm text-gray-900 dark:text-gray-100 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary" />
                     </div>
                 </div>

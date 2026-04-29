@@ -49,13 +49,13 @@ export default function ManagementPage() {
     const [residentSearch, setResidentSearch] = useState("");
 
     const loadAll = useCallback(() => {
-        fetchApi('/admin/accounts').then(setAccounts).catch(console.error);
-        fetchApi('/admin/residents').then(setResidents).catch(console.error);
+        fetchApi('/admin/accounts').then(setAccounts).catch(() => {});
+        fetchApi('/admin/residents').then(setResidents).catch(() => {});
         fetchApi('/unit').then((data: any[]) => setUnits(data.map(u => ({
             id: u.id,
             unit_no: u.unit_no,
             resident_email: u.resident_email || null,
-        })))).catch(console.error);
+        })))).catch(() => {});
     }, []);
 
     useEffect(() => { loadAll(); }, [loadAll]);
@@ -232,9 +232,11 @@ export default function ManagementPage() {
                             {addError && <p className="text-xs text-red-600">{addError}</p>}
                             <div className="grid grid-cols-2 gap-2">
                                 <input required type="email" placeholder="Email address *" value={addForm.email}
+                                    maxLength={255}
                                     onChange={e => setAddForm(f => ({ ...f, email: e.target.value }))}
                                     className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary" />
                                 <input type="text" placeholder="Display name (optional)" value={addForm.name}
+                                    maxLength={100}
                                     onChange={e => setAddForm(f => ({ ...f, name: e.target.value }))}
                                     className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary" />
                             </div>

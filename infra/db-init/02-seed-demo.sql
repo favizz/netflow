@@ -30,24 +30,24 @@ INSERT IGNORE INTO tariffs (utility_type, price_per_unit, effective_date) VALUES
 
 INSERT IGNORE INTO residents (email, name, role) VALUES
   ('izza.diasputra10@gmail.com', 'System Admin',     'admin'),
-  ('18222070@std.stei.itb.ac.id', 'Budi Santoso',    'resident'),
-  ('rina.hapsari@gmail.com',      'Rina Hapsari',    'resident'),
-  ('dedi.kurniawan@yahoo.com',    'Dedi Kurniawan',  'resident'),
-  ('siti.rahayu@gmail.com',       'Siti Rahayu',     'resident'),
-  ('ahmad.fauzi@outlook.com',     'Ahmad Fauzi',     'resident'),
-  ('dewi.permata@gmail.com',      'Dewi Permata',    'resident'),
-  ('hendra.susanto@gmail.com',    'Hendra Susanto',  'resident'),
-  ('maya.lestari@hotmail.com',    'Maya Lestari',    'resident'),
-  ('rizki.pratama@gmail.com',     'Rizki Pratama',   'resident'),
-  ('novia.anggraini@gmail.com',   'Novia Anggraini', 'resident'),
-  ('fajar.nugroho@gmail.com',     'Fajar Nugroho',   'resident'),
-  ('ayu.rahmawati@gmail.com',     'Ayu Rahmawati',   'resident'),
-  ('dian.safitri@gmail.com',      'Dian Safitri',    'resident'),
-  ('bagas.wicaksono@gmail.com',   'Bagas Wicaksono', 'resident'),
-  ('laras.anggraini@gmail.com',   'Laras Anggraini', 'resident'),
-  ('kevin.abadi@gmail.com',       'Kevin Abadi',     'resident'),
-  ('nina.suryani@gmail.com',      'Nina Suryani',    'resident'),
-  ('yusuf.hakim@gmail.com',       'Yusuf Hakim',     'resident');
+  ('cubloxitwo@gmail.com',       'Resident Two',     'resident'),
+  ('cubloxithree@gmail.com',     'Resident Three',   'resident'),
+  ('cubloxifour@gmail.com',      'Resident Four',    'resident'),
+  ('cubloxifive@gmail.com',      'Resident Five',    'resident'),
+  ('cubloxisix@gmail.com',       'Resident Six',     'resident'),
+  ('cubloxiseven@gmail.com',     'Resident Seven',   'resident'),
+  ('cubloxieight@gmail.com',     'Resident Eight',   'resident'),
+  ('cubloxinine@gmail.com',      'Resident Nine',    'resident'),
+  ('cubloxiten@gmail.com',       'Resident Ten',     'resident'),
+  ('cubloxieleven@gmail.com',    'Resident Eleven',  'resident'),
+  ('cubloxitwelve@gmail.com',    'Resident Twelve',  'resident'),
+  ('cubloxithirteen@gmail.com',  'Resident Thirteen','resident'),
+  ('cubloxifourteen@gmail.com',  'Resident Fourteen','resident'),
+  ('cubloxififteen@gmail.com',   'Resident Fifteen', 'resident'),
+  ('cubloxisixteen@gmail.com',   'Resident Sixteen', 'resident'),
+  ('cubloxiseventeen@gmail.com', 'Resident Seventeen','resident'),
+  ('cubloxieighteen@gmail.com',  'Resident Eighteen','resident'),
+  ('cubloxinineteen@gmail.com',  'Resident Nineteen','resident');
 
 -- -----------------------------------------
 -- 4. UNITS (20 units across 3 towers)
@@ -58,27 +58,27 @@ INSERT IGNORE INTO residents (email, name, role) VALUES
 
 INSERT IGNORE INTO units (building_id, unit_no, device_id, resident_email, balance, relay_status, valve_status, last_energy_reading, last_water_reading) VALUES
   -- Tower A
-  (2, 'A-101', 'DEV-A-101', '18222070@std.stei.itb.ac.id', 150000.00, 1, 1, 0, 0),
-  (2, 'A-102', 'DEV-A-102', '18222070@std.stei.itb.ac.id',  12000.00, 1, 1, 0, 0),
-  (2, 'A-103', 'DEV-A-103', 'rina.hapsari@gmail.com',        75000.00, 1, 1, 0, 0),
-  (2, 'A-201', 'DEV-A-201', 'dedi.kurniawan@yahoo.com',     200000.00, 1, 1, 0, 0),
-  (2, 'A-202', 'DEV-A-202', 'siti.rahayu@gmail.com',         95000.00, 1, 1, 0, 0),
-  (2, 'A-203', 'DEV-A-203', 'ahmad.fauzi@outlook.com',       30000.00, 1, 1, 0, 0),
-  (2, 'A-301', 'DEV-A-301', 'dewi.permata@gmail.com',       175000.00, 1, 1, 0, 0),
+  (2, 'A-101', 'DEV-A-101', 'cubloxitwo@gmail.com',         150000.00, 1, 1, 0, 0),
+  (2, 'A-102', 'DEV-A-102', 'cubloxitwo@gmail.com',          12000.00, 1, 1, 0, 0),
+  (2, 'A-103', 'DEV-A-103', 'cubloxithree@gmail.com',        75000.00, 1, 1, 0, 0),
+  (2, 'A-201', 'DEV-A-201', 'cubloxifour@gmail.com',        200000.00, 1, 1, 0, 0),
+  (2, 'A-202', 'DEV-A-202', 'cubloxifive@gmail.com',         95000.00, 1, 1, 0, 0),
+  (2, 'A-203', 'DEV-A-203', 'cubloxisix@gmail.com',          30000.00, 1, 1, 0, 0),
+  (2, 'A-301', 'DEV-A-301', 'cubloxiseven@gmail.com',       175000.00, 1, 1, 0, 0),
   (2, 'A-302', 'DEV-A-302', NULL,                             50000.00, 1, 1, 0, 0),
   -- Tower B
-  (3, 'B-101', 'DEV-B-101', 'hendra.susanto@gmail.com',     120000.00, 1, 1, 0, 0),
-  (3, 'B-102', 'DEV-B-102', 'maya.lestari@hotmail.com',      45000.00, 1, 1, 0, 0),
-  (3, 'B-103', 'DEV-B-103', 'rizki.pratama@gmail.com',       88000.00, 1, 1, 0, 0),
-  (3, 'B-201', 'DEV-B-201', 'novia.anggraini@gmail.com',    250000.00, 1, 1, 0, 0),
-  (3, 'B-202', 'DEV-B-202', 'fajar.nugroho@gmail.com',        5000.00, 0, 0, 0, 0),
+  (3, 'B-101', 'DEV-B-101', 'cubloxieight@gmail.com',       120000.00, 1, 1, 0, 0),
+  (3, 'B-102', 'DEV-B-102', 'cubloxinine@gmail.com',         45000.00, 1, 1, 0, 0),
+  (3, 'B-103', 'DEV-B-103', 'cubloxiten@gmail.com',          88000.00, 1, 1, 0, 0),
+  (3, 'B-201', 'DEV-B-201', 'cubloxieleven@gmail.com',      250000.00, 1, 1, 0, 0),
+  (3, 'B-202', 'DEV-B-202', 'cubloxitwelve@gmail.com',        5000.00, 0, 0, 0, 0),
   (3, 'B-203', 'DEV-B-203', NULL,                             60000.00, 1, 1, 0, 0),
-  (3, 'B-301', 'DEV-B-301', 'ayu.rahmawati@gmail.com',      140000.00, 1, 1, 0, 0),
+  (3, 'B-301', 'DEV-B-301', 'cubloxithirteen@gmail.com',    140000.00, 1, 1, 0, 0),
   -- Tower C
-  (4, 'C-101', 'DEV-C-101', 'dian.safitri@gmail.com',        70000.00, 1, 1, 0, 0),
-  (4, 'C-102', 'DEV-C-102', 'bagas.wicaksono@gmail.com',    100000.00, 1, 1, 0, 0),
-  (4, 'C-103', 'DEV-C-103', 'laras.anggraini@gmail.com',     35000.00, 1, 1, 0, 0),
-  (4, 'C-201', 'DEV-C-201', 'kevin.abadi@gmail.com',        180000.00, 1, 1, 0, 0),
+  (4, 'C-101', 'DEV-C-101', 'cubloxifourteen@gmail.com',     70000.00, 1, 1, 0, 0),
+  (4, 'C-102', 'DEV-C-102', 'cubloxififteen@gmail.com',     100000.00, 1, 1, 0, 0),
+  (4, 'C-103', 'DEV-C-103', 'cubloxisixteen@gmail.com',      35000.00, 1, 1, 0, 0),
+  (4, 'C-201', 'DEV-C-201', 'cubloxiseventeen@gmail.com',   180000.00, 1, 1, 0, 0),
   (4, 'C-202', 'DEV-C-202', NULL,                             80000.00, 1, 1, 0, 0);
 
 -- -----------------------------------------

@@ -63,6 +63,9 @@ export function AddDeviceModal({ isOpen, onClose, onSuccess }: AddDeviceModalPro
                             type="text"
                             value={formData.unit_no}
                             onChange={(e) => setFormData({ ...formData, unit_no: e.target.value })}
+                            maxLength={10}
+                            pattern="[A-Za-z]-\d{3,4}"
+                            title="Format: A-101 or A-2401"
                             className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                             placeholder="e.g. A-101"
                         />
@@ -77,6 +80,9 @@ export function AddDeviceModal({ isOpen, onClose, onSuccess }: AddDeviceModalPro
                             type="text"
                             value={formData.device_id}
                             onChange={(e) => setFormData({ ...formData, device_id: e.target.value })}
+                            maxLength={30}
+                            pattern="[A-Za-z0-9_\-]{3,30}"
+                            title="3–30 alphanumeric characters, hyphens, or underscores"
                             className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                             placeholder="e.g. DEV-A-101"
                         />
@@ -89,6 +95,7 @@ export function AddDeviceModal({ isOpen, onClose, onSuccess }: AddDeviceModalPro
                             type="number"
                             step="1"
                             min="0"
+                            max="999999999"
                             value={formData.balance}
                             onChange={(e) => setFormData({ ...formData, balance: e.target.value })}
                             className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"

@@ -116,7 +116,7 @@ export default function UnitDetailPage() {
                     return { ...prev, status: isOnline ? "Online" : "Offline", lastUpdate: "Live Data" };
                 });
             })
-            .catch(console.error)
+            .catch(() => {})
             .finally(() => setLoadingInfo(false));
     }, [id]);
 
@@ -132,7 +132,7 @@ export default function UnitDetailPage() {
                 }));
                 setHistoricalTrends(mapped);
             })
-            .catch(console.error);
+            .catch(() => {});
     }, [unitInfo?.unit, timeRange]);
 
     useEffect(() => {
@@ -143,9 +143,7 @@ export default function UnitDetailPage() {
 
         client.on('connect', () => {
             setIsConnected(true);
-            client.subscribe([telemetryTopic], (err) => {
-                if (err) console.error("Subscription error:", err);
-            });
+            client.subscribe([telemetryTopic]);
         });
 
         client.on('message', (topic, message) => {
@@ -166,10 +164,7 @@ export default function UnitDetailPage() {
                     parsed = decodeTelemetry(new Uint8Array(message));
                 }
 
-                if (!parsed) { 
-                    console.warn(`Could not decode telemetry frame: ${message.length}B`); 
-                    return; 
-                }
+                if (!parsed) return;
 
                 if (topic === telemetryTopic) {
                     setUnitInfo((prev: any) => prev?.status !== "Online" ? { ...prev, status: "Online" } : prev);
@@ -198,9 +193,7 @@ export default function UnitDetailPage() {
                         details: parsed!,
                     }, ...prev.slice(0, 49)]);
                 }
-            } catch (err) {
-                console.warn("Failed to process telemetry payload:", err);
-            }
+            } catch { /* malformed frame */ }
         });
 
         client.on('error', () => {
@@ -216,7 +209,7 @@ export default function UnitDetailPage() {
         const newState = e.target.checked;
         setPowerState(newState);
         if (id) {
-            fetchApi(`/unit/${id}/relay`, { method: 'PATCH', body: JSON.stringify({ relayStatus: newState }) }).catch(console.error);
+            fetchApi(`/unit/${id}/relay`, { method: 'PATCH', body: JSON.stringify({ relayStatus: newState }) }).catch(() => {});
         }
         if (unitInfo?.meterSerial && mqttClient && isConnected) {
             const cmdTopic = `device/${unitInfo.meterSerial}/command`;

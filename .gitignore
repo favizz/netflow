@@ -23,6 +23,7 @@ build/
 # ── Environment files ─────────────────────────
 # Root .env (single source of truth)
 .env
+.env.dev
 # Sub-package .env files (vite envDir points to root)
 backend-ta/.env*
 frontend-ta/dashboard/.env*

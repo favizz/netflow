@@ -25,7 +25,10 @@ import { RetentionModule } from './retention/retention.module';
 @Module({
   imports: [
     // ── Config ───────────────────────────────────────────────────────────────
-    ConfigModule.forRoot({ isGlobal: true, envFilePath: '../.env' }),
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: process.env.NODE_ENV === 'production' ? '../.env' : ['../.env.dev', '../.env'],
+    }),
 
     ScheduleModule.forRoot(),
 
@@ -44,7 +47,7 @@ import { RetentionModule } from './retention/retention.module';
         // Connection pool tuned for 10 k+ concurrent units
         extra: {
           connectionLimit: cfg.get<number>('DB_POOL_SIZE', 20),
-          idleTimeoutMillis: cfg.get<number>('DB_POOL_IDLE_TIMEOUT', 30_000),
+          idleTimeout: cfg.get<number>('DB_POOL_IDLE_TIMEOUT', 30_000),
           enableKeepAlive: true,
           keepAliveInitialDelay: 10_000,
         },
