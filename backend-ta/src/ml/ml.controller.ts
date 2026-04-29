@@ -30,8 +30,8 @@ export class MlController {
 
   @UseGuards(AdminJwtGuard)
   @Get('admin/ml/model-info')
-  async getModelInfo() {
-    const info = await this.mlService.getModelInfo();
+  getModelInfo() {
+    const info = this.mlService.getModelInfo();
     if (!info) return { error: 'ML service unavailable' };
     return info;
   }
