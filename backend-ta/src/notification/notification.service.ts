@@ -22,7 +22,9 @@ export class NotificationService {
       });
       this.logger.log('SMTP transporter configured.');
     } else {
-      this.logger.warn('SMTP not fully configured. Notifications will only be logged.');
+      this.logger.warn(
+        'SMTP not fully configured. Notifications will only be logged.',
+      );
     }
   }
 
@@ -31,7 +33,9 @@ export class NotificationService {
     subject: string,
     message: string,
   ): Promise<void> {
-    this.logger.log(`[Notification] To: ${email} | Subject: ${subject} | Message: ${message}`);
+    this.logger.log(
+      `[Notification] To: ${email} | Subject: ${subject} | Message: ${message}`,
+    );
 
     if (this.transporter && email) {
       try {

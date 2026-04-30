@@ -8,7 +8,10 @@ import { Transaction } from './entities/transaction.entity';
 export const PAYMENT_EXPIRY_QUEUE = 'payment-expiry';
 
 @Processor(PAYMENT_EXPIRY_QUEUE)
-export class PaymentExpiryProcessor extends WorkerHost implements OnApplicationBootstrap {
+export class PaymentExpiryProcessor
+  extends WorkerHost
+  implements OnApplicationBootstrap
+{
   private readonly logger = new Logger(PaymentExpiryProcessor.name);
 
   constructor(
@@ -20,7 +23,9 @@ export class PaymentExpiryProcessor extends WorkerHost implements OnApplicationB
 
   onApplicationBootstrap() {
     this.worker?.on('error', (err: Error) => {
-      this.logger.warn(`Payment expiry worker error (Redis may be unavailable): ${err.message}`);
+      this.logger.warn(
+        `Payment expiry worker error (Redis may be unavailable): ${err.message}`,
+      );
     });
   }
 

@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Resident } from './resident.entity';
@@ -15,7 +19,10 @@ export class ResidentsService {
   }
 
   findAdmins(): Promise<Resident[]> {
-    return this.residentRepo.find({ where: { role: 'admin' }, order: { email: 'ASC' } });
+    return this.residentRepo.find({
+      where: { role: 'admin' },
+      order: { email: 'ASC' },
+    });
   }
 
   findByEmail(email: string): Promise<Resident | null> {
@@ -26,7 +33,13 @@ export class ResidentsService {
     const existing = await this.residentRepo.findOne({ where: { email } });
     if (existing) throw new BadRequestException('Resident already registered');
 
-    const resident = this.residentRepo.create({ email, name: name ?? null, google_id: null, picture: null, role: 'resident' });
+    const resident = this.residentRepo.create({
+      email,
+      name: name ?? null,
+      google_id: null,
+      picture: null,
+      role: 'resident',
+    });
     return this.residentRepo.save(resident);
   }
 
@@ -40,11 +53,14 @@ export class ResidentsService {
     email: string,
     data: { googleId: string; name?: string | null; picture?: string | null },
   ): Promise<void> {
-    await this.residentRepo.update({ email }, {
-      google_id: data.googleId,
-      ...(data.name !== undefined && { name: data.name }),
-      ...(data.picture !== undefined && { picture: data.picture }),
-    });
+    await this.residentRepo.update(
+      { email },
+      {
+        google_id: data.googleId,
+        ...(data.name !== undefined && { name: data.name }),
+        ...(data.picture !== undefined && { picture: data.picture }),
+      },
+    );
   }
 
   async setRole(email: string, role: 'resident' | 'admin'): Promise<Resident> {

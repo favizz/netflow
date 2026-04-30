@@ -27,7 +27,9 @@ export class UnitService {
   ) {}
 
   async create(createUnitDto: CreateUnitDto) {
-    const existing = await this.unitRepo.findOne({ where: { unit_no: createUnitDto.unit_no } });
+    const existing = await this.unitRepo.findOne({
+      where: { unit_no: createUnitDto.unit_no },
+    });
     if (existing) {
       throw new BadRequestException('unit_no already exists');
     }
@@ -65,7 +67,10 @@ export class UnitService {
   }
 
   findByResidentEmail(email: string): Promise<Unit[]> {
-    return this.unitRepo.find({ where: { resident_email: email }, order: { unit_no: 'ASC' } });
+    return this.unitRepo.find({
+      where: { resident_email: email },
+      order: { unit_no: 'ASC' },
+    });
   }
 
   async setResidentEmail(unitId: number, email: string | null): Promise<Unit> {
@@ -132,16 +137,20 @@ export class UnitService {
     const unit = await this.findByUnitNo(unitNo);
     const energyTariff = await this.tariffService.findCurrent('electricity');
 
-    const remainingKwh = energyTariff > 0 ? Number(unit.balance) / energyTariff : 0;
+    const remainingKwh =
+      energyTariff > 0 ? Number(unit.balance) / energyTariff : 0;
     const averageKwhPerHour = 0.85;
-    const estimateHours = averageKwhPerHour > 0 ? remainingKwh / averageKwhPerHour : 0;
+    const estimateHours =
+      averageKwhPerHour > 0 ? remainingKwh / averageKwhPerHour : 0;
 
     const latest = await this.meterRepo.findOne({
       where: { device_id: unit.device_id },
       order: { time: 'DESC' },
     });
 
-    const lastTelemetryAt = latest?.time ? new Date(latest.time).toISOString() : null;
+    const lastTelemetryAt = latest?.time
+      ? new Date(latest.time).toISOString()
+      : null;
     const online = lastTelemetryAt
       ? Date.now() - new Date(lastTelemetryAt).getTime() <= ONLINE_THRESHOLD_MS
       : false;
@@ -184,7 +193,8 @@ export class UnitService {
           .getRawMany();
 
       for (const row of latestReadings) {
-        if (row.last_time) latestMap.set(row.device_id, new Date(row.last_time));
+        if (row.last_time)
+          latestMap.set(row.device_id, new Date(row.last_time));
       }
     }
 
@@ -192,7 +202,9 @@ export class UnitService {
     const rows = filtered.map((u) => {
       const lastTime = latestMap.get(u.device_id);
       const lastTelemetryAt = lastTime ? lastTime.toISOString() : null;
-      const online = lastTime ? now - lastTime.getTime() <= ONLINE_THRESHOLD_MS : false;
+      const online = lastTime
+        ? now - lastTime.getTime() <= ONLINE_THRESHOLD_MS
+        : false;
 
       return {
         unitNo: u.unit_no,
@@ -216,12 +228,17 @@ export class UnitService {
 
   async getUnitNotifications(unitNo: string) {
     const unit = await this.findByUnitNo(unitNo);
-    const notifications: Array<{ type: 'warning' | 'error' | 'info'; message: string; timestamp: string }> = [];
+    const notifications: Array<{
+      type: 'warning' | 'error' | 'info';
+      message: string;
+      timestamp: string;
+    }> = [];
 
     if (Number(unit.balance) <= LOW_BALANCE_THRESHOLD_RP) {
       notifications.push({
         type: 'warning',
-        message: 'Saldo hampir habis. Lakukan top-up untuk menghindari cut-off.',
+        message:
+          'Saldo hampir habis. Lakukan top-up untuk menghindari cut-off.',
         timestamp: new Date().toISOString(),
       });
     }
@@ -229,7 +246,8 @@ export class UnitService {
     if (!unit.relay_status) {
       notifications.push({
         type: 'error',
-        message: 'Relay unit dalam status OFF. Layanan terputus atau sedang dibatasi.',
+        message:
+          'Relay unit dalam status OFF. Layanan terputus atau sedang dibatasi.',
         timestamp: new Date().toISOString(),
       });
     }

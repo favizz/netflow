@@ -4,7 +4,11 @@ import { Repository, IsNull } from 'typeorm';
 import { ClientProxy } from '@nestjs/microservices';
 import { UnitService } from '../unit/unit.service';
 import { PaymentsService } from '../payments/payments.service';
-import { encodeCalibration, encodeCommand, encodeOta } from '../common/binary-codec';
+import {
+  encodeCalibration,
+  encodeCommand,
+  encodeOta,
+} from '../common/binary-codec';
 import { CalibrationSetting } from './entities/calibration-setting.entity';
 
 export interface CalibrationSettings {
@@ -45,8 +49,10 @@ export class AdminService implements OnModuleInit {
   async getTransactions() {
     const rawTxs = await this.paymentsService.listAllTransactions();
     const units = await this.unitService.findAll();
-    const unitMap = new Map(units.map(u => [u.unit_no, u.resident_email || 'Unassigned']));
-    return rawTxs.map(tx => ({
+    const unitMap = new Map(
+      units.map((u) => [u.unit_no, u.resident_email || 'Unassigned']),
+    );
+    return rawTxs.map((tx) => ({
       ...tx,
       user: unitMap.get(tx.unitNo) || 'Unassigned',
       date: tx.createdAt,
@@ -60,31 +66,47 @@ export class AdminService implements OnModuleInit {
     return { ...this.cached };
   }
 
-  async updateSettings(patch: Partial<CalibrationSettings>): Promise<CalibrationSettings> {
+  async updateSettings(
+    patch: Partial<CalibrationSettings>,
+  ): Promise<CalibrationSettings> {
     if (patch.CAL_FACTOR_FLOWRATE !== undefined) {
-      this.cached.CAL_FACTOR_FLOWRATE = Math.min(5, Math.max(0, Number(patch.CAL_FACTOR_FLOWRATE)));
+      this.cached.CAL_FACTOR_FLOWRATE = Math.min(
+        5,
+        Math.max(0, Number(patch.CAL_FACTOR_FLOWRATE)),
+      );
     }
     if (patch.CAL_FACTOR_POWER !== undefined) {
-      this.cached.CAL_FACTOR_POWER = Math.min(2, Math.max(0, Number(patch.CAL_FACTOR_POWER)));
+      this.cached.CAL_FACTOR_POWER = Math.min(
+        2,
+        Math.max(0, Number(patch.CAL_FACTOR_POWER)),
+      );
     }
     if (patch.SENSOR_SAMPLING_TIME !== undefined) {
-      this.cached.SENSOR_SAMPLING_TIME = Math.min(10, Math.max(1, Math.round(Number(patch.SENSOR_SAMPLING_TIME))));
+      this.cached.SENSOR_SAMPLING_TIME = Math.min(
+        10,
+        Math.max(1, Math.round(Number(patch.SENSOR_SAMPLING_TIME))),
+      );
     }
     await this.persistToDb(null);
     return { ...this.cached };
   }
 
   async getDeviceSettings(deviceId: string): Promise<CalibrationSettings> {
-    const override = await this.calRepo.findOne({ where: { device_id: deviceId } });
+    const override = await this.calRepo.findOne({
+      where: { device_id: deviceId },
+    });
     if (!override) return { ...this.cached };
     return {
       CAL_FACTOR_FLOWRATE: Number(override.flowrate_factor),
-      CAL_FACTOR_POWER:    Number(override.power_factor),
+      CAL_FACTOR_POWER: Number(override.power_factor),
       SENSOR_SAMPLING_TIME: override.sampling_time,
     };
   }
 
-  async pushConfigToDevice(deviceId: string, overrides?: Partial<CalibrationSettings>): Promise<void> {
+  async pushConfigToDevice(
+    deviceId: string,
+    overrides?: Partial<CalibrationSettings>,
+  ): Promise<void> {
     const base = overrides ? { ...this.cached, ...overrides } : this.cached;
 
     if (overrides) {
@@ -97,7 +119,9 @@ export class AdminService implements OnModuleInit {
       st: base.SENSOR_SAMPLING_TIME,
     });
 
-    this.logger.log(`Pushing configuration to device [${deviceId}] | Hex: ${payload.toString('hex')}`);
+    this.logger.log(
+      `Pushing configuration to device [${deviceId}] | Hex: ${payload.toString('hex')}`,
+    );
     this.mqttClient.emit(`device/${deviceId}/config`, payload);
   }
 
@@ -107,14 +131,21 @@ export class AdminService implements OnModuleInit {
     for (const unit of units) {
       await this.pushConfigToDevice(unit.device_id);
     }
-    return { pushed: units.map(u => u.device_id) };
+    return { pushed: units.map((u) => u.device_id) };
   }
 
   // ── OTA firmware update ───────────────────────────────────────────────────
 
-  pushOtaToDevice(deviceId: string, version: string, binaryLink: string, updateNow = true): void {
+  pushOtaToDevice(
+    deviceId: string,
+    version: string,
+    binaryLink: string,
+    updateNow = true,
+  ): void {
     const payload = encodeOta({ version, binaryLink, updateNow });
-    this.logger.log(`Pushing OTA update to device [${deviceId}] (version: ${version}) | Hex: ${payload.slice(0, 10).toString('hex')}...`);
+    this.logger.log(
+      `Pushing OTA update to device [${deviceId}] (version: ${version}) | Hex: ${payload.slice(0, 10).toString('hex')}...`,
+    );
     this.mqttClient.emit(`device/${deviceId}/ota`, payload);
   }
 
@@ -122,35 +153,46 @@ export class AdminService implements OnModuleInit {
 
   sendCommand(deviceId: string, type: 'relay' | 'valve', value: 0 | 1): void {
     const payload = encodeCommand(type, value);
-    this.logger.log(`Sending command [${type}=${value}] to device [${deviceId}] | Hex: ${payload.toString('hex')}`);
+    this.logger.log(
+      `Sending command [${type}=${value}] to device [${deviceId}] | Hex: ${payload.toString('hex')}`,
+    );
     this.mqttClient.emit(`device/${deviceId}/command`, payload);
   }
 
-  async sendCommandToAll(type: 'relay' | 'valve', value: 0 | 1): Promise<{ pushed: string[] }> {
+  async sendCommandToAll(
+    type: 'relay' | 'valve',
+    value: 0 | 1,
+  ): Promise<{ pushed: string[] }> {
     const units = await this.unitService.findAll();
     for (const unit of units) {
       this.sendCommand(unit.device_id, type, value);
     }
-    return { pushed: units.map(u => u.device_id) };
+    return { pushed: units.map((u) => u.device_id) };
   }
 
-  async pushOtaToAll(version: string, binaryLink: string, updateNow = true): Promise<{ pushed: string[] }> {
+  async pushOtaToAll(
+    version: string,
+    binaryLink: string,
+    updateNow = true,
+  ): Promise<{ pushed: string[] }> {
     const units = await this.unitService.findAll();
     for (const unit of units) {
       this.pushOtaToDevice(unit.device_id, version, binaryLink, updateNow);
     }
-    return { pushed: units.map(u => u.device_id) };
+    return { pushed: units.map((u) => u.device_id) };
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
 
   private async loadFromDb(): Promise<void> {
     try {
-      const global = await this.calRepo.findOne({ where: { device_id: IsNull() } });
+      const global = await this.calRepo.findOne({
+        where: { device_id: IsNull() },
+      });
       if (global) {
         this.cached = {
           CAL_FACTOR_FLOWRATE: Number(global.flowrate_factor),
-          CAL_FACTOR_POWER:    Number(global.power_factor),
+          CAL_FACTOR_POWER: Number(global.power_factor),
           SENSOR_SAMPLING_TIME: global.sampling_time,
         };
       }
@@ -159,22 +201,22 @@ export class AdminService implements OnModuleInit {
     }
   }
 
-  private async persistToDb(deviceId: string | null, overrides?: Partial<CalibrationSettings>): Promise<void> {
-    const settings = overrides
-      ? { ...this.cached, ...overrides }
-      : this.cached;
+  private async persistToDb(
+    deviceId: string | null,
+    overrides?: Partial<CalibrationSettings>,
+  ): Promise<void> {
+    const settings = overrides ? { ...this.cached, ...overrides } : this.cached;
 
     try {
-      const whereClause = deviceId === null
-        ? { device_id: IsNull() }
-        : { device_id: deviceId };
+      const whereClause =
+        deviceId === null ? { device_id: IsNull() } : { device_id: deviceId };
       let row = await this.calRepo.findOne({ where: whereClause });
       if (!row) {
         row = this.calRepo.create({ device_id: deviceId });
       }
       row.flowrate_factor = settings.CAL_FACTOR_FLOWRATE;
-      row.power_factor    = settings.CAL_FACTOR_POWER;
-      row.sampling_time   = settings.SENSOR_SAMPLING_TIME;
+      row.power_factor = settings.CAL_FACTOR_POWER;
+      row.sampling_time = settings.SENSOR_SAMPLING_TIME;
       await this.calRepo.save(row);
     } catch {
       // Non-fatal — in-memory value is still updated

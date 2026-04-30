@@ -47,13 +47,19 @@ export class GatewayController {
   }
 
   @Get('mobile/:unitNo/transactions')
-  transactions(@Param('unitNo') unitNo: string, @CurrentUser() user: JwtPayload) {
+  transactions(
+    @Param('unitNo') unitNo: string,
+    @CurrentUser() user: JwtPayload,
+  ) {
     assertUnitAccess(user, unitNo);
     return this.gatewayService.getTransactions(unitNo);
   }
 
   @Get('mobile/:unitNo/notifications')
-  notifications(@Param('unitNo') unitNo: string, @CurrentUser() user: JwtPayload) {
+  notifications(
+    @Param('unitNo') unitNo: string,
+    @CurrentUser() user: JwtPayload,
+  ) {
     assertUnitAccess(user, unitNo);
     return this.gatewayService.getMobileAnomalies(unitNo);
   }
@@ -72,9 +78,15 @@ export class GatewayController {
     @Res() res: Response,
   ) {
     assertUnitAccess(user, unitNo);
-    const invoice = this.paymentsService.buildInvoiceForUnit(unitNo, transactionId);
+    const invoice = this.paymentsService.buildInvoiceForUnit(
+      unitNo,
+      transactionId,
+    );
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename="invoice-${transactionId}.txt"`);
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="invoice-${transactionId}.txt"`,
+    );
     return res.send(invoice);
   }
 
@@ -105,7 +117,11 @@ export class GatewayController {
     @CurrentUser() user: JwtPayload,
   ) {
     assertUnitAccess(user, unitNo);
-    return this.gatewayService.setRelayByUnitNo(unitNo, Boolean(body.status), user.sub);
+    return this.gatewayService.setRelayByUnitNo(
+      unitNo,
+      Boolean(body.status),
+      user.sub,
+    );
   }
 
   @Post('mobile/:unitNo/valve')
@@ -115,6 +131,10 @@ export class GatewayController {
     @CurrentUser() user: JwtPayload,
   ) {
     assertUnitAccess(user, unitNo);
-    return this.gatewayService.setValveByUnitNo(unitNo, Boolean(body.status), user.sub);
+    return this.gatewayService.setValveByUnitNo(
+      unitNo,
+      Boolean(body.status),
+      user.sub,
+    );
   }
 }

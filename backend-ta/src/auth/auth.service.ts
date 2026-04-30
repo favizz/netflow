@@ -1,4 +1,8 @@
-import { ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -22,7 +26,9 @@ export class AuthService {
     @InjectRepository(AuthRefreshToken)
     private readonly refreshTokenRepo: Repository<AuthRefreshToken>,
   ) {
-    this.googleClient = new OAuth2Client(this.configService.get<string>('GOOGLE_CLIENT_ID'));
+    this.googleClient = new OAuth2Client(
+      this.configService.get<string>('GOOGLE_CLIENT_ID'),
+    );
   }
 
   async devLogin(email: string) {
@@ -32,7 +38,9 @@ export class AuthService {
 
     const resident = await this.residentsService.findByEmail(email);
     if (!resident) {
-      throw new UnauthorizedException('Email not registered. Contact administrator.');
+      throw new UnauthorizedException(
+        'Email not registered. Contact administrator.',
+      );
     }
 
     const units = await this.unitService.findByResidentEmail(email);
@@ -61,7 +69,10 @@ export class AuthService {
     let googlePicture: string | null = null;
 
     try {
-      const ticket = await this.googleClient.verifyIdToken({ idToken: credential, audience: clientId });
+      const ticket = await this.googleClient.verifyIdToken({
+        idToken: credential,
+        audience: clientId,
+      });
       const p = ticket.getPayload();
       if (!p?.email) throw new Error('No email in token');
       googleSub = p.sub;
@@ -74,7 +85,9 @@ export class AuthService {
 
     const resident = await this.residentsService.findByEmail(googleEmail);
     if (!resident) {
-      throw new UnauthorizedException('Email not registered. Contact administrator.');
+      throw new UnauthorizedException(
+        'Email not registered. Contact administrator.',
+      );
     }
 
     if (!resident.google_id || resident.google_id !== googleSub) {
@@ -105,7 +118,10 @@ export class AuthService {
   async selectUnit(user: JwtPayload, unitId: number) {
     const units = await this.unitService.findByResidentEmail(user.sub);
     const unit = units.find((u) => u.id === unitId);
-    if (!unit) throw new ForbiddenException('Unit not found or not assigned to your account');
+    if (!unit)
+      throw new ForbiddenException(
+        'Unit not found or not assigned to your account',
+      );
 
     const payload: JwtPayload = {
       sub: user.sub,
@@ -123,10 +139,13 @@ export class AuthService {
 
   async refresh(refreshToken: string) {
     const key = this.hashRefreshToken(refreshToken);
-    const record = await this.refreshTokenRepo.findOne({ where: { token_hash: key } });
+    const record = await this.refreshTokenRepo.findOne({
+      where: { token_hash: key },
+    });
 
     if (!record) throw new UnauthorizedException('Invalid refresh token');
-    if (record.revoked_at) throw new UnauthorizedException('Refresh token already revoked');
+    if (record.revoked_at)
+      throw new UnauthorizedException('Refresh token already revoked');
     if (Date.now() > new Date(record.expires_at).getTime()) {
       record.revoked_at = new Date();
       await this.refreshTokenRepo.save(record);
@@ -150,7 +169,9 @@ export class AuthService {
   async logout(user: JwtPayload, refreshToken?: string) {
     if (refreshToken) {
       const key = this.hashRefreshToken(refreshToken);
-      const record = await this.refreshTokenRepo.findOne({ where: { token_hash: key } });
+      const record = await this.refreshTokenRepo.findOne({
+        where: { token_hash: key },
+      });
       if (record && record.user_sub === user.sub && !record.revoked_at) {
         record.revoked_at = new Date();
         await this.refreshTokenRepo.save(record);
@@ -178,7 +199,10 @@ export class AuthService {
     let googlePicture: string | null = null;
 
     try {
-      const ticket = await this.googleClient.verifyIdToken({ idToken: credential, audience: clientId });
+      const ticket = await this.googleClient.verifyIdToken({
+        idToken: credential,
+        audience: clientId,
+      });
       const p = ticket.getPayload();
       if (!p?.email) throw new Error('No email in token');
       googleSub = p.sub;
@@ -191,7 +215,9 @@ export class AuthService {
 
     const resident = await this.residentsService.findByEmail(googleEmail);
     if (!resident || resident.role !== 'admin') {
-      throw new UnauthorizedException('Not authorized as admin. Contact the system administrator.');
+      throw new UnauthorizedException(
+        'Not authorized as admin. Contact the system administrator.',
+      );
     }
 
     await this.residentsService.updateProfile(googleEmail, {
@@ -211,7 +237,10 @@ export class AuthService {
   }
 
   async me(user: JwtPayload) {
-    const units = user.role === 'admin' ? [] : await this.unitService.findByResidentEmail(user.sub);
+    const units =
+      user.role === 'admin'
+        ? []
+        : await this.unitService.findByResidentEmail(user.sub);
     return {
       email: user.sub,
       role: user.role,
@@ -226,10 +255,13 @@ export class AuthService {
       this.configService.get<string>('JWT_EXPIRES_IN_SECONDS') || 3600,
     );
     const refreshExpiresInSeconds = Number(
-      this.configService.get<string>('JWT_REFRESH_EXPIRES_IN_SECONDS') || 604800,
+      this.configService.get<string>('JWT_REFRESH_EXPIRES_IN_SECONDS') ||
+        604800,
     );
 
-    const accessToken = await this.jwtService.signAsync(payload, { expiresIn: accessExpiresInSeconds });
+    const accessToken = await this.jwtService.signAsync(payload, {
+      expiresIn: accessExpiresInSeconds,
+    });
 
     const refreshToken = randomBytes(48).toString('base64url');
     const refreshKey = this.hashRefreshToken(refreshToken);

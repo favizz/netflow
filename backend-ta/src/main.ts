@@ -4,7 +4,6 @@ import { MicroserviceOptions, Transport } from '@nestjs/microservices';
 import { AppModule } from './app.module';
 import compression from 'compression';
 import helmet from 'helmet';
-import type { Request, Response } from 'express';
 
 // Suppress raw ioredis reconnect noise — BullMQ inline fallback handles these
 process.on('uncaughtException', (err: NodeJS.ErrnoException) => {
@@ -24,19 +23,23 @@ async function bootstrap() {
   app.setGlobalPrefix('api');
 
   // ── Security headers ────────────────────────────────────────────────────────
-  app.use(helmet({
-    crossOriginEmbedderPolicy: false,                          // allow WebSocket MQTT from browser
-    contentSecurityPolicy: false,                              // configured per-environment in Nginx
-    crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' }, // allow Google OAuth popup postMessage
-  }));
+  app.use(
+    helmet({
+      crossOriginEmbedderPolicy: false, // allow WebSocket MQTT from browser
+      contentSecurityPolicy: false, // configured per-environment in Nginx
+      crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' }, // allow Google OAuth popup postMessage
+    }),
+  );
 
   // ── Response compression (gzip) ─────────────────────────────────────────────
   app.use(compression());
 
   // ── CORS ────────────────────────────────────────────────────────────────────
-  const allowedOrigins = process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : ['*'];
+  const allowedOrigins = process.env.CORS_ORIGIN
+    ? process.env.CORS_ORIGIN.split(',')
+    : ['*'];
   console.log(`[CORS] Allowed origins: ${allowedOrigins.join(', ')}`);
-  
+
   app.enableCors({
     origin: allowedOrigins,
     credentials: true,
@@ -61,9 +64,15 @@ async function bootstrap() {
       .setVersion('2.0')
       .addBearerAuth()
       .build();
-    SwaggerModule.setup('api/docs', app, SwaggerModule.createDocument(app, swaggerConfig));
+    SwaggerModule.setup(
+      'api/docs',
+      app,
+      SwaggerModule.createDocument(app, swaggerConfig),
+    );
     /* eslint-enable @typescript-eslint/no-require-imports, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
-  } catch { /* @nestjs/swagger not installed — API docs disabled */ }
+  } catch {
+    /* @nestjs/swagger not installed — API docs disabled */
+  }
 
   // ── MQTT microservice ────────────────────────────────────────────────────────
   app.connectMicroservice<MicroserviceOptions>({

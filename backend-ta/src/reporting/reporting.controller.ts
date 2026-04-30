@@ -8,6 +8,9 @@ export class ReportingController {
 
   @Get('trends/:unitNo')
   getTrends(@Param('unitNo') unitNo: string, @Query() query: TrendQueryDto) {
-    return this.reportingService.getConsumptionTrends(unitNo, query.period || 'daily');
+    return this.reportingService.getConsumptionTrends(
+      unitNo,
+      query.period || 'daily',
+    );
   }
 }

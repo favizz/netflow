@@ -28,11 +28,15 @@ export class GatewayService {
   async getMobileAnomalies(unitNo: string) {
     const anomalies = await this.anomalyService.getAnomaliesForUnit(unitNo);
     const txs = await this.paymentsService.listTransactionsForUnit(unitNo);
-    
+
     // Get last 5 successful transactions
     const successfulTxs = txs
       .filter((tx) => tx.status === 'success')
-      .sort((a, b) => new Date(b.createdAt ?? '').getTime() - new Date(a.createdAt ?? '').getTime())
+      .sort(
+        (a, b) =>
+          new Date(b.createdAt ?? '').getTime() -
+          new Date(a.createdAt ?? '').getTime(),
+      )
       .slice(0, 5);
 
     const topupNotifs = successfulTxs.map((tx) => ({
@@ -43,8 +47,11 @@ export class GatewayService {
       metadata: { amount: tx.amount, tx_id: tx.id },
       detectedAt: tx.confirmedAt || tx.createdAt,
     }));
-    
-    return [...topupNotifs, ...anomalies].sort((a, b) => new Date(b.detectedAt).getTime() - new Date(a.detectedAt).getTime());
+
+    return [...topupNotifs, ...anomalies].sort(
+      (a, b) =>
+        new Date(b.detectedAt).getTime() - new Date(a.detectedAt).getTime(),
+    );
   }
 
   getMobileTrends(unitNo: string, period: 'daily' | 'monthly') {
@@ -62,14 +69,20 @@ export class GatewayService {
   async setRelayByUnitNo(unitNo: string, on: boolean, actorEmail?: string) {
     const unit = await this.unitService.findByUnitNo(unitNo);
     await this.unitService.setRelayStatus(unit.id, on, actorEmail);
-    this.mqttClient.emit(`device/${unit.device_id}/command`, encodeCommand('relay', on ? 1 : 0));
+    this.mqttClient.emit(
+      `device/${unit.device_id}/command`,
+      encodeCommand('relay', on ? 1 : 0),
+    );
     return { relayStatus: on };
   }
 
   async setValveByUnitNo(unitNo: string, open: boolean, actorEmail?: string) {
     const unit = await this.unitService.findByUnitNo(unitNo);
     await this.unitService.setValveStatus(unit.id, open, actorEmail);
-    this.mqttClient.emit(`device/${unit.device_id}/command`, encodeCommand('valve', open ? 1 : 0));
+    this.mqttClient.emit(
+      `device/${unit.device_id}/command`,
+      encodeCommand('valve', open ? 1 : 0),
+    );
     return { valveStatus: open };
   }
 }

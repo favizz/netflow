@@ -21,8 +21,9 @@ export class DeviceService {
   ) {}
 
   async saveSensorData(payload: any) {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
-    const deviceId: string | undefined = payload?._deviceId || payload?.dev_id || payload?.device_id; // eslint-disable-line @typescript-eslint/no-unsafe-member-access
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    const deviceId: string | undefined =
+      payload?._deviceId || payload?.dev_id || payload?.device_id; // eslint-disable-line @typescript-eslint/no-unsafe-member-access
     if (!deviceId) return;
 
     let data: Record<string, any>;
@@ -37,10 +38,10 @@ export class DeviceService {
     }
 
     const incomingEnergyTotal = Number(data.et || 0);
-    const incomingWaterTotal  = Number(data.wt || 0);
-    const voltage  = this.toNumber(data.v);
-    const current  = this.toNumber(data.c);
-    const power    = this.toNumber(data.p);
+    const incomingWaterTotal = Number(data.wt || 0);
+    const voltage = this.toNumber(data.v);
+    const current = this.toNumber(data.c);
+    const power = this.toNumber(data.p);
     const waterFlow = this.toNumber(data.wf);
     const incomingBalance = data.b !== undefined ? Number(data.b) : null;
 
@@ -73,7 +74,7 @@ export class DeviceService {
           deltaWater = incomingWaterTotal - Number(unit.last_water_reading);
         }
 
-        const cost = (deltaEnergy * energyTariff) + (deltaWater * waterTariff);
+        const cost = deltaEnergy * energyTariff + deltaWater * waterTariff;
 
         if (cost > 0) {
           unit.balance = Number(unit.balance) - cost;
@@ -84,11 +85,17 @@ export class DeviceService {
             unit.balance = 0;
             if (unit.relay_status) {
               unit.relay_status = false;
-              this.mqttClient.emit(`device/${deviceId}/command`, encodeCommand('relay', 0));
+              this.mqttClient.emit(
+                `device/${deviceId}/command`,
+                encodeCommand('relay', 0),
+              );
             }
             if (unit.valve_status) {
               unit.valve_status = false;
-              this.mqttClient.emit(`device/${deviceId}/command`, encodeCommand('valve', 0));
+              this.mqttClient.emit(
+                `device/${deviceId}/command`,
+                encodeCommand('valve', 0),
+              );
             }
           }
         }
@@ -97,7 +104,9 @@ export class DeviceService {
           const cloudBalance = Number(unit.balance);
           const diff = Math.abs(cloudBalance - incomingBalance);
           if (diff > 500) {
-            this.logger.warn(`Balance mismatch on ${deviceId}: edge Rp ${incomingBalance} vs cloud Rp ${cloudBalance}`);
+            this.logger.warn(
+              `Balance mismatch on ${deviceId}: edge Rp ${incomingBalance} vs cloud Rp ${cloudBalance}`,
+            );
           } else {
             unit.balance = incomingBalance;
           }

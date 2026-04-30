@@ -17,13 +17,18 @@ export class TariffService {
   ) {}
 
   findAll(): Promise<Tariff[]> {
-    return this.repo.find({ order: { utility_type: 'ASC', effective_date: 'DESC' } });
+    return this.repo.find({
+      order: { utility_type: 'ASC', effective_date: 'DESC' },
+    });
   }
 
   async findCurrent(utilityType: 'electricity' | 'water'): Promise<number> {
     const today = new Date().toISOString().split('T')[0];
     const tariff = await this.repo.findOne({
-      where: { utility_type: utilityType, effective_date: LessThanOrEqual(today) },
+      where: {
+        utility_type: utilityType,
+        effective_date: LessThanOrEqual(today),
+      },
       order: { effective_date: 'DESC' },
     });
     if (!tariff) return utilityType === 'electricity' ? 1444.7 : 5000;
@@ -35,7 +40,10 @@ export class TariffService {
     return this.repo.save(entity);
   }
 
-  async update(id: number, dto: Partial<Pick<CreateTariffDto, 'price_per_unit' | 'effective_date'>>): Promise<Tariff> {
+  async update(
+    id: number,
+    dto: Partial<Pick<CreateTariffDto, 'price_per_unit' | 'effective_date'>>,
+  ): Promise<Tariff> {
     const tariff = await this.repo.findOne({ where: { id } });
     if (!tariff) throw new NotFoundException('Tariff not found');
     Object.assign(tariff, dto);

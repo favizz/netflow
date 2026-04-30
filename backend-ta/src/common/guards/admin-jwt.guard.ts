@@ -1,4 +1,9 @@
-import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  CanActivate,
+  ExecutionContext,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Request } from 'express';
 import * as jwt from 'jsonwebtoken';
@@ -19,7 +24,10 @@ export class AdminJwtGuard implements CanActivate {
     }
     try {
       const secret = this.configService.getOrThrow<string>('JWT_SECRET');
-      const payload = jwt.verify(auth.slice(7), secret) as Record<string, unknown>;
+      const payload = jwt.verify(auth.slice(7), secret) as Record<
+        string,
+        unknown
+      >;
       if (payload?.role !== 'admin') {
         throw new UnauthorizedException('Admin access required');
       }

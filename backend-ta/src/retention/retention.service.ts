@@ -28,8 +28,10 @@ export class RetentionService {
         .from(MeterReading)
         .where('time < DATE_SUB(NOW(), INTERVAL 24 MONTH)')
         .execute();
-      
-      this.logger.log(`Deleted ${telemetryResult.affected || 0} old telemetry records.`);
+
+      this.logger.log(
+        `Deleted ${telemetryResult.affected || 0} old telemetry records.`,
+      );
 
       // 2. Clean up transactions (60 months)
       const transactionResult = await this.dataSource
@@ -39,8 +41,9 @@ export class RetentionService {
         .where('created_at < DATE_SUB(NOW(), INTERVAL 60 MONTH)')
         .execute();
 
-      this.logger.log(`Deleted ${transactionResult.affected || 0} old transaction records.`);
-
+      this.logger.log(
+        `Deleted ${transactionResult.affected || 0} old transaction records.`,
+      );
     } catch (error) {
       this.logger.error('Error during data retention cleanup:', error);
     }

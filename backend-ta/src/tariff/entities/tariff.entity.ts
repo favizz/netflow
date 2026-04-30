@@ -1,8 +1,17 @@
-import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Column,
+  CreateDateColumn,
+  Entity,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
 
 class NumericTransformer {
-  to(data: number): number { return data; }
-  from(data: string): number { return parseFloat(data); }
+  to(data: number): number {
+    return data;
+  }
+  from(data: string): number {
+    return parseFloat(data);
+  }
 }
 
 @Entity('tariffs')
@@ -13,7 +22,11 @@ export class Tariff {
   @Column({ type: 'enum', enum: ['electricity', 'water'] })
   utility_type!: 'electricity' | 'water';
 
-  @Column('decimal', { precision: 10, scale: 4, transformer: new NumericTransformer() })
+  @Column('decimal', {
+    precision: 10,
+    scale: 4,
+    transformer: new NumericTransformer(),
+  })
   price_per_unit!: number;
 
   @Column({ type: 'date' })

@@ -76,17 +76,26 @@ export class MlService implements OnModuleInit {
   async onModuleInit() {
     await this.initModel();
 
-    const scoringIntervalSec = this.cfg.get<number>('ML_SCORING_INTERVAL_SECONDS', 300);
+    const scoringIntervalSec = this.cfg.get<number>(
+      'ML_SCORING_INTERVAL_SECONDS',
+      300,
+    );
     if (scoringIntervalSec > 0 && this.mlAvailable) {
       setInterval(() => void this.scoreAllUnits(), scoringIntervalSec * 1_000);
     }
 
     // Retrain daily with real field data (runs 1 min after startup to avoid boot congestion)
-    const retrainingIntervalSec = this.cfg.get<number>('ML_RETRAINING_INTERVAL_SECONDS', 86_400);
+    const retrainingIntervalSec = this.cfg.get<number>(
+      'ML_RETRAINING_INTERVAL_SECONDS',
+      86_400,
+    );
     if (retrainingIntervalSec > 0) {
       setTimeout(() => {
         void this.retrainWithFieldData();
-        setInterval(() => void this.retrainWithFieldData(), retrainingIntervalSec * 1_000);
+        setInterval(
+          () => void this.retrainWithFieldData(),
+          retrainingIntervalSec * 1_000,
+        );
       }, 60_000);
     }
   }
@@ -105,13 +114,13 @@ export class MlService implements OnModuleInit {
   getModelInfo(): ModelInfo | null {
     if (!this.mlAvailable || !this.modelStats) return null;
     return {
-      modelFitted:  true,
-      sampleCount:  this.modelStats.sampleCount,
-      source:       'in-process-zscore',
-      trainedAt:    this.modelStats.trainedAt,
-      threshold:    MlService.ANOMALY_THRESHOLD,
+      modelFitted: true,
+      sampleCount: this.modelStats.sampleCount,
+      source: 'in-process-zscore',
+      trainedAt: this.modelStats.trainedAt,
+      threshold: MlService.ANOMALY_THRESHOLD,
       featureNames: ['power', 'voltage', 'current', 'water_flow'],
-      history:      this.modelStats.history,
+      history: this.modelStats.history,
     };
   }
 
@@ -120,27 +129,36 @@ export class MlService implements OnModuleInit {
    * Called daily by the scheduler. Also callable manually via admin endpoint.
    * Uses Z-score (Gaussian) statistical model — no external service required.
    */
-  async retrainWithFieldData(): Promise<{ samplesCollected: number; status: string }> {
+  async retrainWithFieldData(): Promise<{
+    samplesCollected: number;
+    status: string;
+  }> {
     try {
-      const rows: Array<{ power: string; voltage: string; current: string; water_flow: string }> =
-        await this.meterRepo.query(
-          `SELECT power, voltage, current, water_flow
+      const rows: Array<{
+        power: string;
+        voltage: string;
+        current: string;
+        water_flow: string;
+      }> = await this.meterRepo.query(
+        `SELECT power, voltage, current, water_flow
            FROM meter_readings
            WHERE time >= DATE_SUB(NOW(), INTERVAL 30 DAY)
              AND power IS NOT NULL AND voltage IS NOT NULL
            ORDER BY RAND()
            LIMIT 50000`,
-        );
+      );
 
       if (rows.length < MlService.MIN_SAMPLES) {
-        this.logger.warn(`ML retraining skipped — only ${rows.length} readings available (need ≥ ${MlService.MIN_SAMPLES})`);
+        this.logger.warn(
+          `ML retraining skipped — only ${rows.length} readings available (need ≥ ${MlService.MIN_SAMPLES})`,
+        );
         return { samplesCollected: rows.length, status: 'insufficient_data' };
       }
 
       const features = rows.map((r) => ({
-        power:      parseFloat(r.power)      || 0,
-        voltage:    parseFloat(r.voltage)    || 220,
-        current:    parseFloat(r.current)    || 0,
+        power: parseFloat(r.power) || 0,
+        voltage: parseFloat(r.voltage) || 220,
+        current: parseFloat(r.current) || 0,
         water_flow: parseFloat(r.water_flow) || 0,
       }));
 
@@ -149,7 +167,7 @@ export class MlService implements OnModuleInit {
       this.modelStats = {
         ...stats,
         sampleCount: rows.length,
-        trainedAt:   Date.now(),
+        trainedAt: Date.now(),
         history: [
           ...(prev?.history ?? []).slice(-9),
           { timestamp: Date.now(), sample_count: rows.length, source: 'field' },
@@ -173,7 +191,8 @@ export class MlService implements OnModuleInit {
     ]);
 
     const stats = await this.get7DayStats(unit.device_id);
-    const dailyCostRp = (stats.avgDailyKwh * elecTariff) + (stats.avgDailyM3 * waterTariff);
+    const dailyCostRp =
+      stats.avgDailyKwh * elecTariff + stats.avgDailyM3 * waterTariff;
     const balance = Number(unit.balance);
 
     let estimatedDaysRemaining = 0;
@@ -181,25 +200,32 @@ export class MlService implements OnModuleInit {
 
     if (dailyCostRp > 0) {
       estimatedDaysRemaining = balance / dailyCostRp;
-      confidence = stats.readingDays >= 7 ? 'high' : stats.readingDays >= 3 ? 'medium' : 'low';
+      confidence =
+        stats.readingDays >= 7
+          ? 'high'
+          : stats.readingDays >= 3
+            ? 'medium'
+            : 'low';
     }
 
     return {
       unitNo,
-      balanceRp:              balance,
+      balanceRp: balance,
       estimatedDaysRemaining: parseFloat(estimatedDaysRemaining.toFixed(1)),
-      avgDailyKwh:            parseFloat(stats.avgDailyKwh.toFixed(3)),
-      avgDailyM3:             parseFloat(stats.avgDailyM3.toFixed(3)),
-      dailyCostRp:            parseFloat(dailyCostRp.toFixed(2)),
+      avgDailyKwh: parseFloat(stats.avgDailyKwh.toFixed(3)),
+      avgDailyM3: parseFloat(stats.avgDailyM3.toFixed(3)),
+      dailyCostRp: parseFloat(dailyCostRp.toFixed(2)),
       confidence,
-      forecastAt:             new Date().toISOString(),
+      forecastAt: new Date().toISOString(),
     };
   }
 
   async scoreAllUnits(): Promise<void> {
     try {
       const units = await this.unitRepo.find();
-      await Promise.all(units.map(u => this.scoreUnit(u.device_id).catch(() => null)));
+      await Promise.all(
+        units.map((u) => this.scoreUnit(u.device_id).catch(() => null)),
+      );
     } catch (err) {
       this.logger.warn(`Batch ML scoring failed: ${(err as Error).message}`);
     }
@@ -210,9 +236,13 @@ export class MlService implements OnModuleInit {
   private async initModel(): Promise<void> {
     const result = await this.retrainWithFieldData();
     if (result.status === 'trained') {
-      this.logger.log(`In-process ML model ready — ${result.samplesCollected} samples, Z-score threshold ${MlService.ANOMALY_THRESHOLD}`);
+      this.logger.log(
+        `In-process ML model ready — ${result.samplesCollected} samples, Z-score threshold ${MlService.ANOMALY_THRESHOLD}`,
+      );
     } else {
-      this.logger.warn(`ML model deferred — ${result.status} (${result.samplesCollected} samples). Will retry after first retraining interval.`);
+      this.logger.warn(
+        `ML model deferred — ${result.status} (${result.samplesCollected} samples). Will retry after first retraining interval.`,
+      );
     }
   }
 
@@ -220,7 +250,9 @@ export class MlService implements OnModuleInit {
     if (!this.mlAvailable || !this.modelStats) return null;
 
     try {
-      const unit = await this.unitRepo.findOne({ where: { device_id: deviceId } });
+      const unit = await this.unitRepo.findOne({
+        where: { device_id: deviceId },
+      });
       if (!unit) return null;
 
       const readings = await this.meterRepo.find({
@@ -230,20 +262,20 @@ export class MlService implements OnModuleInit {
       });
       if (readings.length < 5) return null;
 
-      const features = readings.map(r => ({
-        power:      Number(r.power)      || 0,
-        voltage:    Number(r.voltage)    || 220,
-        current:    Number(r.current)    || 0,
+      const features = readings.map((r) => ({
+        power: Number(r.power) || 0,
+        voltage: Number(r.voltage) || 220,
+        current: Number(r.current) || 0,
         water_flow: Number(r.water_flow) || 0,
       }));
 
       const { score, isAnomaly } = this.computeScore(features);
       const result: AnomalyScore = {
         deviceId,
-        unitNo:    unit.unit_no,
+        unitNo: unit.unit_no,
         score,
         isAnomaly,
-        scoredAt:  new Date().toISOString(),
+        scoredAt: new Date().toISOString(),
       };
 
       this.scoreCache.set(deviceId, result);
@@ -259,20 +291,31 @@ export class MlService implements OnModuleInit {
    * Reason: 95th percentile is robust to individual noisy readings while
    * still detecting sustained deviations.
    */
-  private computeScore(features: Array<{ power: number; voltage: number; current: number; water_flow: number }>): { score: number; isAnomaly: boolean } {
+  private computeScore(
+    features: Array<{
+      power: number;
+      voltage: number;
+      current: number;
+      water_flow: number;
+    }>,
+  ): { score: number; isAnomaly: boolean } {
     if (!this.modelStats) return { score: 0, isAnomaly: false };
     const s = this.modelStats;
 
-    const perReadingMax = features.map(f => Math.max(
-      this.zScore(f.power,      s.power),
-      this.zScore(f.voltage,    s.voltage),
-      this.zScore(f.current,    s.current),
-      this.zScore(f.water_flow, s.water_flow),
-    ));
+    const perReadingMax = features.map((f) =>
+      Math.max(
+        this.zScore(f.power, s.power),
+        this.zScore(f.voltage, s.voltage),
+        this.zScore(f.current, s.current),
+        this.zScore(f.water_flow, s.water_flow),
+      ),
+    );
 
     const sorted = [...perReadingMax].sort((a, b) => a - b);
     const p95idx = Math.floor(sorted.length * 0.95);
-    const score = parseFloat((sorted[p95idx] ?? sorted[sorted.length - 1]).toFixed(4));
+    const score = parseFloat(
+      (sorted[p95idx] ?? sorted[sorted.length - 1]).toFixed(4),
+    );
     return { score, isAnomaly: score > MlService.ANOMALY_THRESHOLD };
   }
 
@@ -282,39 +325,47 @@ export class MlService implements OnModuleInit {
   }
 
   private computeFeatureStats(
-    features: Array<{ power: number; voltage: number; current: number; water_flow: number }>,
+    features: Array<{
+      power: number;
+      voltage: number;
+      current: number;
+      water_flow: number;
+    }>,
   ): Pick<ModelStats, 'power' | 'voltage' | 'current' | 'water_flow'> {
     const keys = ['power', 'voltage', 'current', 'water_flow'] as const;
-    const result = {} as Record<typeof keys[number], FeatureStats>;
+    const result = {} as Record<(typeof keys)[number], FeatureStats>;
     for (const k of keys) {
-      const vals = features.map(f => f[k]);
+      const vals = features.map((f) => f[k]);
       const mean = vals.reduce((s, v) => s + v, 0) / vals.length;
-      const variance = vals.reduce((s, v) => s + (v - mean) ** 2, 0) / vals.length;
+      const variance =
+        vals.reduce((s, v) => s + (v - mean) ** 2, 0) / vals.length;
       result[k] = { mean, std: Math.sqrt(variance) };
     }
     return result;
   }
 
   private async get7DayStats(deviceId: string) {
-    const rows: Array<{ day: string; kwh: string; m3: string }> = await this.meterRepo.query(
-      `SELECT DATE_FORMAT(time, '%Y-%m-%d') AS day,
+    const rows: Array<{ day: string; kwh: string; m3: string }> =
+      await this.meterRepo.query(
+        `SELECT DATE_FORMAT(time, '%Y-%m-%d') AS day,
               GREATEST(0, MAX(energy_total) - MIN(energy_total)) AS kwh,
               GREATEST(0, MAX(water_total)  - MIN(water_total))  AS m3
        FROM meter_readings
        WHERE device_id = ? AND time >= DATE_SUB(NOW(), INTERVAL 7 DAY) AND energy_total IS NOT NULL
        GROUP BY DATE_FORMAT(time, '%Y-%m-%d')
        ORDER BY day`,
-      [deviceId],
-    );
+        [deviceId],
+      );
 
-    if (rows.length === 0) return { avgDailyKwh: 0, avgDailyM3: 0, readingDays: 0 };
+    if (rows.length === 0)
+      return { avgDailyKwh: 0, avgDailyM3: 0, readingDays: 0 };
 
     const totalKwh = rows.reduce((s, r) => s + parseFloat(r.kwh), 0);
-    const totalM3  = rows.reduce((s, r) => s + parseFloat(r.m3), 0);
+    const totalM3 = rows.reduce((s, r) => s + parseFloat(r.m3), 0);
 
     return {
       avgDailyKwh: totalKwh / rows.length,
-      avgDailyM3:  totalM3  / rows.length,
+      avgDailyM3: totalM3 / rows.length,
       readingDays: rows.length,
     };
   }

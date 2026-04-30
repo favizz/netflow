@@ -9,7 +9,7 @@ export class AuthRefreshToken {
   token_hash!: string;
 
   @Column({ type: 'varchar' })
-  user_sub!: string;  // resident email
+  user_sub!: string; // resident email
 
   @Column({ type: 'varchar', nullable: true })
   unit_no!: string | null;

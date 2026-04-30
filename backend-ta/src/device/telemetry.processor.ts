@@ -19,7 +19,10 @@ export const TELEMETRY_QUEUE = 'telemetry';
 @Processor(TELEMETRY_QUEUE, {
   concurrency: Number(process.env.TELEMETRY_QUEUE_CONCURRENCY || 10),
 })
-export class TelemetryProcessor extends WorkerHost implements OnApplicationBootstrap {
+export class TelemetryProcessor
+  extends WorkerHost
+  implements OnApplicationBootstrap
+{
   private readonly logger = new Logger(TelemetryProcessor.name);
 
   constructor(private readonly deviceService: DeviceService) {
@@ -31,7 +34,9 @@ export class TelemetryProcessor extends WorkerHost implements OnApplicationBoots
     // Absorb Worker-level Redis errors so they don't crash the process.
     // When Redis is unavailable, DeviceController falls back to inline processing.
     this.worker?.on('error', (err: Error) => {
-      this.logger.warn(`BullMQ worker error (Redis unavailable, inline fallback active): ${err.message}`);
+      this.logger.warn(
+        `BullMQ worker error (Redis unavailable, inline fallback active): ${err.message}`,
+      );
     });
   }
 
@@ -43,13 +48,18 @@ export class TelemetryProcessor extends WorkerHost implements OnApplicationBoots
       if (payload?._isBuffer && typeof payload._data === 'string') {
         const buf = Buffer.from(payload._data as string, 'base64');
         const deviceId = payload._deviceId as string;
-        await this.deviceService.saveSensorData({ ...decodeBinaryPayload(buf), _deviceId: deviceId });
+        await this.deviceService.saveSensorData({
+          ...decodeBinaryPayload(buf),
+          _deviceId: deviceId,
+        });
       } else {
         await this.deviceService.saveSensorData(payload);
       }
       /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
     } catch (err) {
-      this.logger.error(`Telemetry job ${job.id} failed: ${(err as Error).message}`);
+      this.logger.error(
+        `Telemetry job ${job.id} failed: ${(err as Error).message}`,
+      );
       throw err; // BullMQ retries on throw
     }
   }

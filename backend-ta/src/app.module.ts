@@ -27,7 +27,10 @@ import { RetentionModule } from './retention/retention.module';
     // ── Config ───────────────────────────────────────────────────────────────
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: process.env.NODE_ENV === 'production' ? '../.env' : ['../.env.dev', '../.env'],
+      envFilePath:
+        process.env.NODE_ENV === 'production'
+          ? '../.env'
+          : ['../.env.dev', '../.env'],
     }),
 
     ScheduleModule.forRoot(),
@@ -64,9 +67,10 @@ import { RetentionModule } from './retention/retention.module';
           port: cfg.get<number>('REDIS_PORT', 6379),
           password: cfg.get('REDIS_PASSWORD') || undefined,
           maxRetriesPerRequest: null, // required for BullMQ
-          lazyConnect: true,          // don't connect on startup — connect on first use
-          enableOfflineQueue: false,  // fail fast so DeviceController catch() fires immediately
-          retryStrategy: (times: number) => times > 3 ? null : Math.min(times * 500, 2000),
+          lazyConnect: true, // don't connect on startup — connect on first use
+          enableOfflineQueue: false, // fail fast so DeviceController catch() fires immediately
+          retryStrategy: (times: number) =>
+            times > 3 ? null : Math.min(times * 500, 2000),
         },
       }),
       inject: [ConfigService],

@@ -1,5 +1,10 @@
 import { Controller, Logger } from '@nestjs/common';
-import { MessagePattern, Payload, Ctx, MqttContext } from '@nestjs/microservices';
+import {
+  MessagePattern,
+  Payload,
+  Ctx,
+  MqttContext,
+} from '@nestjs/microservices';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { DeviceService } from './device.service';
@@ -34,27 +39,42 @@ export class DeviceController {
     let ack: { status?: string; version?: string; error?: number } = {};
     try {
       const raw = Buffer.isBuffer(data)
-        ? (data as Buffer).toString('utf8')
+        ? data.toString('utf8')
         : JSON.stringify(data);
       ack = JSON.parse(raw) as typeof ack;
     } catch {
       ack = { status: 'unknown' };
     }
 
-    const result = ack.status === 'ok' ? 'success' : ack.status === 'noop' ? 'info' : 'failure';
+    const result =
+      ack.status === 'ok'
+        ? 'success'
+        : ack.status === 'noop'
+          ? 'info'
+          : 'failure';
     this.logger.log(`OTA ACK [${deviceId}] → ${JSON.stringify(ack)}`);
-    void this.auditLogService.log(`device:${deviceId}`, 'OTA_ACK', 'device', deviceId, ack as Record<string, unknown>, result);
+    void this.auditLogService.log(
+      `device:${deviceId}`,
+      'OTA_ACK',
+      'device',
+      deviceId,
+      ack as Record<string, unknown>,
+      result,
+    );
   }
 
   @MessagePattern('device/+/config_ack')
-  handleCalibrationAck(@Payload() data: unknown, @Ctx() ctx: MqttContext): void {
+  handleCalibrationAck(
+    @Payload() data: unknown,
+    @Ctx() ctx: MqttContext,
+  ): void {
     const topic = ctx.getTopic();
     const deviceId = topic.split('/')[1] ?? 'unknown';
 
     let ack: { status?: string; error?: string | number } = {};
     try {
       const raw = Buffer.isBuffer(data)
-        ? (data as Buffer).toString('utf8')
+        ? data.toString('utf8')
         : JSON.stringify(data);
       ack = JSON.parse(raw) as typeof ack;
     } catch {
@@ -63,7 +83,14 @@ export class DeviceController {
 
     const result = ack.status === 'ok' ? 'success' : 'failure';
     this.logger.log(`CONFIG ACK [${deviceId}] → ${JSON.stringify(ack)}`);
-    void this.auditLogService.log(`device:${deviceId}`, 'CONFIG_ACK', 'device', deviceId, ack as Record<string, unknown>, result);
+    void this.auditLogService.log(
+      `device:${deviceId}`,
+      'CONFIG_ACK',
+      'device',
+      deviceId,
+      ack as Record<string, unknown>,
+      result,
+    );
   }
 
   @MessagePattern('device/+/command_ack')
@@ -74,7 +101,7 @@ export class DeviceController {
     let ack: { status?: string; type?: string; error?: string | number } = {};
     try {
       const raw = Buffer.isBuffer(data)
-        ? (data as Buffer).toString('utf8')
+        ? data.toString('utf8')
         : JSON.stringify(data);
       ack = JSON.parse(raw) as typeof ack;
     } catch {
@@ -83,7 +110,14 @@ export class DeviceController {
 
     const result = ack.status === 'ok' ? 'success' : 'failure';
     this.logger.log(`COMMAND ACK [${deviceId}] → ${JSON.stringify(ack)}`);
-    void this.auditLogService.log(`device:${deviceId}`, 'COMMAND_ACK', 'device', deviceId, ack as Record<string, unknown>, result);
+    void this.auditLogService.log(
+      `device:${deviceId}`,
+      'COMMAND_ACK',
+      'device',
+      deviceId,
+      ack as Record<string, unknown>,
+      result,
+    );
   }
 
   @MessagePattern('device/+/data')
@@ -96,7 +130,11 @@ export class DeviceController {
     if (Buffer.isBuffer(data) || data instanceof Uint8Array) {
       const buf = Buffer.isBuffer(data) ? data : Buffer.from(data);
       // Serialize buffer as base64 so BullMQ can store it in Redis JSON.
-      payload = { _isBuffer: true, _data: buf.toString('base64'), _deviceId: deviceId };
+      payload = {
+        _isBuffer: true,
+        _data: buf.toString('base64'),
+        _deviceId: deviceId,
+      };
     } else {
       payload = { ...(data as Record<string, unknown>), _deviceId: deviceId };
     }
@@ -110,11 +148,15 @@ export class DeviceController {
       });
     } catch (queueErr) {
       // Redis unavailable — fall back to inline processing (same as v1).
-      this.logger.warn(`Queue unavailable, processing inline: ${(queueErr as Error).message}`);
+      this.logger.warn(
+        `Queue unavailable, processing inline: ${(queueErr as Error).message}`,
+      );
       try {
         await this.deviceService.saveSensorData(payload);
       } catch (err) {
-        this.logger.error(`Inline telemetry error for ${deviceId}: ${(err as Error).message}`);
+        this.logger.error(
+          `Inline telemetry error for ${deviceId}: ${(err as Error).message}`,
+        );
       }
     }
   }

@@ -50,25 +50,25 @@
 
 export interface TelemetryPayload {
   et: number; // energy_total kWh
-  p:  number; // active_power W
-  v:  number; // voltage      V
-  c:  number; // current      A
+  p: number; // active_power W
+  v: number; // voltage      V
+  c: number; // current      A
   wf: number; // water_flow   L/min
   wt: number; // water_total  m³
-  b:  number; // balance      Rp
+  b: number; // balance      Rp
   rs: number; // relay_status 0|1
   vs: number; // valve_status 0|1
 }
 
 export function decodeTelemetry(buf: Buffer): TelemetryPayload {
   return {
-    et: buf.readUInt32BE(0)  / 100,
-    p:  buf.readUInt16BE(4)  / 10,
-    v:  buf.readUInt16BE(6)  / 10,
-    c:  buf.readUInt16BE(8)  / 1000,
+    et: buf.readUInt32BE(0) / 100,
+    p: buf.readUInt16BE(4) / 10,
+    v: buf.readUInt16BE(6) / 10,
+    c: buf.readUInt16BE(8) / 1000,
     wf: buf.readUInt16BE(10) / 100,
     wt: buf.readUInt32BE(12) / 1000,
-    b:  buf.readUInt32BE(16),
+    b: buf.readUInt32BE(16),
     rs: buf[20] & 1,
     vs: (buf[20] >> 1) & 1,
   };
@@ -76,13 +76,13 @@ export function decodeTelemetry(buf: Buffer): TelemetryPayload {
 
 export function encodeTelemetry(t: TelemetryPayload): Buffer {
   const buf = Buffer.allocUnsafe(21);
-  buf.writeUInt32BE(Math.round(t.et * 100),  0);
-  buf.writeUInt16BE(Math.round(t.p  * 10),   4);
-  buf.writeUInt16BE(Math.round(t.v  * 10),   6);
-  buf.writeUInt16BE(Math.round(t.c  * 1000), 8);
-  buf.writeUInt16BE(Math.round(t.wf * 100),  10);
+  buf.writeUInt32BE(Math.round(t.et * 100), 0);
+  buf.writeUInt16BE(Math.round(t.p * 10), 4);
+  buf.writeUInt16BE(Math.round(t.v * 10), 6);
+  buf.writeUInt16BE(Math.round(t.c * 1000), 8);
+  buf.writeUInt16BE(Math.round(t.wf * 100), 10);
   buf.writeUInt32BE(Math.round(t.wt * 1000), 12);
-  buf.writeUInt32BE(Math.round(t.b),         16);
+  buf.writeUInt32BE(Math.round(t.b), 16);
   buf[20] = (t.rs & 1) | ((t.vs & 1) << 1);
   return buf;
 }
@@ -118,8 +118,8 @@ export function encodeCalibration(payload: CalibrationPayload): Buffer {
 }
 
 export interface OtaPayload {
-  version:    string;  // semver "1.0.1"
-  binaryLink: string;  // full URL to .bin file (e.g. GitHub raw)
+  version: string; // semver "1.0.1"
+  binaryLink: string; // full URL to .bin file (e.g. GitHub raw)
   updateNow?: boolean; // default true → flags byte 0x01
 }
 
@@ -139,9 +139,9 @@ export function encodeOta(payload: OtaPayload): Buffer {
   const flags = payload.updateNow !== false ? 0x01 : 0x00;
   const urlBytes = Buffer.from(payload.binaryLink, 'utf8');
   const buf = Buffer.allocUnsafe(4 + urlBytes.length);
-  buf[0] = maj & 0xFF;
-  buf[1] = min & 0xFF;
-  buf[2] = pat & 0xFF;
+  buf[0] = maj & 0xff;
+  buf[1] = min & 0xff;
+  buf[2] = pat & 0xff;
   buf[3] = flags;
   urlBytes.copy(buf, 4);
   return buf;

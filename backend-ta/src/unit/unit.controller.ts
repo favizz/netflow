@@ -60,14 +60,30 @@ export class UnitController {
 
   @UseGuards(AdminJwtGuard)
   @Patch(':id/relay')
-  relay(@Param('id') id: string, @Body() body: { relayStatus: boolean }, @CurrentUser() user: JwtPayload) {
-    return this.unitService.setRelayStatus(+id, Boolean(body.relayStatus), user.sub);
+  relay(
+    @Param('id') id: string,
+    @Body() body: { relayStatus: boolean },
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.unitService.setRelayStatus(
+      +id,
+      Boolean(body.relayStatus),
+      user.sub,
+    );
   }
 
   @UseGuards(AdminJwtGuard)
   @Patch(':id/valve')
-  valve(@Param('id') id: string, @Body() body: { valveStatus: boolean }, @CurrentUser() user: JwtPayload) {
-    return this.unitService.setValveStatus(+id, Boolean(body.valveStatus), user.sub);
+  valve(
+    @Param('id') id: string,
+    @Body() body: { valveStatus: boolean },
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.unitService.setValveStatus(
+      +id,
+      Boolean(body.valveStatus),
+      user.sub,
+    );
   }
 
   @Get(':unitNo/notifications')

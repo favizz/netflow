@@ -36,15 +36,16 @@ export class PaymentsService {
     const unit = await this.unitService.findByUnitNo(dto.unitNo);
     const id = `TRX-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
-    const isProd = this.configService.get<string>('MIDTRANS_IS_PRODUCTION') === 'true';
+    const isProd =
+      this.configService.get<string>('MIDTRANS_IS_PRODUCTION') === 'true';
     const serverKey = this.configService.get<string>('MIDTRANS_SERVER_KEY');
-    
-    // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-unsafe-assignment
+
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const midtransClient = require('midtrans-client');
     const coreApi = new midtransClient.CoreApi({
-        isProduction: isProd,
-        serverKey: serverKey,
-        clientKey: this.configService.get<string>('MIDTRANS_CLIENT_KEY') || ''
+      isProduction: isProd,
+      serverKey: serverKey,
+      clientKey: this.configService.get<string>('MIDTRANS_CLIENT_KEY') || '',
     });
 
     const paymentParams: any = {
@@ -54,9 +55,9 @@ export class PaymentsService {
         gross_amount: dto.amount,
       },
       customer_details: {
-        first_name: "Unit",
+        first_name: 'Unit',
         last_name: dto.unitNo,
-      }
+      },
     };
 
     if (dto.method === 'transfer') {
@@ -68,13 +69,15 @@ export class PaymentsService {
 
       let vaNumber = undefined;
       let qrUrl = undefined;
-      
+
       if (mResponse.va_numbers && mResponse.va_numbers.length > 0) {
         vaNumber = mResponse.va_numbers[0].va_number;
       }
-      
+
       if (mResponse.actions) {
-        const qrAction = mResponse.actions.find((a: any) => a.name === 'generate-qr-code');
+        const qrAction = mResponse.actions.find(
+          (a: any) => a.name === 'generate-qr-code',
+        );
         if (qrAction) qrUrl = qrAction.url;
       }
 
@@ -95,10 +98,16 @@ export class PaymentsService {
         await this.expiryQueue.add(
           'expire',
           { transactionId: id },
-          { delay: PAYMENT_EXPIRY_MS, removeOnComplete: true, removeOnFail: 100 },
+          {
+            delay: PAYMENT_EXPIRY_MS,
+            removeOnComplete: true,
+            removeOnFail: 100,
+          },
         );
       } catch {
-        this.logger.warn(`Could not schedule expiry for ${id} (Redis unavailable)`);
+        this.logger.warn(
+          `Could not schedule expiry for ${id} (Redis unavailable)`,
+        );
       }
 
       return {
@@ -120,7 +129,9 @@ export class PaymentsService {
 
     // Using transaction_id for event id since midtrans might ping multiple times
     const eventId = dto.transaction_id + '-' + dto.transaction_status;
-    const alreadyProcessed = await this.txRepo.findOne({ where: { webhook_event_id: eventId } });
+    const alreadyProcessed = await this.txRepo.findOne({
+      where: { webhook_event_id: eventId },
+    });
     if (alreadyProcessed) {
       return { ...this.toResponse(alreadyProcessed), idempotent: true };
     }
@@ -137,7 +148,11 @@ export class PaymentsService {
         finalStatus = fStatus === 'challenge' ? 'pending' : 'success';
       } else if (mStatus === 'settlement') {
         finalStatus = 'success';
-      } else if (mStatus === 'cancel' || mStatus === 'deny' || mStatus === 'expire') {
+      } else if (
+        mStatus === 'cancel' ||
+        mStatus === 'deny' ||
+        mStatus === 'expire'
+      ) {
         finalStatus = 'failed';
       } else if (mStatus === 'pending') {
         finalStatus = 'pending';
@@ -148,7 +163,10 @@ export class PaymentsService {
 
       if (finalStatus === 'success') {
         tx.confirmed_at = new Date();
-        await this.unitService.creditBalanceByUnitNo(tx.unit_no, Number(tx.amount_rp));
+        await this.unitService.creditBalanceByUnitNo(
+          tx.unit_no,
+          Number(tx.amount_rp),
+        );
       }
 
       await this.txRepo.save(tx);
@@ -165,7 +183,10 @@ export class PaymentsService {
 
     tx.status = 'success';
     tx.confirmed_at = new Date();
-    await this.unitService.creditBalanceByUnitNo(tx.unit_no, Number(tx.amount_rp));
+    await this.unitService.creditBalanceByUnitNo(
+      tx.unit_no,
+      Number(tx.amount_rp),
+    );
     await this.txRepo.save(tx);
 
     return this.toResponse(tx);
@@ -192,9 +213,13 @@ export class PaymentsService {
     return tx;
   }
 
-  async getTransactionForUnit(unitNo: string, transactionId: string): Promise<Transaction> {
+  async getTransactionForUnit(
+    unitNo: string,
+    transactionId: string,
+  ): Promise<Transaction> {
     const tx = await this.getTransaction(transactionId);
-    if (tx.unit_no !== unitNo) throw new ForbiddenException('Transaction does not belong to this unit');
+    if (tx.unit_no !== unitNo)
+      throw new ForbiddenException('Transaction does not belong to this unit');
     return tx;
   }
 
@@ -203,7 +228,10 @@ export class PaymentsService {
     return this.formatInvoice(tx);
   }
 
-  async buildInvoiceForUnit(unitNo: string, transactionId: string): Promise<string> {
+  async buildInvoiceForUnit(
+    unitNo: string,
+    transactionId: string,
+  ): Promise<string> {
     const tx = await this.getTransactionForUnit(unitNo, transactionId);
     return this.formatInvoice(tx);
   }
@@ -243,7 +271,9 @@ export class PaymentsService {
     const grossAmount = payload.gross_amount;
     const signatureKey = payload.signature_key;
 
-    const hash = createHash('sha512').update(orderId + statusCode + grossAmount + serverKey).digest('hex');
+    const hash = createHash('sha512')
+      .update(orderId + statusCode + grossAmount + serverKey)
+      .digest('hex');
 
     if (hash !== signatureKey) {
       throw new UnauthorizedException('Invalid Midtrans Signature');

@@ -1,8 +1,17 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn } from 'typeorm';
+import {
+  Entity,
+  Column,
+  PrimaryGeneratedColumn,
+  CreateDateColumn,
+} from 'typeorm';
 
 class NumericTransformer {
-  to(data: number): number { return data; }
-  from(data: string): number { return parseFloat(data); }
+  to(data: number): number {
+    return data;
+  }
+  from(data: string): number {
+    return parseFloat(data);
+  }
 }
 
 @Entity('units')
@@ -22,7 +31,12 @@ export class Unit {
   @Column({ type: 'varchar', nullable: true })
   resident_email!: string | null;
 
-  @Column('decimal', { precision: 15, scale: 2, default: 0, transformer: new NumericTransformer() })
+  @Column('decimal', {
+    precision: 15,
+    scale: 2,
+    default: 0,
+    transformer: new NumericTransformer(),
+  })
   balance!: number;
 
   @Column({ default: true })
@@ -31,10 +45,20 @@ export class Unit {
   @Column({ default: true })
   valve_status!: boolean;
 
-  @Column('decimal', { precision: 15, scale: 4, default: 0, transformer: new NumericTransformer() })
+  @Column('decimal', {
+    precision: 15,
+    scale: 4,
+    default: 0,
+    transformer: new NumericTransformer(),
+  })
   last_energy_reading!: number;
 
-  @Column('decimal', { precision: 15, scale: 4, default: 0, transformer: new NumericTransformer() })
+  @Column('decimal', {
+    precision: 15,
+    scale: 4,
+    default: 0,
+    transformer: new NumericTransformer(),
+  })
   last_water_reading!: number;
 
   @CreateDateColumn()

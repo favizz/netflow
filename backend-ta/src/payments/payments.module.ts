@@ -5,7 +5,10 @@ import { UnitModule } from '../unit/unit.module';
 import { Transaction } from './entities/transaction.entity';
 import { PaymentsController } from './payments.controller';
 import { PaymentsService } from './payments.service';
-import { PaymentExpiryProcessor, PAYMENT_EXPIRY_QUEUE } from './payment-expiry.processor';
+import {
+  PaymentExpiryProcessor,
+  PAYMENT_EXPIRY_QUEUE,
+} from './payment-expiry.processor';
 
 @Module({
   imports: [

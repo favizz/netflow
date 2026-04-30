@@ -1,7 +1,9 @@
 import { Column, CreateDateColumn, Entity, PrimaryColumn } from 'typeorm';
 
 class NumericTransformer {
-  to(data: number | null): number | null { return data; }
+  to(data: number | null): number | null {
+    return data;
+  }
   from(data: string | null): number | null {
     if (data === null || data === undefined) return null;
     return parseFloat(data);
@@ -19,13 +21,21 @@ export class Transaction {
   @Column({ type: 'varchar', length: 50 })
   unit_no!: string;
 
-  @Column('decimal', { precision: 12, scale: 2, transformer: new NumericTransformer() })
+  @Column('decimal', {
+    precision: 12,
+    scale: 2,
+    transformer: new NumericTransformer(),
+  })
   amount_rp!: number;
 
   @Column({ type: 'enum', enum: ['qris', 'transfer', 'ewallet'] })
   method!: 'qris' | 'transfer' | 'ewallet';
 
-  @Column({ type: 'enum', enum: ['pending', 'success', 'failed'], default: 'pending' })
+  @Column({
+    type: 'enum',
+    enum: ['pending', 'success', 'failed'],
+    default: 'pending',
+  })
   status!: 'pending' | 'success' | 'failed';
 
   @Column({ type: 'varchar', length: 100, nullable: true })

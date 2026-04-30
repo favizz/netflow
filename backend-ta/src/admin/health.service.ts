@@ -31,7 +31,11 @@ export class HealthService {
   async check(): Promise<HealthReport> {
     const [database, redis, mqtt, ml, smtp] = await Promise.all([
       this.checkDatabase(),
-      this.checkTcpService('Redis', this.cfg.get('REDIS_HOST', 'localhost'), this.cfg.get<number>('REDIS_PORT', 6379)),
+      this.checkTcpService(
+        'Redis',
+        this.cfg.get('REDIS_HOST', 'localhost'),
+        this.cfg.get<number>('REDIS_PORT', 6379),
+      ),
       this.checkMqtt(),
       this.checkMl(),
       Promise.resolve(this.checkSmtp()),
@@ -59,7 +63,11 @@ export class HealthService {
     }
   }
 
-  private checkTcpService(name: string, host: string, port: number): Promise<ServiceHealth> {
+  private checkTcpService(
+    name: string,
+    host: string,
+    port: number,
+  ): Promise<ServiceHealth> {
     const start = Date.now();
     return new Promise((resolve) => {
       const sock = net.connect({ host, port, timeout: 3000 }, () => {
@@ -116,6 +124,9 @@ export class HealthService {
       this.cfg.get<string>('SMTP_USER') &&
       this.cfg.get<string>('SMTP_PASS')
     );
-    return { status: configured ? 'configured' : 'not_configured', latencyMs: null };
+    return {
+      status: configured ? 'configured' : 'not_configured',
+      latencyMs: null,
+    };
   }
 }

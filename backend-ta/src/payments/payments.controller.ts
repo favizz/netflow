@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Param, Post, Res, UnauthorizedException } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Res,
+  UnauthorizedException,
+} from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { ConfigService } from '@nestjs/config';
 import { InitiateTopupDto } from './dto/initiate-topup.dto';
@@ -33,15 +41,23 @@ export class PaymentsController {
   }
 
   @Get('invoice/:transactionId')
-  async invoice(@Param('transactionId') transactionId: string, @Res() res: Response) {
+  async invoice(
+    @Param('transactionId') transactionId: string,
+    @Res() res: Response,
+  ) {
     const invoice = await this.paymentsService.buildInvoice(transactionId);
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename="invoice-${transactionId}.txt"`);
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="invoice-${transactionId}.txt"`,
+    );
     return res.send(invoice);
   }
 
   private assertWebhookSource(req: Request) {
-    const allowed = (this.configService.get<string>('PAYMENT_WEBHOOK_ALLOWED_IPS') || '')
+    const allowed = (
+      this.configService.get<string>('PAYMENT_WEBHOOK_ALLOWED_IPS') || ''
+    )
       .split(',')
       .map((ip) => ip.trim())
       .filter(Boolean);
@@ -54,11 +70,7 @@ export class PaymentsController {
     const forwardedText = Array.isArray(forwarded) ? forwarded[0] : forwarded;
     const firstForwarded = forwardedText?.split(',')[0]?.trim();
 
-    const remoteIp =
-      firstForwarded ||
-      req.ip ||
-      req.socket.remoteAddress ||
-      '';
+    const remoteIp = firstForwarded || req.ip || req.socket.remoteAddress || '';
 
     const normalized = remoteIp.replace('::ffff:', '');
     const allowedSet = new Set(allowed.map((ip) => ip.replace('::ffff:', '')));
