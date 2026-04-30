@@ -16,13 +16,23 @@ let waterTotal = 180;
 let relayOn = true;
 let valveOpen = true;
 
+// Calibration factors (simulated)
+let cf = 4.55;
+let cp = 1.05;
+let st = 5;
+
 client.on('connect', () => {
     console.log(`[Success] Connected to EMQX. Simulating telemetry for ${deviceId}`);
     console.log(`(Press Ctrl+C to stop the simulation)`);
 
-    // Subscribe to unified physical command channel
-    client.subscribe(`device/${deviceId}/command`, { qos: 1 });
-    console.log(`[Listening] Emulating hardware triggers on unified command channel.`);
+    // Subscribe to all control channels
+    const topics = [
+        `device/${deviceId}/command`,
+        `device/${deviceId}/ota`,
+        `device/${deviceId}/config`
+    ];
+    client.subscribe(topics, { qos: 1 });
+    console.log(`[Listening] Subscribed to: ${topics.join(', ')}`);
 
     setInterval(() => {
         // Drop power and flow to 0 when disconnected
@@ -44,39 +54,81 @@ client.on('connect', () => {
         };
 
         const topic = `device/${deviceId}/data`;
-        // Encode as MessagePack binary (~40-50 bytes vs ~90 bytes JSON)
+        // Encode as MessagePack binary
         const msgpackPayload = Buffer.from(encode(payload));
         client.publish(topic, msgpackPayload);
-        console.log(`[Telemetry] -> ${topic} | Power: ${power.toFixed(1)}W | Flow: ${flow.toFixed(2)}L/min`);
+        // console.log(`[Telemetry] -> ${topic} | Power: ${power.toFixed(1)}W | Flow: ${flow.toFixed(2)}L/min`);
     }, intervalMs);
 });
 
 client.on('message', (topic, message) => {
-    try {
-        const rawPayload = message.toString().trim();
-        let actionTriggered = false;
+    console.log(`\n[Incoming] Topic: ${topic} | Length: ${message.length} bytes`);
 
-        if (topic === `device/${deviceId}/command`) {
-            try {
-                const cmd = JSON.parse(rawPayload);
-                if (cmd.r !== undefined) {
-                    relayOn = cmd.r === 1;
-                    actionTriggered = true;
-                }
-                if (cmd.v !== undefined) {
-                    valveOpen = cmd.v === 1;
-                    actionTriggered = true;
-                }
-            } catch(e) {
-                console.error("Payload not valid JSON");
+    // ── 1. Binary Commands (Relay/Valve) ────────────────────────────────────
+    if (topic === `device/${deviceId}/command`) {
+        if (message.length === 1) {
+            const byte = message[0];
+            const type = (byte >> 4) & 0x0F; // 1=relay, 2=valve
+            const val = byte & 0x0F;        // 0=off, 1=on
+            
+            let typeStr = 'unknown';
+            if (type === 1) {
+                relayOn = val === 1;
+                typeStr = 'relay';
+            } else if (type === 2) {
+                valveOpen = val === 1;
+                typeStr = 'valve';
             }
-        }
 
-        if (actionTriggered) {
-             console.log(`\n🚨 [COMMAND INGESTED] Hardware Switch Toggled! Relay: ${relayOn ? 'ON' : 'OFF'} | Valve: ${valveOpen ? 'OPEN' : 'CLOSE'}\n`);
+            console.log(`🚨 [COMMAND] ${typeStr} -> ${val ? 'ON/OPEN' : 'OFF/CLOSE'}`);
+            
+            // SEND ACK
+            const ackTopic = `device/${deviceId}/command_ack`;
+            const ackPayload = JSON.stringify({ status: 'ok', type: typeStr, value: val });
+            client.publish(ackTopic, ackPayload);
+            console.log(`   [ACK] -> ${ackTopic}`);
         }
-    } catch (e) {
-        console.error("Failed to parse command payload:", e.message);
+    }
+
+    // ── 2. Binary Calibration (Config) ──────────────────────────────────────
+    if (topic === `device/${deviceId}/config`) {
+        if (message.length === 4) {
+            const cf_raw = message.readUInt16BE(0);
+            cf = cf_raw / 100;
+            cp = message[2] / 100;
+            st = message[3];
+
+            console.log(`⚙️  [CONFIG] CF: ${cf.toFixed(2)}, CP: ${cp.toFixed(2)}, ST: ${st}s`);
+
+            // SEND ACK
+            const ackTopic = `device/${deviceId}/config_ack`;
+            const ackPayload = JSON.stringify({ status: 'ok' });
+            client.publish(ackTopic, ackPayload);
+            console.log(`   [ACK] -> ${ackTopic}`);
+        }
+    }
+
+    // ── 3. Binary OTA Update ────────────────────────────────────────────────
+    if (topic === `device/${deviceId}/ota`) {
+        if (message.length >= 4) {
+            const major = message[0];
+            const minor = message[1];
+            const patch = message[2];
+            const flags = message[3];
+            const url = message.slice(4).toString('utf8');
+
+            console.log(`🚀 [OTA] Version: ${major}.${minor}.${patch} | Flags: 0x${flags.toString(16)}`);
+            console.log(`   URL: ${url}`);
+
+            // Simulate update delay
+            console.log(`   Flashing...`);
+            setTimeout(() => {
+                const ackTopic = `device/${deviceId}/ota_ack`;
+                const ackPayload = JSON.stringify({ status: 'ok', version: `${major}.${minor}.${patch}` });
+                client.publish(ackTopic, ackPayload);
+                console.log(`   [ACK] -> ${ackTopic} | Device Reboots.`);
+            }, 2000);
+        }
     }
 });
 

@@ -190,24 +190,47 @@ export default function ControlCenterPage() {
     const [lastOtaLink, setLastOtaLink] = useState(() => localStorage.getItem('ota_last_link') ?? '');
     const [lastOtaVersion, setLastOtaVersion] = useState(() => localStorage.getItem('ota_last_version') ?? '');
 
-    // ── Subscribe to OTA ACKs from devices ───────────────────────────────────
+    // ── Subscribe to ACKs from devices ──────────────────────────────────────
     useEffect(() => {
         if (!MQTT_CONFIG.brokerUrl) return;
         const client = mqtt.connect(MQTT_CONFIG.brokerUrl, {
             ...MQTT_CONFIG.options,
-            clientId: `dashboard-ota-${Math.random().toString(16).slice(2, 8)}`,
+            clientId: `dashboard-ctrl-${Math.random().toString(16).slice(2, 8)}`,
         });
-        client.on('connect', () => { client.subscribe('device/+/ota_ack'); });
+        client.on('connect', () => {
+            client.subscribe('device/+/ota_ack');
+            client.subscribe('device/+/config_ack');
+            client.subscribe('device/+/command_ack');
+        });
         client.on('message', (topic, payload) => {
-            const deviceId = topic.split('/')[1] ?? 'unknown';
-            let ack: { status?: string; version?: string; error?: number } = {};
-            try { ack = JSON.parse(payload.toString()) as typeof ack; } catch { ack = { status: 'unknown' }; }
-            const level: LogEntry['level'] = ack.status === 'ok' ? 'ok' : ack.status === 'noop' ? 'info' : 'err';
-            const text = ack.status === 'ok'
-                ? `✓ ACK [${deviceId}] flash ok — v${ack.version ?? '?'}`
-                : ack.status === 'noop'
-                ? `· ACK [${deviceId}] already up-to-date`
-                : `✗ ACK [${deviceId}] flash failed — error ${ack.error ?? '?'}`;
+            const parts = topic.split('/');
+            const deviceId = parts[1] ?? 'unknown';
+            const type = parts[2] ?? 'unknown';
+
+            let ack: any = {};
+            try { ack = JSON.parse(payload.toString()); } catch { ack = { status: 'unknown' }; }
+
+            let level: LogEntry['level'] = ack.status === 'ok' ? 'ok' : ack.status === 'noop' ? 'info' : 'err';
+            let text = '';
+
+            if (type === 'ota_ack') {
+                text = ack.status === 'ok'
+                    ? `✓ OTA ACK [${deviceId}] flash ok — v${ack.version ?? '?'}`
+                    : ack.status === 'noop'
+                    ? `· OTA ACK [${deviceId}] already up-to-date`
+                    : `✗ OTA ACK [${deviceId}] flash failed — error ${ack.error ?? '?'}`;
+            } else if (type === 'config_ack') {
+                text = ack.status === 'ok'
+                    ? `✓ CONFIG ACK [${deviceId}] calibration applied`
+                    : `✗ CONFIG ACK [${deviceId}] calibration failed — ${ack.error ?? '?'}`;
+            } else if (type === 'command_ack') {
+                text = ack.status === 'ok'
+                    ? `✓ COMMAND ACK [${deviceId}] ${ack.type ?? 'actuation'} success`
+                    : `✗ COMMAND ACK [${deviceId}] ${ack.type ?? 'actuation'} failed`;
+            } else {
+                text = `? Unknown ACK [${deviceId}/${type}]: ${JSON.stringify(ack)}`;
+            }
+
             setLog(prev => [...prev.slice(-49), { ts: ts(), level, text }]);
         });
         return () => { client.end(); };

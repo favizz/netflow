@@ -89,15 +89,14 @@ export class AdminService implements OnModuleInit {
       await this.persistToDb(deviceId, overrides);
     }
 
-    this.logger.log(`Pushing configuration to device [${deviceId}]`);
-    this.mqttClient.emit(
-      `device/${deviceId}/config`,
-      encodeCalibration({
-        cf: base.CAL_FACTOR_FLOWRATE,
-        cp: base.CAL_FACTOR_POWER,
-        st: base.SENSOR_SAMPLING_TIME,
-      }),
-    );
+    const payload = encodeCalibration({
+      cf: base.CAL_FACTOR_FLOWRATE,
+      cp: base.CAL_FACTOR_POWER,
+      st: base.SENSOR_SAMPLING_TIME,
+    });
+
+    this.logger.log(`Pushing configuration to device [${deviceId}] | Hex: ${payload.toString('hex')}`);
+    this.mqttClient.emit(`device/${deviceId}/config`, payload);
   }
 
   async pushConfigToAll(): Promise<{ pushed: string[] }> {
@@ -111,24 +110,23 @@ export class AdminService implements OnModuleInit {
   // ── OTA firmware update ───────────────────────────────────────────────────
 
   pushOtaToDevice(deviceId: string, version: string, binaryLink: string, updateNow = true): void {
-    this.logger.log(`Pushing OTA update to device [${deviceId}] (version: ${version})`);
-    this.mqttClient.emit(
-      `device/${deviceId}/ota`,
-      encodeOta({ version, binaryLink, updateNow }),
-    );
+    const payload = encodeOta({ version, binaryLink, updateNow });
+    this.logger.log(`Pushing OTA update to device [${deviceId}] (version: ${version}) | Hex: ${payload.slice(0, 10).toString('hex')}...`);
+    this.mqttClient.emit(`device/${deviceId}/ota`, payload);
   }
 
   // ── Direct device commands ────────────────────────────────────────────────
 
   sendCommand(deviceId: string, type: 'relay' | 'valve', value: 0 | 1): void {
-    this.logger.log(`Sending command [${type}=${value}] to device [${deviceId}]`);
-    this.mqttClient.emit(`device/${deviceId}/command`, encodeCommand(type, value));
+    const payload = encodeCommand(type, value);
+    this.logger.log(`Sending command [${type}=${value}] to device [${deviceId}] | Hex: ${payload.toString('hex')}`);
+    this.mqttClient.emit(`device/${deviceId}/command`, payload);
   }
 
   async sendCommandToAll(type: 'relay' | 'valve', value: 0 | 1): Promise<{ pushed: string[] }> {
     const units = await this.unitService.findAll();
     for (const unit of units) {
-      this.mqttClient.emit(`device/${unit.device_id}/command`, encodeCommand(type, value));
+      this.sendCommand(unit.device_id, type, value);
     }
     return { pushed: units.map(u => u.device_id) };
   }
