@@ -9,15 +9,13 @@ export class AppController {
     private readonly healthService: HealthService,
   ) {}
 
-  @Get('check')
-  getHello(): string {
-    return this.appService.getHello();
+  @Get()
+  getHealth() {
+    return { overall: 'ok' };
   }
 
-  @Get()
-  async getHealth() {
-    // Keep the internal check for logs, but return 'ok' for the script
-    await this.healthService.check();
-    return { overall: 'ok' };
+  @Get('check')
+  async getDetailedHealth() {
+    return this.healthService.check();
   }
 }
