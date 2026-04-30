@@ -45,6 +45,8 @@ export class HealthService {
     const degraded = redis.status === 'error' || ml.status === 'error';
     const overall = critical ? 'critical' : degraded ? 'degraded' : 'healthy';
 
+    this.logger.log(`Health check: ${overall} (Redis: ${redis.status}, ML: ${ml.status})`);
+
     return {
       checkedAt: new Date().toISOString(),
       overall,
