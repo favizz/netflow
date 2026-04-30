@@ -1,4 +1,9 @@
-const BASE_URL = import.meta.env.VITE_API_BASE_URL as string;
+let BASE_URL = import.meta.env.VITE_API_BASE_URL as string;
+
+// Ensure base URL always points to the /api proxy on the server
+if (BASE_URL && !BASE_URL.endsWith('/api')) {
+  BASE_URL = BASE_URL.replace(/\/$/, '') + '/api';
+}
 
 export async function fetchApi(endpoint: string, options: RequestInit = {}) {
   const token = localStorage.getItem('admin-token');

@@ -32,7 +32,9 @@ export class AdminService implements OnModuleInit {
     private readonly unitService: UnitService,
     private readonly paymentsService: PaymentsService,
     @Inject('MQTT_CLIENT') private readonly mqttClient: ClientProxy,
-  ) {}
+  ) {
+    this.logger.log('AdminService initialized');
+  }
 
   async onModuleInit() {
     await this.loadFromDb();
@@ -101,6 +103,7 @@ export class AdminService implements OnModuleInit {
 
   async pushConfigToAll(): Promise<{ pushed: string[] }> {
     const units = await this.unitService.findAll();
+    this.logger.log(`Pushing configuration to all [${units.length}] units`);
     for (const unit of units) {
       await this.pushConfigToDevice(unit.device_id);
     }

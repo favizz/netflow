@@ -13,6 +13,7 @@ import { TariffModule } from '../tariff/tariff.module';
 import { AuditLogModule } from '../audit-log/audit-log.module';
 import { AdminJwtGuard } from '../common/guards/admin-jwt.guard';
 import { CalibrationSetting } from './entities/calibration-setting.entity';
+import { HealthService } from './health.service';
 
 @Module({
   imports: [
@@ -49,6 +50,7 @@ import { CalibrationSetting } from './entities/calibration-setting.entity';
     ]),
   ],
   controllers: [AdminController],
-  providers: [AdminService, AdminJwtGuard],
+  providers: [AdminService, AdminJwtGuard, HealthService],
+  exports: [HealthService],
 })
 export class AdminModule {}

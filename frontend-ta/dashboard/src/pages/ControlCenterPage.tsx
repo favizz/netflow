@@ -193,16 +193,28 @@ export default function ControlCenterPage() {
     // ── Subscribe to ACKs from devices ──────────────────────────────────────
     useEffect(() => {
         if (!MQTT_CONFIG.brokerUrl) return;
+        console.log(`[MQTT] Attempting to connect to ${MQTT_CONFIG.brokerUrl}...`);
+        
+        let active = true;
         const client = mqtt.connect(MQTT_CONFIG.brokerUrl, {
             ...MQTT_CONFIG.options,
             clientId: `dashboard-ctrl-${Math.random().toString(16).slice(2, 8)}`,
         });
+
         client.on('connect', () => {
+            if (!active) return;
+            console.log(`[MQTT] Connected successfully to ${MQTT_CONFIG.brokerUrl}`);
             client.subscribe('device/+/ota_ack');
             client.subscribe('device/+/config_ack');
             client.subscribe('device/+/command_ack');
         });
+
+        client.on('error', (err) => {
+            if (active) console.error(`[MQTT] Connection error:`, err);
+        });
+
         client.on('message', (topic, payload) => {
+            if (!active) return;
             const parts = topic.split('/');
             const deviceId = parts[1] ?? 'unknown';
             const type = parts[2] ?? 'unknown';
@@ -233,7 +245,10 @@ export default function ControlCenterPage() {
 
             setLog(prev => [...prev.slice(-49), { ts: ts(), level, text }]);
         });
-        return () => { client.end(); };
+        return () => {
+            active = false;
+            client.end();
+        };
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
