@@ -1,12 +1,9 @@
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { MicroserviceOptions, Transport } from '@nestjs/microservices';
-import { DataSource } from 'typeorm';
 import { AppModule } from './app.module';
 import compression from 'compression';
 import helmet from 'helmet';
-import Redis from 'ioredis';
-import * as net from 'net';
 import type { Request, Response } from 'express';
 
 // Suppress raw ioredis reconnect noise — BullMQ inline fallback handles these
@@ -24,6 +21,7 @@ process.on('unhandledRejection', (reason: unknown) => {
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  app.setGlobalPrefix('api');
 
   // ── Security headers ────────────────────────────────────────────────────────
   app.use(helmet({

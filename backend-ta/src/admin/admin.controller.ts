@@ -14,7 +14,6 @@ import { UnitService } from '../unit/unit.service';
 import { AnomalyService } from '../anomaly/anomaly.service';
 import { TariffService, CreateTariffDto } from '../tariff/tariff.service';
 import { AuditLogService } from '../audit-log/audit-log.service';
-import { HealthService } from './health.service';
 
 class CreateResidentDto {
   email!: string;
