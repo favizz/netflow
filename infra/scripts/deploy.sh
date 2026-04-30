@@ -12,7 +12,7 @@ export NVM_DIR="${HOME}/.nvm"
 export PATH="${HOME}/.local/bin:${PATH}"
 
 REPO_DIR="${HOME}/TA-Flowmeter"
-HEALTH_URL="http://localhost:5000/health"
+HEALTH_URL="http://localhost:5000/api/health"
 PREV_COMMIT_FILE="/tmp/netflow_prev_commit"
 
 log() { echo "[deploy] $(date '+%H:%M:%S') $*"; }

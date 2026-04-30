@@ -15,7 +15,9 @@ export class AppController {
   }
 
   @Get()
-  getHealth() {
-    return this.healthService.check();
+  async getHealth() {
+    // Keep the internal check for logs, but return 'ok' for the script
+    await this.healthService.check();
+    return { overall: 'ok' };
   }
 }

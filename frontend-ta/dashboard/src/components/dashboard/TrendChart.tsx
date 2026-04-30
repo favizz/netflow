@@ -229,9 +229,9 @@ export function TrendChart() {
                             <Tooltip
                                 contentStyle={tooltipStyle}
                                 formatter={(val: number | string | readonly (number | string)[] | undefined) => [
-                                    `${Number(Array.isArray(val) ? val[0] : val ?? 0).toFixed(2)} ${LABELS[utility].unit}`,
+                                    `${Number(val ?? 0).toFixed(2)} ${LABELS[utility].unit}`,
                                     LABELS[utility].title
-                                ]}
+                                ] as [string, string]}
                             />
                             <Area
                                 type="monotone"
