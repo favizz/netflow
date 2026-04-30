@@ -21,6 +21,8 @@ import { TariffModule } from './tariff/tariff.module';
 import { AuditLogModule } from './audit-log/audit-log.module';
 import { MlModule } from './ml/ml.module';
 import { RetentionModule } from './retention/retention.module';
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
 
 @Module({
   imports: [
@@ -130,5 +132,7 @@ import { RetentionModule } from './retention/retention.module';
     MlModule,
     RetentionModule,
   ],
+  controllers: [AppController],
+  providers: [AppService],
 })
 export class AppModule {}
