@@ -65,22 +65,25 @@ function HealthPanel() {
         // fetchApi would throw on non-2xx, so we'd lose the body. Read it unconditionally.
         fetch(`${API_BASE_URL}/health`)
             .then(res => res.json())
-            .then((data: any) => {
-                const services: Record<string, ServiceHealth> = {};
-                for (const [key, val] of Object.entries(data.checks ?? {})) {
-                    const v = val as { ok: boolean; latencyMs?: number };
-                    services[key] = {
-                        status: key === 'smtp'
-                            ? (v.ok ? 'configured' : 'not_configured')
-                            : (v.ok ? 'ok' : 'error'),
-                        latencyMs: v.latencyMs ?? null,
-                    };
+            .then((data: unknown) => {
+                if (data && typeof data === 'object') {
+                    const d = data as Record<string, unknown>;
+                    const checks = (d.checks as Record<string, { ok: boolean; latencyMs?: number }>) ?? {};
+                    const services: Record<string, ServiceHealth> = {};
+                    for (const [key, val] of Object.entries(checks)) {
+                        services[key] = {
+                            status: key === 'smtp'
+                                ? (val.ok ? 'configured' : 'not_configured')
+                                : (val.ok ? 'ok' : 'error'),
+                            latencyMs: val.latencyMs ?? null,
+                        };
+                    }
+                    setHealth({
+                        checkedAt: (d.checkedAt as string) ?? new Date().toISOString(),
+                        overall: (d.overall as HealthReport['overall']) ?? 'healthy',
+                        services,
+                    });
                 }
-                setHealth({
-                    checkedAt: data.checkedAt ?? new Date().toISOString(),
-                    overall: data.overall ?? 'healthy',
-                    services,
-                });
             })
             .catch(() => setHealth(null))
             .finally(() => setLoading(false));
@@ -182,10 +185,10 @@ export default function DashboardPage() {
             let pWater = 0;
             let pAlerts = 0;
 
-            (units || []).forEach((u: any) => {
+            (units || []).forEach((u: { last_energy_reading?: number; last_water_reading?: number; balance?: number | string; relay_status?: boolean }) => {
                 pPower += Number(u.last_energy_reading || 0);
                 pWater += Number(u.last_water_reading || 0);
-                if (Number(u.balance) <= 20000 || !u.relay_status) pAlerts++;
+                if (Number(u.balance) <= 20000 || u.relay_status === false) pAlerts++;
             });
 
             setStats({

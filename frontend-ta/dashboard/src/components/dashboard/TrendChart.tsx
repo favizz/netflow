@@ -42,6 +42,19 @@ function periodLabel(key: string, period: Period): string {
     return `Year ${key}`;
 }
 
+interface TrendData {
+    name: string;
+    electricity: number;
+    water: number;
+}
+
+interface TrendResponse {
+    bucket: string;
+    kwh?: number;
+    waterM3?: number;
+    water_m3?: number;
+}
+
 export function TrendChart() {
     const isDark = useIsDark();
     const gridColor = isDark ? '#374151' : '#E5E7EB';
@@ -58,7 +71,7 @@ export function TrendChart() {
     const [utility, setUtility] = useState<Utility>('electricity');
     const [period, setPeriod] = useState<Period>('monthly');
     const [periodKey, setPeriodKey] = useState(() => getCurrentPeriodKey('monthly'));
-    const [data, setData] = useState<any[]>([]);
+    const [data, setData] = useState<TrendData[]>([]);
     const [loading, setLoading] = useState(true);
     const [hasPrev, setHasPrev] = useState(false);
     const [hasNext, setHasNext] = useState(false);
@@ -75,7 +88,7 @@ export function TrendChart() {
         setLoading(true);
 
         fetchApi('/unit')
-            .then(async (units: any[]) => {
+            .then(async (units: { unit_no: string }[]) => {
                 if (cancelled) return;
                 if (!units || units.length === 0) { setData([]); setHasPrev(false); setHasNext(false); return; }
 
@@ -84,7 +97,7 @@ export function TrendChart() {
                 const trends = await fetchApi(`/reporting/trends/${encodeURIComponent(firstUnit)}?period=${apiPeriod}`);
                 if (cancelled) return;
 
-                const raw = (trends || []) as any[];
+                const raw = (trends || []) as TrendResponse[];
 
                 const filtered = raw.filter(t => {
                     const d = new Date(t.bucket);
@@ -95,12 +108,12 @@ export function TrendChart() {
                     return String(d.getFullYear()) === periodKey;
                 });
 
-                const mapped = filtered.map(t => ({
+                const mapped: TrendData[] = filtered.map(t => ({
                     name: period === 'monthly'
                         ? new Date(t.bucket).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })
                         : new Date(t.bucket).toLocaleDateString('id-ID', { month: 'short' }),
-                    electricity: parseFloat(t.kwh || 0),
-                    water: parseFloat(t.waterM3 || t.water_m3 || 0),
+                    electricity: Number(t.kwh || 0),
+                    water: Number(t.waterM3 || t.water_m3 || 0),
                 }));
 
                 setData(mapped);
@@ -215,7 +228,7 @@ export function TrendChart() {
                             <YAxis axisLine={false} tickLine={false} tick={{ fill: tickColor, fontSize: 11 }} width={40} />
                             <Tooltip
                                 contentStyle={tooltipStyle}
-                                formatter={(val: any) => [`${Number(val).toFixed(2)} ${LABELS[utility].unit}`, LABELS[utility].title]}
+                                formatter={(val: number) => [`${val.toFixed(2)} ${LABELS[utility].unit}`, LABELS[utility].title]}
                             />
                             <Area
                                 type="monotone"

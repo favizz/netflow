@@ -52,8 +52,9 @@ function TariffCard({ icon, label, unit, tariff, onSave }: {
         try {
             await onSave(p, date);
             setEditing(false);
-        } catch (err: any) {
-            setError(err.message?.replace(/^API error \(\d+\): /, '') || 'Could not save tariff.');
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : 'Could not save tariff.';
+            setError(message.replace(/^API error \(\d+\): /, '') || 'Could not save tariff.');
         } finally {
             setSaving(false);
         }
@@ -219,7 +220,14 @@ export default function ControlCenterPage() {
             const deviceId = parts[1] ?? 'unknown';
             const type = parts[2] ?? 'unknown';
 
-            let ack: any = {};
+            interface MqttAck {
+                status?: 'ok' | 'noop' | 'error' | 'failed' | 'unknown';
+                version?: string;
+                error?: string | number;
+                type?: string;
+            }
+
+            let ack: MqttAck = {};
             try { ack = JSON.parse(payload.toString()); } catch { ack = { status: 'unknown' }; }
 
             const level: LogEntry['level'] = ack.status === 'ok' ? 'ok' : ack.status === 'noop' ? 'info' : 'err';
@@ -249,7 +257,6 @@ export default function ControlCenterPage() {
             active = false;
             client.end();
         };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const isDirty = useMemo(
@@ -257,8 +264,8 @@ export default function ControlCenterPage() {
         [config, serverConfig]
     );
 
-    const addLog = (level: LogEntry['level'], text: string) =>
-        setLog(prev => [...prev.slice(-49), { ts: ts(), level, text }]);
+    const addLog = useCallback((level: LogEntry['level'], text: string) =>
+        setLog(prev => [...prev.slice(-49), { ts: ts(), level, text }]), []);
 
     const loadTariffs = useCallback(() => {
         fetchApi('/admin/tariff')
@@ -269,17 +276,18 @@ export default function ControlCenterPage() {
                 setElecTariff(sorted('electricity')[0] ?? null);
                 setWaterTariff(sorted('water')[0] ?? null);
             })
-            .catch((err: any) => addLog('err', `Failed to load tariffs: ${err.message}`));
-    }, []);
+            .catch((err: unknown) => addLog('err', `Failed to load tariffs: ${err instanceof Error ? err.message : 'Unknown error'}`));
+    }, [addLog]);
 
     useEffect(() => {
         fetchApi('/admin/settings')
-            .then((data: any) => {
-                if (data) {
+            .then((data: unknown) => {
+                if (data && typeof data === 'object') {
+                    const d = data as Record<string, unknown>;
                     const loaded: CalibrationConfig = {
-                        CAL_FACTOR_FLOWRATE: Number(data.CAL_FACTOR_FLOWRATE ?? DEFAULTS.CAL_FACTOR_FLOWRATE),
-                        CAL_FACTOR_POWER: Number(data.CAL_FACTOR_POWER ?? DEFAULTS.CAL_FACTOR_POWER),
-                        SENSOR_SAMPLING_TIME: Number(data.SENSOR_SAMPLING_TIME ?? DEFAULTS.SENSOR_SAMPLING_TIME),
+                        CAL_FACTOR_FLOWRATE: Number(d.CAL_FACTOR_FLOWRATE ?? DEFAULTS.CAL_FACTOR_FLOWRATE),
+                        CAL_FACTOR_POWER: Number(d.CAL_FACTOR_POWER ?? DEFAULTS.CAL_FACTOR_POWER),
+                        SENSOR_SAMPLING_TIME: Number(d.SENSOR_SAMPLING_TIME ?? DEFAULTS.SENSOR_SAMPLING_TIME),
                     };
                     setConfig(loaded);
                     setServerConfig(loaded);
@@ -315,10 +323,10 @@ export default function ControlCenterPage() {
             const res = await fetchApi('/admin/command', {
                 method: 'POST',
                 body: JSON.stringify({ type, value }),
-            });
+            }) as { pushed?: string[] };
             addLog('ok', `✓ COMMAND sent to ${Array.isArray(res?.pushed) ? res.pushed.length : '?'} device(s)`);
-        } catch (err: any) {
-            addLog('err', `✗ BROADCAST failed: ${err.message}`);
+        } catch (err: unknown) {
+            addLog('err', `✗ BROADCAST failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
         } finally {
             setCmdPending(null);
         }
@@ -328,10 +336,10 @@ export default function ControlCenterPage() {
         setCmdPending('config');
         addLog('info', '→ CONFIG  push to ALL devices');
         try {
-            const res = await fetchApi('/admin/push-config', { method: 'POST' });
+            const res = await fetchApi('/admin/push-config', { method: 'POST' }) as { pushed?: string[] };
             addLog('ok', `✓ CONFIG pushed to ${Array.isArray(res?.pushed) ? res.pushed.length : '?'} device(s)`);
-        } catch (err: any) {
-            addLog('err', `✗ CONFIG push failed: ${err.message}`);
+        } catch (err: unknown) {
+            addLog('err', `✗ CONFIG push failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
         } finally {
             setCmdPending(null);
         }
@@ -345,7 +353,7 @@ export default function ControlCenterPage() {
             const res = await fetchApi('/admin/ota', {
                 method: 'POST',
                 body: JSON.stringify({ version: otaVersion, binaryLink: otaBinaryLink, updateNow: true }),
-            });
+            }) as { pushed?: string[] };
             addLog('info', `→ OTA sent to ${Array.isArray(res?.pushed) ? res.pushed.length : '?'} device(s) — awaiting ACK...`);
             localStorage.setItem('ota_last_link', otaBinaryLink);
             localStorage.setItem('ota_last_version', otaVersion);
@@ -353,8 +361,8 @@ export default function ControlCenterPage() {
             setLastOtaVersion(otaVersion);
             setOtaBinaryLink('');
             setOtaVersion('');
-        } catch (err: any) {
-            addLog('err', `✗ OTA push failed: ${err.message}`);
+        } catch (err: unknown) {
+            addLog('err', `✗ OTA push failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
         } finally {
             setOtaPending(false);
         }

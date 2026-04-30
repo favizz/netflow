@@ -21,13 +21,22 @@ const COLOR_MAP: Record<string, { text: string; bg: string }> = {
     warning:  { text: "text-orange-600 dark:text-orange-400", bg: "bg-orange-50 dark:bg-orange-900/30" },
 };
 
+interface Anomaly {
+    anomalyType: string;
+    severity: 'critical' | 'warning';
+    message: string;
+    detectedAt: string;
+    deviceId?: string;
+    device_id?: string;
+}
+
 export function RecentAlerts() {
-    const [alerts, setAlerts] = useState<any[]>([]);
+    const [alerts, setAlerts] = useState<Anomaly[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         fetchApi('/admin/anomalies')
-            .then((data: any[]) => setAlerts(data.slice(0, 5)))
+            .then((data: Anomaly[]) => setAlerts(data.slice(0, 5)))
             .catch(() => setAlerts([]))
             .finally(() => setLoading(false));
     }, []);
