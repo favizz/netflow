@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { SlidersHorizontal, Save, RefreshCw, CheckCircle, AlertCircle, Zap, Droplets, Loader2, Clock, Pencil, Check, X, Terminal, Radio, UploadCloud } from "lucide-react";
 import { fetchApi } from "@/lib/api";
+import mqtt from "mqtt";
+import { MQTT_CONFIG } from "@/lib/constants";
 
 interface CalibrationConfig {
     CAL_FACTOR_FLOWRATE: number;
@@ -188,6 +190,30 @@ export default function ControlCenterPage() {
     const [lastOtaLink, setLastOtaLink] = useState(() => localStorage.getItem('ota_last_link') ?? '');
     const [lastOtaVersion, setLastOtaVersion] = useState(() => localStorage.getItem('ota_last_version') ?? '');
 
+    // ── Subscribe to OTA ACKs from devices ───────────────────────────────────
+    useEffect(() => {
+        if (!MQTT_CONFIG.brokerUrl) return;
+        const client = mqtt.connect(MQTT_CONFIG.brokerUrl, {
+            ...MQTT_CONFIG.options,
+            clientId: `dashboard-ota-${Math.random().toString(16).slice(2, 8)}`,
+        });
+        client.on('connect', () => { client.subscribe('device/+/ota_ack'); });
+        client.on('message', (topic, payload) => {
+            const deviceId = topic.split('/')[1] ?? 'unknown';
+            let ack: { status?: string; version?: string; error?: number } = {};
+            try { ack = JSON.parse(payload.toString()) as typeof ack; } catch { ack = { status: 'unknown' }; }
+            const level: LogEntry['level'] = ack.status === 'ok' ? 'ok' : ack.status === 'noop' ? 'info' : 'err';
+            const text = ack.status === 'ok'
+                ? `✓ ACK [${deviceId}] flash ok — v${ack.version ?? '?'}`
+                : ack.status === 'noop'
+                ? `· ACK [${deviceId}] already up-to-date`
+                : `✗ ACK [${deviceId}] flash failed — error ${ack.error ?? '?'}`;
+            setLog(prev => [...prev.slice(-49), { ts: ts(), level, text }]);
+        });
+        return () => { client.end(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
     const isDirty = useMemo(
         () => JSON.stringify(config) !== JSON.stringify(serverConfig),
         [config, serverConfig]
@@ -282,7 +308,7 @@ export default function ControlCenterPage() {
                 method: 'POST',
                 body: JSON.stringify({ version: otaVersion, binaryLink: otaBinaryLink, updateNow: true }),
             });
-            addLog('ok', `✓ OTA pushed to ${Array.isArray(res?.pushed) ? res.pushed.length : '?'} device(s)`);
+            addLog('info', `→ OTA sent to ${Array.isArray(res?.pushed) ? res.pushed.length : '?'} device(s) — awaiting ACK...`);
             localStorage.setItem('ota_last_link', otaBinaryLink);
             localStorage.setItem('ota_last_version', otaVersion);
             setLastOtaLink(otaBinaryLink);

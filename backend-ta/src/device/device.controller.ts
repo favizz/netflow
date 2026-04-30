@@ -46,6 +46,46 @@ export class DeviceController {
     void this.auditLogService.log(`device:${deviceId}`, 'OTA_ACK', 'device', deviceId, ack as Record<string, unknown>, result);
   }
 
+  @MessagePattern('device/+/config_ack')
+  handleCalibrationAck(@Payload() data: unknown, @Ctx() ctx: MqttContext): void {
+    const topic = ctx.getTopic();
+    const deviceId = topic.split('/')[1] ?? 'unknown';
+
+    let ack: { status?: string; error?: string | number } = {};
+    try {
+      const raw = Buffer.isBuffer(data)
+        ? (data as Buffer).toString('utf8')
+        : JSON.stringify(data);
+      ack = JSON.parse(raw) as typeof ack;
+    } catch {
+      ack = { status: 'unknown' };
+    }
+
+    const result = ack.status === 'ok' ? 'success' : 'failure';
+    this.logger.log(`CONFIG ACK [${deviceId}] → ${JSON.stringify(ack)}`);
+    void this.auditLogService.log(`device:${deviceId}`, 'CONFIG_ACK', 'device', deviceId, ack as Record<string, unknown>, result);
+  }
+
+  @MessagePattern('device/+/command_ack')
+  handleCommandAck(@Payload() data: unknown, @Ctx() ctx: MqttContext): void {
+    const topic = ctx.getTopic();
+    const deviceId = topic.split('/')[1] ?? 'unknown';
+
+    let ack: { status?: string; type?: string; error?: string | number } = {};
+    try {
+      const raw = Buffer.isBuffer(data)
+        ? (data as Buffer).toString('utf8')
+        : JSON.stringify(data);
+      ack = JSON.parse(raw) as typeof ack;
+    } catch {
+      ack = { status: 'unknown' };
+    }
+
+    const result = ack.status === 'ok' ? 'success' : 'failure';
+    this.logger.log(`COMMAND ACK [${deviceId}] → ${JSON.stringify(ack)}`);
+    void this.auditLogService.log(`device:${deviceId}`, 'COMMAND_ACK', 'device', deviceId, ack as Record<string, unknown>, result);
+  }
+
   @MessagePattern('device/+/data')
   async handleSensorData(@Payload() data: any, @Ctx() ctx: MqttContext) {
     const topic: string = ctx.getTopic();

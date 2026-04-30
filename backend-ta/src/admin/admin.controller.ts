@@ -1,5 +1,5 @@
 import {
-  Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Request, UseGuards,
+  Body, Controller, Delete, Get, Logger, Param, ParseIntPipe, Patch, Post, Request, UseGuards,
 } from '@nestjs/common';
 import type { Request as ExpressRequest } from 'express';
 import { AdminJwtGuard } from '../common/guards/admin-jwt.guard';
@@ -23,6 +23,8 @@ class CreateResidentDto {
 @Controller('admin')
 @UseGuards(AdminJwtGuard)
 export class AdminController {
+  private readonly logger = new Logger(AdminController.name);
+
   constructor(
     private readonly adminService: AdminService,
     private readonly residentsService: ResidentsService,
@@ -128,18 +130,21 @@ export class AdminController {
 
   @Patch('settings')
   async updateSettings(@Body() body: Partial<CalibrationSettings>, @Request() req: AdminRequest) {
-    const result = this.adminService.updateSettings(body);
+    this.logger.log(`Request to update calibration settings from ${this.adminEmail(req)}`);
+    const result = await this.adminService.updateSettings(body);
     void this.auditLogService.log(this.adminEmail(req), 'UPDATE_SETTINGS', 'calibration', null, body as Record<string, unknown>);
     return result;
   }
 
   @Post('push-config/:deviceId')
   pushConfig(@Param('deviceId') deviceId: string) {
+    this.logger.log(`Request to push config to ${deviceId}`);
     return this.adminService.pushConfigToDevice(deviceId);
   }
 
   @Post('push-config')
   pushConfigAll() {
+    this.logger.log(`Request to push config to all devices`);
     return this.adminService.pushConfigToAll();
   }
 
@@ -151,6 +156,7 @@ export class AdminController {
     @Body() body: { type: 'relay' | 'valve'; value: 0 | 1 },
     @Request() req: AdminRequest,
   ) {
+    this.logger.log(`Request to send command [${body.type}=${body.value}] to ${deviceId} from ${this.adminEmail(req)}`);
     this.adminService.sendCommand(deviceId, body.type, body.value);
     void this.auditLogService.log(this.adminEmail(req), 'SEND_COMMAND', 'device', deviceId, body as Record<string, unknown>);
     return { sent: true, deviceId, type: body.type, value: body.value };
@@ -174,6 +180,7 @@ export class AdminController {
     @Body() body: { version: string; binaryLink: string; updateNow?: boolean },
     @Request() req: AdminRequest,
   ) {
+    this.logger.log(`Request to push OTA to ${deviceId} from ${this.adminEmail(req)}`);
     this.adminService.pushOtaToDevice(deviceId, body.version, body.binaryLink, body.updateNow ?? true);
     void this.auditLogService.log(this.adminEmail(req), 'OTA_PUSH', 'device', deviceId, body as Record<string, unknown>);
     return { pushed: [deviceId] };
@@ -184,6 +191,7 @@ export class AdminController {
     @Body() body: { version: string; binaryLink: string; updateNow?: boolean },
     @Request() req: AdminRequest,
   ) {
+    this.logger.log(`Request to push OTA to all devices from ${this.adminEmail(req)}`);
     const result = await this.adminService.pushOtaToAll(body.version, body.binaryLink, body.updateNow ?? true);
     void this.auditLogService.log(this.adminEmail(req), 'OTA_PUSH_ALL', 'device', null, body as Record<string, unknown>);
     return result;

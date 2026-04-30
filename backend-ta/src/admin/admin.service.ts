@@ -1,4 +1,4 @@
-import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
+import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, IsNull } from 'typeorm';
 import { ClientProxy } from '@nestjs/microservices';
@@ -21,6 +21,8 @@ const DEFAULTS: CalibrationSettings = {
 
 @Injectable()
 export class AdminService implements OnModuleInit {
+  private readonly logger = new Logger(AdminService.name);
+
   /** In-memory cache — loaded from DB on startup, written through on every update. */
   private cached: CalibrationSettings = { ...DEFAULTS };
 
@@ -87,6 +89,7 @@ export class AdminService implements OnModuleInit {
       await this.persistToDb(deviceId, overrides);
     }
 
+    this.logger.log(`Pushing configuration to device [${deviceId}]`);
     this.mqttClient.emit(
       `device/${deviceId}/config`,
       encodeCalibration({
@@ -108,6 +111,7 @@ export class AdminService implements OnModuleInit {
   // ── OTA firmware update ───────────────────────────────────────────────────
 
   pushOtaToDevice(deviceId: string, version: string, binaryLink: string, updateNow = true): void {
+    this.logger.log(`Pushing OTA update to device [${deviceId}] (version: ${version})`);
     this.mqttClient.emit(
       `device/${deviceId}/ota`,
       encodeOta({ version, binaryLink, updateNow }),
@@ -117,6 +121,7 @@ export class AdminService implements OnModuleInit {
   // ── Direct device commands ────────────────────────────────────────────────
 
   sendCommand(deviceId: string, type: 'relay' | 'valve', value: 0 | 1): void {
+    this.logger.log(`Sending command [${type}=${value}] to device [${deviceId}]`);
     this.mqttClient.emit(`device/${deviceId}/command`, encodeCommand(type, value));
   }
 
