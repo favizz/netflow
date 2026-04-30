@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { Info, Wifi, Zap, AlertTriangle } from "lucide-react";
+import { Wifi, Zap, AlertTriangle } from "lucide-react";
 import { useState } from "react";
 import { ZoneDetailModal } from "./ZoneDetailModal";
 
@@ -14,7 +14,7 @@ interface TowerProps {
 
 type TabType = "consumption" | "connectivity" | "anomaly";
 
-export function TowerCard({ name, totalDevices, onlineDevices, anomalies }: TowerProps) {
+export function TowerCard({ name }: TowerProps) {
     const [activeTab, setActiveTab] = useState<TabType>("consumption");
     const [selectedZone, setSelectedZone] = useState<{ floor: number; zone: string } | null>(null);
 

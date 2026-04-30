@@ -222,7 +222,7 @@ export default function ControlCenterPage() {
             let ack: any = {};
             try { ack = JSON.parse(payload.toString()); } catch { ack = { status: 'unknown' }; }
 
-            let level: LogEntry['level'] = ack.status === 'ok' ? 'ok' : ack.status === 'noop' ? 'info' : 'err';
+            const level: LogEntry['level'] = ack.status === 'ok' ? 'ok' : ack.status === 'noop' ? 'info' : 'err';
             let text = '';
 
             if (type === 'ota_ack') {
