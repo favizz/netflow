@@ -228,8 +228,8 @@ export function TrendChart() {
                             <YAxis axisLine={false} tickLine={false} tick={{ fill: tickColor, fontSize: 11 }} width={40} />
                             <Tooltip
                                 contentStyle={tooltipStyle}
-                                formatter={(val: number | string | Array<number | string> | undefined) => [
-                                    `${Number(val ?? 0).toFixed(2)} ${LABELS[utility].unit}`,
+                                formatter={(val: number | string | readonly (number | string)[] | undefined) => [
+                                    `${Number(Array.isArray(val) ? val[0] : val ?? 0).toFixed(2)} ${LABELS[utility].unit}`,
                                     LABELS[utility].title
                                 ]}
                             />
