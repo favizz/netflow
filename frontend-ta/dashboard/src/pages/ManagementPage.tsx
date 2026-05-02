@@ -1,4 +1,4 @@
-import { Shield, Users, UserCheck, UserPlus, Trash2, Link, Unlink, Loader2, X, Check, ChevronLeft, ChevronRight } from "lucide-react";
+import { Shield, Users, UserCheck, UserPlus, Trash2, Link, Loader2, X, Check, ChevronLeft, ChevronRight } from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
 import { fetchApi } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -51,7 +51,7 @@ export default function ManagementPage() {
     const loadAll = useCallback(() => {
         fetchApi('/admin/accounts').then(setAccounts).catch(() => {});
         fetchApi('/admin/residents').then(setResidents).catch(() => {});
-        fetchApi('/unit').then((data: any[]) => setUnits(data.map(u => ({
+        fetchApi('/unit').then((data: { id: number; unit_no: string; resident_email: string | null }[]) => setUnits(data.map(u => ({
             id: u.id,
             unit_no: u.unit_no,
             resident_email: u.resident_email || null,
@@ -72,8 +72,8 @@ export default function ManagementPage() {
             setAddForm({ email: "", name: "" });
             setShowAddForm(false);
             loadAll();
-        } catch (err: any) {
-            setAddError(err.message || "Failed to add resident");
+        } catch (err) {
+            setAddError(err instanceof Error ? err.message : "Failed to add resident");
         } finally {
             setAddLoading(false);
         }
@@ -86,8 +86,8 @@ export default function ManagementPage() {
             await fetchApi(`/admin/residents/${encodeURIComponent(deleteTarget)}`, { method: 'DELETE' });
             setDeleteTarget(null);
             loadAll();
-        } catch (err: any) {
-            setAddError(err.message?.replace(/^API error \(\d+\): /, '') || "Failed to delete resident");
+        } catch (err) {
+            setAddError(err instanceof Error ? err.message.replace(/^API error \(\d+\): /, '') : "Failed to delete resident");
         } finally {
             setDeleteLoading(false);
         }
@@ -103,8 +103,8 @@ export default function ManagementPage() {
             setAssignTarget(null);
             setAssignUnitId("");
             loadAll();
-        } catch (err: any) {
-            setAssignError(err.message || "Failed to assign unit");
+        } catch (err) {
+            setAssignError(err instanceof Error ? err.message : "Failed to assign unit");
         } finally {
             setAssignLoading(false);
         }
@@ -114,8 +114,8 @@ export default function ManagementPage() {
         try {
             await fetchApi(`/admin/residents/${encodeURIComponent(email)}/units/${unitId}`, { method: 'DELETE' });
             loadAll();
-        } catch (err: any) {
-            setAddError(err.message?.replace(/^API error \(\d+\): /, '') || "Failed to unassign unit");
+        } catch (err) {
+            setAddError(err instanceof Error ? err.message.replace(/^API error \(\d+\): /, '') : "Failed to unassign unit");
         }
     };
 
@@ -127,8 +127,8 @@ export default function ManagementPage() {
                 body: JSON.stringify({ enabled: currentRole !== 'admin' }),
             });
             loadAll();
-        } catch (err: any) {
-            setAddError(err.message?.replace(/^API error \(\d+\): /, '') || "Failed to update account");
+        } catch (err) {
+            setAddError(err instanceof Error ? err.message.replace(/^API error \(\d+\): /, '') : "Failed to update account");
         } finally {
             setToggleLoading(null);
         }
@@ -178,7 +178,7 @@ export default function ManagementPage() {
                             {accounts.map((acc) => (
                                 <tr key={acc.email} className="hover:bg-gray-50">
                                     <td className="px-4 py-2 font-medium text-gray-900">{acc.email}</td>
-                                    <td className="px-4 py-2 text-gray-500">{(acc as any).name || "—"}</td>
+                                    <td className="px-4 py-2 text-gray-500">{(acc as { name?: string }).name || "—"}</td>
                                     <td className="px-4 py-2 text-gray-400 text-xs">{new Date(acc.created_at).toLocaleDateString()}</td>
                                     <td className="px-4 py-2 text-right">
                                         <button

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { ScrollText, Search, ChevronDown, Copy, Check, ExternalLink } from "lucide-react";
+import { Search, ChevronDown, Copy, Check, ExternalLink } from "lucide-react";
 import { fetchApi } from "@/lib/api";
 import { API_BASE_URL } from "@/lib/constants";
 
@@ -84,7 +84,7 @@ type LogEntry = {
     result: 'success' | 'failure' | 'info';
 };
 
-function mapAuditLog(entry: any): LogEntry {
+function mapAuditLog(entry: { id: number; created_at: string; admin_email: string | null; action: string | null; entity: string | null; entity_id: string | null; details: string | null; result: 'success' | 'failure' | 'info' | null; }): LogEntry {
     return {
         id: String(entry.id),
         timestamp: entry.created_at,
@@ -94,7 +94,7 @@ function mapAuditLog(entry: any): LogEntry {
         entity: entry.entity ?? '',
         entity_id: entry.entity_id ?? null,
         details: entry.details,
-        result: (entry.result as any) ?? 'success',
+        result: entry.result ?? 'success',
     };
 }
 
@@ -139,7 +139,7 @@ export default function LogsPage() {
     useEffect(() => {
         setLoading(true);
         fetchApi('/admin/audit-logs')
-            .then((data: any[]) => setLogs(Array.isArray(data) ? data.map(mapAuditLog) : []))
+            .then((data: Parameters<typeof mapAuditLog>[0][]) => setLogs(Array.isArray(data) ? data.map(mapAuditLog) : []))
             .catch(() => setLogs([]))
             .finally(() => setLoading(false));
     }, []);

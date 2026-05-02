@@ -31,8 +31,8 @@ export function AddDeviceModal({ isOpen, onClose, onSuccess }: AddDeviceModalPro
             setFormData({ unit_no: "", device_id: "", balance: "0" });
             onSuccess();
             onClose();
-        } catch (err: any) {
-            setError(err.message || "Failed to create unit");
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Failed to create unit");
         } finally {
             setLoading(false);
         }

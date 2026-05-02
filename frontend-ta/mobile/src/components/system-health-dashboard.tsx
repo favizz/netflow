@@ -1,4 +1,5 @@
 "use client"
+import { useState } from "react"
 
 import { Card } from "@/components/ui/card"
 import { AlertTriangle, CheckCircle2, Clock, Zap, Droplets, AlertCircle } from "lucide-react"
@@ -10,6 +11,7 @@ interface SystemHealthDashboardProps {
 }
 
 export default function SystemHealthDashboard({ devices, lastUpdated }: SystemHealthDashboardProps) {
+  const [now] = useState(() => Date.now())
   const connectedDevices = devices.filter((d) => d.connectivity === "connected").length
   const allDevicesHealthy = devices.every((d) => d.connectivity === "connected" && !d.tampering)
   const anyTampering = devices.some((d) => d.tampering)
@@ -83,7 +85,7 @@ export default function SystemHealthDashboard({ devices, lastUpdated }: SystemHe
               <div>
                 <span className="text-muted-foreground">Telemetri</span>
                 <p className="font-semibold text-foreground">
-                  {Math.floor((Date.now() - new Date(electricityMeter.lastTelemetry).getTime()) / 60000)} min lalu
+                  {Math.floor((now - new Date(electricityMeter.lastTelemetry).getTime()) / 60000)} min lalu
                 </p>
               </div>
             </div>
@@ -118,7 +120,7 @@ export default function SystemHealthDashboard({ devices, lastUpdated }: SystemHe
               <div className="col-span-2">
                 <span className="text-muted-foreground">Telemetri</span>
                 <p className="font-semibold text-foreground">
-                  {Math.floor((Date.now() - new Date(waterMeter.lastTelemetry).getTime()) / 60000)} min lalu
+                  {Math.floor((now - new Date(waterMeter.lastTelemetry).getTime()) / 60000)} min lalu
                 </p>
               </div>
             </div>

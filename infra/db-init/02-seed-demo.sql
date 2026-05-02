@@ -30,6 +30,7 @@ INSERT IGNORE INTO tariffs (utility_type, price_per_unit, effective_date) VALUES
 
 INSERT IGNORE INTO residents (email, name, role) VALUES
   ('izza.diasputra10@gmail.com', 'System Admin',     'admin'),
+  ('18222134@std.stei.itb.ac.id', 'System Admin 2', 'admin'),
   ('cubloxitwo@gmail.com',       'Resident Two',     'resident'),
   ('cubloxithree@gmail.com',     'Resident Three',   'resident'),
   ('cubloxifour@gmail.com',      'Resident Four',    'resident'),

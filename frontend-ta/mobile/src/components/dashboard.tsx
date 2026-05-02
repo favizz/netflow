@@ -30,7 +30,7 @@ interface DashboardProps {
   onSelectUnit?: (id: number) => Promise<void>
 }
 
-interface LivePoint {
+type LivePoint = {
   date: string
   kwh: number
   water: number
@@ -39,7 +39,7 @@ interface LivePoint {
   fullDate: string
 }
 
-interface TrendPoint {
+type TrendPoint = {
   date: string
   kwh: number
   water: number
@@ -185,12 +185,12 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
     client.on("message", (t, msg) => {
       if (t !== topic) return
       try {
-        let p: Record<string, any> | null = null
+        let p: Record<string, unknown> | null = null
         const uint8 = new Uint8Array(msg)
 
         // 1. Try MessagePack
         try {
-          const decoded = msgpackDecode(uint8) as Record<string, any>
+          const decoded = msgpackDecode(uint8) as Record<string, unknown>
           if (decoded && typeof decoded === 'object') p = decoded
         } catch { /* not msgpack */ }
 
@@ -265,7 +265,7 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
   const currentWatts  = latestLive?.watts    ?? 0
   const currentFlow   = latestLive?.flowRate ?? 0
 
-  const totalChart = displayData.reduce((s, d) => s + ((d as any)[chartDataKey] ?? 0), 0)
+  const totalChart = displayData.reduce((s, d) => s + ((d as unknown as Record<string, number>)[chartDataKey] ?? 0), 0)
   const avgChart   = displayData.length > 0 ? totalChart / displayData.length : 0
 
   // ── Control handlers ─────────────────────────────────────────────────────
@@ -490,7 +490,7 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
               <p className="text-xs text-muted-foreground">{isLive ? "Maks" : "Total"}</p>
               <p className="font-bold text-foreground">
                 {isLive
-                  ? Math.max(...displayData.map((d) => (d as any)[chartDataKey] ?? 0)).toFixed(1)
+                  ? Math.max(...displayData.map((d) => (d as unknown as Record<string, number>)[chartDataKey] ?? 0)).toFixed(1)
                   : totalChart.toFixed(2)
                 }{" "}
                 <span className="text-xs font-normal text-muted-foreground">{chartUnit}</span>

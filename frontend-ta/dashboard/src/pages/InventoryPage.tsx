@@ -22,8 +22,8 @@ export default function InventoryPage() {
             fetchApi('/unit/connectivity').catch(() => ({ onlineUnitsList: [], offlineUnitsList: [] }))
         ])
             .then(([units, conn]) => {
-                const onlineIds = new Set((conn.onlineUnitsList || []).map((u: any) => u.device_id));
-                const mapped: InventoryItem[] = units.map((u: any) => ({
+                const onlineIds = new Set((conn.onlineUnitsList || []).map((u: { device_id: string }) => u.device_id));
+                const mapped: InventoryItem[] = units.map((u: { id: number; resident_email: string | null; unit_no: string; device_id: string; relay_status: number; valve_status: number }) => ({
                     id: String(u.id),
                     tenant: u.resident_email || "Unassigned",
                     unit: u.unit_no,
@@ -49,8 +49,8 @@ export default function InventoryPage() {
             await fetchApi(`/unit/${deleteConfirm.id}`, { method: 'DELETE' });
             setDeleteConfirm(null);
             loadData();
-        } catch (err: any) {
-            setDeleteError(err.message?.replace(/^API error \(\d+\): /, '') || 'Could not delete unit. Please try again.');
+        } catch (err) {
+            setDeleteError(err instanceof Error ? err.message.replace(/^API error \(\d+\): /, '') : 'Could not delete unit. Please try again.');
         } finally {
             setDeleteLoading(false);
         }

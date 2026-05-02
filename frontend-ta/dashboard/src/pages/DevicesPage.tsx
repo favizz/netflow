@@ -27,9 +27,9 @@ export default function DevicesPage() {
             .then(([units, conn]) => {
                 // conn.units is the per-unit connectivity array from /unit/connectivity
                 const onlineIds = new Set(
-                    ((conn.units || []) as any[]).filter((u: any) => u.online).map((u: any) => u.deviceId)
+                    ((conn.units || []) as { online: boolean; deviceId: string }[]).filter(u => u.online).map(u => u.deviceId)
                 );
-                const mapped: InventoryItem[] = units.map((u: any) => ({
+                const mapped: InventoryItem[] = units.map((u: { id: number; resident_email: string | null; unit_no: string; device_id: string; relay_status: number; valve_status: number }) => ({
                     id: String(u.id),
                     tenant: u.resident_email || "Unassigned",
                     unit: u.unit_no,
@@ -67,8 +67,8 @@ export default function DevicesPage() {
             await fetchApi(`/unit/${deleteConfirm.id}`, { method: 'DELETE' });
             setDeleteConfirm(null);
             loadData();
-        } catch (err: any) {
-            setDeleteError(err.message?.replace(/^API error \(\d+\): /, '') || "Failed to delete unit");
+        } catch (err) {
+            setDeleteError(err instanceof Error ? err.message.replace(/^API error \(\d+\): /, '') : "Failed to delete unit");
         } finally {
             setDeleteLoading(false);
         }

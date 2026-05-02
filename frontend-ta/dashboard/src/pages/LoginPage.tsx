@@ -27,8 +27,9 @@ export default function LoginPage() {
     setLoading(true);
     setError('');
     try {
-      const BASE_URL = import.meta.env.VITE_API_BASE_URL as string;
-      const res = await fetch(`${BASE_URL}/auth/admin`, {
+      const BASE_URL = (import.meta.env.VITE_API_BASE_URL as string) || 'http://localhost:5000';
+      const apiBase = BASE_URL.endsWith('/api') ? BASE_URL : BASE_URL.replace(/\/$/, '') + '/api';
+      const res = await fetch(`${apiBase}/auth/admin`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ credential: response.credential }),
@@ -40,8 +41,8 @@ export default function LoginPage() {
       const data = await res.json();
       localStorage.setItem('admin-token', data.accessToken);
       navigate('/');
-    } catch (err: any) {
-      setError(err.message || 'Sign-in failed. Please try again.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Sign-in failed. Please try again.');
     } finally {
       setLoading(false);
     }
