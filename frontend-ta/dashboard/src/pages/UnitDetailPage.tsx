@@ -72,7 +72,8 @@ export default function UnitDetailPage() {
         fontSize: '12px',
     };
 
-    const [unitInfo, setUnitInfo] = useState<any>(null);
+    type UnitInfoState = { unit: string; tenant: string; meterSerial: string; status: string; lastUpdate: string; relay_status?: number; valve_status?: number; };
+    const [unitInfo, setUnitInfo] = useState<UnitInfoState | null>(null);
     const [loadingInfo, setLoadingInfo] = useState(true);
 
     const [powerState, setPowerState] = useState(false);
@@ -110,9 +111,9 @@ export default function UnitDetailPage() {
                 return fetchApi('/unit/connectivity');
             })
             .then(conn => {
-                setUnitInfo((prev: any) => {
+                setUnitInfo((prev: UnitInfoState | null) => {
                     if (!prev) return prev;
-                    const isOnline = Array.isArray(conn.units) && conn.units.some((u: any) => u.online && u.deviceId === prev.meterSerial);
+                    const isOnline = Array.isArray(conn.units) && conn.units.some((u: { online: boolean; deviceId: string; }) => u.online && u.deviceId === prev.meterSerial);
                     return { ...prev, status: isOnline ? "Online" : "Offline", lastUpdate: "Live Data" };
                 });
             })
@@ -125,10 +126,10 @@ export default function UnitDetailPage() {
         const period = timeRange === "Today" ? "daily" : "monthly";
         fetchApi(`/reporting/trends/${encodeURIComponent(unitInfo.unit)}?period=${period}`)
             .then(data => {
-                const mapped = (data || []).map((t: any) => ({
+                const mapped = (data || []).map((t: { bucket: string; kwh?: string; waterM3?: string; water_m3?: string; }) => ({
                     time: new Date(t.bucket).toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric' }),
-                    powerVal: parseFloat(t.kwh || 0),
-                    waterVal: parseFloat(t.waterM3 || t.water_m3 || 0),
+                    powerVal: parseFloat(t.kwh || "0"),
+                    waterVal: parseFloat(t.waterM3 || t.water_m3 || "0"),
                 }));
                 setHistoricalTrends(mapped);
             })
@@ -155,7 +156,7 @@ export default function UnitDetailPage() {
                 
                 // Try MessagePack first (standard for v2 / mobile)
                 try {
-                    const decoded = msgpackDecode(new Uint8Array(message)) as any;
+                    const decoded = msgpackDecode(new Uint8Array(message)) as IoTPayload;
                     if (decoded && (decoded.p !== undefined || decoded.wf !== undefined)) {
                         parsed = decoded;
                     }
@@ -167,7 +168,7 @@ export default function UnitDetailPage() {
                 if (!parsed) return;
 
                 if (topic === telemetryTopic) {
-                    setUnitInfo((prev: any) => prev?.status !== "Online" ? { ...prev, status: "Online" } : prev);
+                    setUnitInfo((prev: UnitInfoState | null) => prev?.status !== "Online" ? { ...prev!, status: "Online" } : prev);
                     setEnergyStats({
                         total_kwh: parsed.et ?? energyStats.total_kwh,
                         active_power_w: parsed.p ?? 0,
@@ -198,7 +199,7 @@ export default function UnitDetailPage() {
 
         client.on('error', () => {
             setIsConnected(false);
-            setUnitInfo((prev: any) => ({ ...prev, status: "Offline" }));
+            setUnitInfo((prev: UnitInfoState | null) => (prev ? { ...prev, status: "Offline" } : null));
         });
 
         setMqttClient(client);
@@ -214,7 +215,7 @@ export default function UnitDetailPage() {
         if (unitInfo?.meterSerial && mqttClient && isConnected) {
             const cmdTopic = `device/${unitInfo.meterSerial}/command`;
             const payload = encodeCommand('relay', newState ? 1 : 0);
-            mqttClient.publish(cmdTopic, payload as any);
+            mqttClient.publish(cmdTopic, payload as unknown as string);
             setLiveLogs(prev => [{
                 timestamp: new Date().toISOString(), value: newState ? 1 : 0, unit: 'CMD',
                 rawPayload: `OUTGOING [Binary] ${cmdTopic}: relay=${newState ? 1 : 0} (0x${payload[0].toString(16).toUpperCase()}) 1B`,
@@ -228,7 +229,7 @@ export default function UnitDetailPage() {
         if (unitInfo?.meterSerial && mqttClient && isConnected) {
             const cmdTopic = `device/${unitInfo.meterSerial}/command`;
             const payload = encodeCommand('valve', newState ? 1 : 0);
-            mqttClient.publish(cmdTopic, payload as any);
+            mqttClient.publish(cmdTopic, payload as unknown as string);
             setLiveLogs(prev => [{
                 timestamp: new Date().toISOString(), value: newState ? 1 : 0, unit: 'CMD',
                 rawPayload: `OUTGOING [Binary] ${cmdTopic}: valve=${newState ? 1 : 0} (0x${payload[0].toString(16).toUpperCase()}) 1B`,

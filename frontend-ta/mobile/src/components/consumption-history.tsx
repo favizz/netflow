@@ -15,7 +15,7 @@ import { MQTT_CONFIG } from "@/lib/config"
 import { api } from "@/lib/api"
 import { interactive, DEFAULT_TARIFF, type TimePeriod } from "@/lib/styles"
 
-interface ChartData {
+type ChartData = {
   date: string
   kwh: number
   water: number
@@ -133,10 +133,10 @@ export default function ConsumptionHistory({ unitId }: ConsumptionHistoryProps) 
       if (incomingTopic !== topic) return
 
       try {
-        let payload: Record<string, any>
+        let payload: Record<string, unknown>
         try {
           const uint8 = new Uint8Array(message)
-          payload = msgpackDecode(uint8) as Record<string, any>
+          payload = msgpackDecode(uint8) as Record<string, unknown>
         } catch {
           payload = JSON.parse(message.toString())
         }
@@ -145,10 +145,10 @@ export default function ConsumptionHistory({ unitId }: ConsumptionHistoryProps) 
         const now = new Date()
 
         setRealtimeData((prev) => {
-          const watts     = Number(payload?.p  ?? payload?.electricity?.active_power_w ?? 0)
-          const flowRate  = Number(payload?.wf ?? payload?.water?.flow_rate_lpm       ?? 0)
-          const totalKwh  = Number(payload?.et ?? payload?.electricity?.total_energy_kwh ?? 0)
-          const totalWater = Number(payload?.wt ?? payload?.water?.total_volume_m3        ?? 0)
+          const watts     = Number(payload?.p  ?? (payload?.electricity as Record<string, unknown>)?.active_power_w ?? 0)
+          const flowRate  = Number(payload?.wf ?? (payload?.water as Record<string, unknown>)?.flow_rate_lpm       ?? 0)
+          const totalKwh  = Number(payload?.et ?? (payload?.electricity as Record<string, unknown>)?.total_energy_kwh ?? 0)
+          const totalWater = Number(payload?.wt ?? (payload?.water as Record<string, unknown>)?.total_volume_m3        ?? 0)
 
           const last = prev.length > 0 ? prev[prev.length - 1] : null
           const kwh   = totalKwh   > 0 ? totalKwh   : (last?.kwh   || 0) + (watts    / 1000 / 60) * 2

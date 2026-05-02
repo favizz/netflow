@@ -33,8 +33,8 @@ export function EditUnitModal({ unit, onClose, onSuccess }: EditUnitModalProps) 
             });
             onSuccess();
             onClose();
-        } catch (err: any) {
-            setError(err.message || "Failed to update unit");
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Failed to update unit");
         } finally {
             setLoading(false);
         }

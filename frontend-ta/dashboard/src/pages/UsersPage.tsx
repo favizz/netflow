@@ -83,7 +83,7 @@ export default function UsersPage() {
             fetchApi('/unit').catch(() => []),
         ]).then(([res, unitData]) => {
             setResidents(Array.isArray(res) ? res : []);
-            setUnits(Array.isArray(unitData) ? unitData.map((u: any) => ({ id: u.id, unit_no: u.unit_no, resident_email: u.resident_email || null })) : []);
+            setUnits(Array.isArray(unitData) ? unitData.map((u: { id: number; unit_no: string; resident_email: string | null; }) => ({ id: u.id, unit_no: u.unit_no, resident_email: u.resident_email || null })) : []);
         }).finally(() => setLoading(false));
     }, []);
 
@@ -119,8 +119,8 @@ export default function UsersPage() {
             setAddForm({ email: '', name: '' });
             setShowAddForm(false);
             loadAll();
-        } catch (err: any) {
-            setAddError(err.message?.replace(/^API error \(\d+\): /, '') || 'Could not add resident. Check the email and try again.');
+        } catch (err) {
+            setAddError(err instanceof Error ? err.message.replace(/^API error \(\d+\): /, '') : 'Could not add resident. Check the email and try again.');
         } finally {
             setAddLoading(false);
         }
@@ -134,8 +134,8 @@ export default function UsersPage() {
             await fetchApi(`/admin/residents/${encodeURIComponent(deleteTarget)}`, { method: 'DELETE' });
             setDeleteTarget(null);
             loadAll();
-        } catch (err: any) {
-            setDeleteError(err.message?.replace(/^API error \(\d+\): /, '') || 'Could not delete resident.');
+        } catch (err) {
+            setDeleteError(err instanceof Error ? err.message.replace(/^API error \(\d+\): /, '') : 'Could not delete resident.');
         } finally {
             setDeleteLoading(false);
         }
@@ -151,8 +151,8 @@ export default function UsersPage() {
             setAssignTarget(null);
             setAssignUnitId('');
             loadAll();
-        } catch (err: any) {
-            setAssignError(err.message?.replace(/^API error \(\d+\): /, '') || 'Could not assign unit.');
+        } catch (err) {
+            setAssignError(err instanceof Error ? err.message.replace(/^API error \(\d+\): /, '') : 'Could not assign unit.');
         } finally {
             setAssignLoading(false);
         }
@@ -163,8 +163,8 @@ export default function UsersPage() {
         try {
             await fetchApi(`/admin/residents/${encodeURIComponent(email)}/units/${unitId}`, { method: 'DELETE' });
             loadAll();
-        } catch (err: any) {
-            setInlineError(err.message?.replace(/^API error \(\d+\): /, '') || 'Could not unassign unit.');
+        } catch (err) {
+            setInlineError(err instanceof Error ? err.message.replace(/^API error \(\d+\): /, '') : 'Could not unassign unit.');
         }
     };
 
@@ -178,8 +178,8 @@ export default function UsersPage() {
             });
             setToggleTarget(null);
             loadAll();
-        } catch (err: any) {
-            setInlineError(err.message?.replace(/^API error \(\d+\): /, '') || 'Could not update role.');
+        } catch (err) {
+            setInlineError(err instanceof Error ? err.message.replace(/^API error \(\d+\): /, '') : 'Could not update role.');
             setToggleTarget(null);
         } finally {
             setToggleLoading(false);
@@ -217,7 +217,7 @@ export default function UsersPage() {
                             </div>
                             <select
                                 value={roleFilter}
-                                onChange={e => { setRoleFilter(e.target.value as any); setPage(1); }}
+                                onChange={e => { setRoleFilter(e.target.value as 'all' | 'admin' | 'resident'); setPage(1); }}
                                 className="h-9 rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 text-sm text-gray-700 dark:text-gray-300 outline-none focus:border-primary focus:ring-1 focus:ring-primary"
                             >
                                 <option value="all">All roles</option>

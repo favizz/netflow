@@ -12,7 +12,7 @@ import {
 } from "recharts"
 
 interface ConsumptionChartProps {
-  data: any[]
+  data: { [key: string]: string | number }[]
   dataKey: string
   unit: string
   period: "daily" | "weekly" | "monthly"
@@ -27,7 +27,7 @@ function MobileTouchLabel({
   unit,
 }: {
   active?: boolean
-  payload?: any[]
+  payload?: { value: string | number }[]
   label?: string
   unit: string
 }) {
@@ -60,7 +60,7 @@ export default function ConsumptionChart({
   const [activePoint, setActivePoint] = useState<{ value: number; label: string } | null>(null)
 
   const handleMouseMove = useCallback(
-    (e: any) => {
+    (e: { activePayload?: { value: number }[]; activeLabel?: string }) => {
       if (e?.activePayload?.[0]) {
         setActivePoint({
           value: e.activePayload[0].value,

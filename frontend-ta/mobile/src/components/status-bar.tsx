@@ -1,13 +1,12 @@
-import { STATUS_MAP, type BalanceStatus } from "@/lib/styles"
+import { type BalanceStatus } from "@/lib/styles"
 
 interface StatusBarProps {
   percentage: number
   status: BalanceStatus
 }
 
-export default function StatusBar({ percentage, status }: StatusBarProps) {
-  const { barColor } = STATUS_MAP[status]
-
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export default function StatusBar(_props: StatusBarProps) {
   // The progress bar and percentage are commented out as the textual status pill is sufficient
   /*
   return (

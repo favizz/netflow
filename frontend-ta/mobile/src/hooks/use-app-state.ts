@@ -73,9 +73,9 @@ const generateMockData = (unitId: string) => {
 }
 
 export function useAppState() {
-  const [utility, setUtility] = useState<UtilityStatus>(generateMockData("UNIT-001"))
+  const [utility, setUtility] = useState<UtilityStatus>(() => generateMockData("UNIT-001"))
 
-  const [devices, setDevices] = useState<DeviceStatus[]>([
+  const [devices, setDevices] = useState<DeviceStatus[]>(() => [
     {
       id: "meter-kwh-001",
       type: "electricity",
@@ -97,7 +97,7 @@ export function useAppState() {
     },
   ])
 
-  const [transactions, setTransactions] = useState<Transaction[]>([
+  const [transactions, setTransactions] = useState<Transaction[]>(() => [
     {
       id: "TRX-20250103-001",
       timestamp: new Date(Date.now() - 86400000).toISOString(),
@@ -119,7 +119,7 @@ export function useAppState() {
     },
   ])
 
-  const [alerts, setAlerts] = useState<Alert[]>([
+  const [alerts, setAlerts] = useState<Alert[]>(() => [
     {
       id: "1",
       type: "warning",
