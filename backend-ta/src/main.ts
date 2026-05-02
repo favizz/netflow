@@ -84,9 +84,10 @@ async function bootstrap() {
     },
   });
 
-  await app.startAllMicroservices();
   const port = Number(process.env.PORT || 5000);
   await app.listen(port, '0.0.0.0');
+  
+  await app.startAllMicroservices();
 
   console.log(`NetFlow backend listening on 0.0.0.0:${port}`);
   console.log(`MQTT connected to ${process.env.MQTT_BROKER_URL}`);
