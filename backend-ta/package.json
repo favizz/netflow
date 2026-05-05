@@ -1,7 +1,7 @@
 {
   "name": "netflow-backend",
   "version": "2.0.0",
-  "description": "NetFlow — Smart Prepaid Metering System Backend (scale edition)",
+  "description": "NetFlow - Smart Prepaid Metering System Backend (scale edition)",
   "author": "",
   "private": true,
   "license": "UNLICENSED",

@@ -113,7 +113,7 @@ export default function TransactionsPage() {
             <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Transaction Logs</h1>
 
             <div className="rounded-lg bg-white dark:bg-gray-800 shadow-sm ring-1 ring-gray-900/5 dark:ring-gray-700 overflow-hidden">
-                {/* Filter header — same pattern as InventoryTable */}
+                {/* Filter header - same pattern as InventoryTable */}
                 <div className="border-b border-gray-200 dark:border-gray-700 px-6 py-4">
                     <div className="flex flex-col space-y-4 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
                         <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">Payment History</h2>
@@ -164,10 +164,10 @@ export default function TransactionsPage() {
                             <tr key={tx.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/40">
                                 <td className="px-6 py-4 font-mono text-xs text-gray-900 dark:text-gray-100">{tx.id}</td>
                                 <td className="px-6 py-4 text-xs">
-                                    {tx.createdAt ? new Date(tx.createdAt).toLocaleString('id-ID') : '—'}
+                                    {tx.createdAt ? new Date(tx.createdAt).toLocaleString('id-ID') : '-'}
                                 </td>
-                                <td className="px-6 py-4 font-medium text-gray-900 dark:text-gray-100">{tx.unitNo ?? '—'}</td>
-                                <td className="px-6 py-4">{METHOD_LABEL[tx.method] ?? tx.method ?? '—'}</td>
+                                <td className="px-6 py-4 font-medium text-gray-900 dark:text-gray-100">{tx.unitNo ?? '-'}</td>
+                                <td className="px-6 py-4">{METHOD_LABEL[tx.method] ?? tx.method ?? '-'}</td>
                                 <td className="px-6 py-4 font-medium text-gray-900 dark:text-gray-100">
                                     Rp {tx.amount.toLocaleString('id-ID')}
                                 </td>

@@ -110,7 +110,7 @@ export default function AccountSheet({
             </div>
             <div>
               <p className="font-semibold text-foreground">Aliran Listrik</p>
-              <p className="text-xs text-muted-foreground">{relay ? "Aktif — aliran berjalan" : "Dimatikan"}</p>
+              <p className="text-xs text-muted-foreground">{relay ? "Aktif - aliran berjalan" : "Dimatikan"}</p>
             </div>
           </div>
           <Switch

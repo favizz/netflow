@@ -37,7 +37,7 @@ start_ml() {
 }
 
 rollback() {
-  log "FAILED — rolling back to ${PREV_COMMIT:0:8}..."
+  log "FAILED - rolling back to ${PREV_COMMIT:0:8}..."
   git -C "$REPO_DIR" checkout "$PREV_COMMIT" -- .
   cd "$REPO_DIR/backend-ta"
   pnpm install --frozen-lockfile
@@ -69,7 +69,7 @@ pip3 install -r requirements.txt -q
 cd "$REPO_DIR"
 start_ml
 
-# ── Frontends (static builds — nginx serves the dist/ folders) ───────────────
+# ── Frontends (static builds - nginx serves the dist/ folders) ───────────────
 log "Building dashboard..."
 cd frontend-ta/dashboard
 pnpm install --frozen-lockfile
@@ -97,5 +97,5 @@ if [[ -z "$OVERALL" || "$OVERALL" == "critical" ]]; then
   rollback
 fi
 
-log "Deploy complete — status: $OVERALL"
+log "Deploy complete - status: $OVERALL"
 log "Run 'pm2 list' and 'curl -s http://localhost:5000/health' to verify."

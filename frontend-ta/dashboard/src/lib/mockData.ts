@@ -9,5 +9,5 @@ export interface InventoryItem {
     lastUpdate: string;
 }
 
-// No hardcoded demo data — all data comes from the backend API via /unit
+// No hardcoded demo data - all data comes from the backend API via /unit
 export const initialData: InventoryItem[] = [];

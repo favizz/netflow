@@ -313,7 +313,7 @@ export default function UsersPage() {
                                                     </div>
                                                 )}
                                                 <div className="min-w-0">
-                                                    <div className="font-medium text-gray-900 dark:text-gray-100 truncate">{res.name || '—'}</div>
+                                                    <div className="font-medium text-gray-900 dark:text-gray-100 truncate">{res.name || '-'}</div>
                                                     <div className="text-xs text-gray-400 dark:text-gray-500 truncate">{res.email}</div>
                                                 </div>
                                             </div>
@@ -343,7 +343,7 @@ export default function UsersPage() {
                                             </div>
                                         </td>
                                         <td className="px-6 py-3 text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">
-                                            {res.created_at ? new Date(res.created_at).toLocaleDateString('id-ID') : '—'}
+                                            {res.created_at ? new Date(res.created_at).toLocaleDateString('id-ID') : '-'}
                                         </td>
                                         <td className="px-6 py-3 text-right">
                                             <div className="flex items-center justify-end gap-1">

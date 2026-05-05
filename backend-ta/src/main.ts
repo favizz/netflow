@@ -5,7 +5,7 @@ import { AppModule } from './app.module';
 import compression from 'compression';
 import helmet from 'helmet';
 
-// Suppress raw ioredis reconnect noise — BullMQ inline fallback handles these
+// Suppress raw ioredis reconnect noise - BullMQ inline fallback handles these
 process.on('uncaughtException', (err: NodeJS.ErrnoException) => {
   if (err.code === 'ECONNRESET' || err.code === 'ECONNREFUSED') return;
   console.error('[FATAL] Uncaught exception:', err);
@@ -54,13 +54,13 @@ async function bootstrap() {
     }),
   );
 
-  // ── Swagger API docs (optional — install @nestjs/swagger to enable) ─────────
+  // ── Swagger API docs (optional - install @nestjs/swagger to enable) ─────────
   try {
     /* eslint-disable @typescript-eslint/no-require-imports, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
     const { DocumentBuilder, SwaggerModule } = require('@nestjs/swagger');
     const swaggerConfig = new DocumentBuilder()
       .setTitle('NetFlow API')
-      .setDescription('Smart Prepaid Metering System — v2 (scale edition)')
+      .setDescription('Smart Prepaid Metering System - v2 (scale edition)')
       .setVersion('2.0')
       .addBearerAuth()
       .build();
@@ -71,7 +71,7 @@ async function bootstrap() {
     );
     /* eslint-enable @typescript-eslint/no-require-imports, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
   } catch {
-    /* @nestjs/swagger not installed — API docs disabled */
+    /* @nestjs/swagger not installed - API docs disabled */
   }
 
   // ── MQTT microservice ────────────────────────────────────────────────────────

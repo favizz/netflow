@@ -12,6 +12,7 @@ import { ConfigService } from '@nestjs/config';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { UnitService } from '../unit/unit.service';
+import { AuditLogService } from '../audit-log/audit-log.service';
 import { Transaction } from './entities/transaction.entity';
 import { InitiateTopupDto } from './dto/initiate-topup.dto';
 import { PAYMENT_EXPIRY_QUEUE } from './payment-expiry.processor';
@@ -28,6 +29,7 @@ export class PaymentsService {
     private readonly txRepo: Repository<Transaction>,
     private readonly unitService: UnitService,
     private readonly configService: ConfigService,
+    private readonly auditLogService: AuditLogService,
     @InjectQueue(PAYMENT_EXPIRY_QUEUE)
     private readonly expiryQueue: Queue,
   ) {}
@@ -92,6 +94,15 @@ export class PaymentsService {
       });
 
       await this.txRepo.save(tx);
+
+      void this.auditLogService.log(
+        `unit:${dto.unitNo}`,
+        'TOKEN_PURCHASE',
+        'transaction',
+        id,
+        { amount: dto.amount, method: dto.method, status: 'pending' },
+        'info',
+      );
 
       // Schedule auto-cancel after 30 minutes if payment is not settled
       try {
@@ -170,6 +181,17 @@ export class PaymentsService {
       }
 
       await this.txRepo.save(tx);
+
+      if (finalStatus !== 'pending') {
+        void this.auditLogService.log(
+          'system:midtrans',
+          'TOKEN_PURCHASE',
+          'transaction',
+          tx.id,
+          { amount: Number(tx.amount_rp), method: tx.method, status: finalStatus, gateway_status: mStatus },
+          finalStatus === 'success' ? 'success' : 'failure',
+        );
+      }
     }
 
     return this.toResponse(tx);
@@ -188,6 +210,15 @@ export class PaymentsService {
       Number(tx.amount_rp),
     );
     await this.txRepo.save(tx);
+
+    void this.auditLogService.log(
+      `unit:${tx.unit_no}`,
+      'TOKEN_PURCHASE',
+      'transaction',
+      tx.id,
+      { amount: Number(tx.amount_rp), method: tx.method, status: 'success' },
+      'success',
+    );
 
     return this.toResponse(tx);
   }

@@ -72,7 +72,7 @@ export default function ConsumptionChart({
   )
 
   const handleMouseLeave = useCallback(() => {
-    // Don't clear on leave — keep last value visible for mobile
+    // Don't clear on leave - keep last value visible for mobile
   }, [])
 
   // Always show latest value if no point selected

@@ -11,7 +11,7 @@
   --muted-bg: #f3f4f6;
   --muted-text: #6b7280;
 
-  /* Brand Green — matching mobile */
+  /* Brand Green - matching mobile */
   --primary: oklch(0.42 0.16 142);
   --primary-hover: oklch(0.38 0.16 142);
   --primary-fg: #ffffff;

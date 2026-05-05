@@ -3,9 +3,9 @@ import { Bell, Sun, Moon, User, X } from "lucide-react";
 import { getAdminEmail } from "@/lib/auth";
 
 const MOCK_NOTIFICATIONS = [
-    { id: 1, title: "Low balance — Unit A-201", desc: "Balance below Rp 20,000", time: "2m ago", unread: true },
-    { id: 2, title: "Device offline — SM-003", desc: "No heartbeat for 10 minutes", time: "15m ago", unread: true },
-    { id: 3, title: "Payment received — Unit B-102", desc: "Rp 100,000 via QRIS", time: "1h ago", unread: false },
+    { id: 1, title: "Low balance - Unit A-201", desc: "Balance below Rp 20,000", time: "2m ago", unread: true },
+    { id: 2, title: "Device offline - SM-003", desc: "No heartbeat for 10 minutes", time: "15m ago", unread: true },
+    { id: 3, title: "Payment received - Unit B-102", desc: "Rp 100,000 via QRIS", time: "1h ago", unread: false },
 ];
 
 interface HeaderProps {

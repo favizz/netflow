@@ -1,4 +1,4 @@
-// Unified design tokens — import from here, never hardcode Tailwind class strings inline
+// Unified design tokens - import from here, never hardcode Tailwind class strings inline
 
 // ── Domain types ──────────────────────────────────────────────────────────────
 export type BalanceStatus = "aman" | "kurang" | "kritis" | "terputus"

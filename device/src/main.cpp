@@ -72,7 +72,6 @@ float water_tariff  = 5000.0f;   // Rp / m³
 // CALIBRATION — updated live via MQTT config frame
 // CALIBRATION_FACTOR (pulses/s per L/min) lives in sRusun_Flowmeter.cpp
 // =============================================================================
-float   CAL_FACTOR_POWER     = 1.00f;  // trim multiplier on PZEM power
 uint8_t SENSOR_SAMPLING_TIME = 5;      // seconds between MQTT publishes
 
 // =============================================================================

@@ -178,7 +178,7 @@ export default function ManagementPage() {
                             {accounts.map((acc) => (
                                 <tr key={acc.email} className="hover:bg-gray-50">
                                     <td className="px-4 py-2 font-medium text-gray-900">{acc.email}</td>
-                                    <td className="px-4 py-2 text-gray-500">{(acc as { name?: string }).name || "—"}</td>
+                                    <td className="px-4 py-2 text-gray-500">{(acc as { name?: string }).name || "-"}</td>
                                     <td className="px-4 py-2 text-gray-400 text-xs">{new Date(acc.created_at).toLocaleDateString()}</td>
                                     <td className="px-4 py-2 text-right">
                                         <button
@@ -279,7 +279,7 @@ export default function ManagementPage() {
                                                     </div>
                                                 )}
                                                 <div>
-                                                    <div className="font-medium text-gray-900">{res.name || "—"}</div>
+                                                    <div className="font-medium text-gray-900">{res.name || "-"}</div>
                                                     <div className="text-xs text-gray-400">{res.email}</div>
                                                 </div>
                                             </div>

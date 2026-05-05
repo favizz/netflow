@@ -4,6 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Job } from 'bullmq';
 import { Transaction } from './entities/transaction.entity';
+import { AuditLogService } from '../audit-log/audit-log.service';
 
 export const PAYMENT_EXPIRY_QUEUE = 'payment-expiry';
 
@@ -17,6 +18,7 @@ export class PaymentExpiryProcessor
   constructor(
     @InjectRepository(Transaction)
     private readonly txRepo: Repository<Transaction>,
+    private readonly auditLogService: AuditLogService,
   ) {
     super();
   }
@@ -39,5 +41,13 @@ export class PaymentExpiryProcessor
     await this.txRepo.save(tx);
 
     this.logger.log(`Payment ${transactionId} auto-expired (30 min timeout)`);
+    void this.auditLogService.log(
+      'system:expiry',
+      'TOKEN_PURCHASE',
+      'transaction',
+      transactionId,
+      { amount: Number(tx.amount_rp), method: tx.method, status: 'failed', reason: 'expired' },
+      'failure',
+    );
   }
 }

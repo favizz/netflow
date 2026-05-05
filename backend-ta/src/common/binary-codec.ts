@@ -1,6 +1,6 @@
 /**
  * Custom binary protocol for device commands and calibration config.
- * Absolute minimum wire bytes — no key names, no type tags.
+ * Absolute minimum wire bytes - no key names, no type tags.
  *
  * ─────────────────────────────────────────────────────────────
  * COMMAND FRAME  (1 byte)
@@ -124,7 +124,7 @@ export interface OtaPayload {
 }
 
 /**
- * Compact binary OTA frame — no JSON wrapper.
+ * Compact binary OTA frame - no JSON wrapper.
  *   byte[0]   major  (uint8)
  *   byte[1]   minor  (uint8)
  *   byte[2]   patch  (uint8)

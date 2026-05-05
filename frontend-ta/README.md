@@ -1,6 +1,6 @@
 # Frontend TA
 
-Two isolated frontend applications — each with its own tooling, dependencies, and config.
+Two isolated frontend applications - each with its own tooling, dependencies, and config.
 
 | App | Path | Framework | Package Manager |
 |---|---|---|---|

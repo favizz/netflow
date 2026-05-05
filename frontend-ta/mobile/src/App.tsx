@@ -26,7 +26,7 @@ const ANOMALY_META: Record<
   low_power_factor:   { label: "Faktor Daya Rendah",      Icon: Gauge,          action: "Kurangi beban induktif atau hubungi teknisi listrik." },
   zero_flow:          { label: "Tidak Ada Aliran Air",    Icon: RotateCcw,      action: "Periksa kondisi pipa, katup, dan suplai air dari pengelola." },
   usage_spike:        { label: "Lonjakan Konsumsi",       Icon: TrendingUp,     action: "Periksa perangkat yang baru dinyalakan. Matikan yang tidak diperlukan." },
-  backflow:           { label: "Aliran Air Balik",        Icon: Activity,       action: "Laporkan ke pengelola — kemungkinan masalah instalasi pipa." },
+  backflow:           { label: "Aliran Air Balik",        Icon: Activity,       action: "Laporkan ke pengelola - kemungkinan masalah instalasi pipa." },
   jailbreak:          { label: "Bypass Sistem",           Icon: ShieldAlert,    action: "Hubungi pengelola gedung segera." },
   device_offline:     { label: "Perangkat Offline",       Icon: WifiOff,        action: "Hubungi pengelola untuk pemeriksaan perangkat." },
   topup_success:      { label: "Pembelian Token Berhasil", Icon: CheckCircle,   action: "Token otomatis terisi. Cek saldo di Beranda." },
@@ -167,7 +167,7 @@ export default function App() {
       {/* ── Bottom nav with centre FAB ──────────────────────────────────── */}
       <nav className="flex-none relative h-16 bg-card/95 backdrop-blur-sm border-t border-border z-20 overflow-visible">
         <div className="flex h-full">
-          {/* Left — Beli Token */}
+          {/* Left - Beli Token */}
           <button
             onClick={() => setCurrentPage("purchase")}
             className={`flex-1 flex flex-col items-center justify-center gap-1 transition-colors duration-150 ${
@@ -178,10 +178,10 @@ export default function App() {
             <span className="text-xs font-medium">Beli Token</span>
           </button>
 
-          {/* Centre spacer — keeps left/right balanced */}
+          {/* Centre spacer - keeps left/right balanced */}
           <div className="w-20 flex-shrink-0" />
 
-          {/* Right — Notifikasi */}
+          {/* Right - Notifikasi */}
           <button
             onClick={() => setCurrentPage("notifications")}
             className={`flex-1 flex flex-col items-center justify-center gap-1 transition-colors duration-150 relative ${
@@ -204,7 +204,7 @@ export default function App() {
           </button>
         </div>
 
-        {/* Centre FAB — Beranda, pops out above the nav */}
+        {/* Centre FAB - Beranda, pops out above the nav */}
         <button
           onClick={() => setCurrentPage("home")}
           className={`

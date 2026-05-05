@@ -27,7 +27,7 @@ const DEFAULTS: CalibrationSettings = {
 export class AdminService implements OnModuleInit {
   private readonly logger = new Logger(AdminService.name);
 
-  /** In-memory cache — loaded from DB on startup, written through on every update. */
+  /** In-memory cache - loaded from DB on startup, written through on every update. */
   private cached: CalibrationSettings = { ...DEFAULTS };
 
   constructor(
@@ -197,7 +197,7 @@ export class AdminService implements OnModuleInit {
         };
       }
     } catch {
-      // DB not ready (first boot before schema applied) — keep defaults
+      // DB not ready (first boot before schema applied) - keep defaults
     }
   }
 
@@ -219,7 +219,7 @@ export class AdminService implements OnModuleInit {
       row.sampling_time = settings.SENSOR_SAMPLING_TIME;
       await this.calRepo.save(row);
     } catch {
-      // Non-fatal — in-memory value is still updated
+      // Non-fatal - in-memory value is still updated
     }
   }
 }

@@ -12,6 +12,7 @@ extern float frequency;
 extern float pf;
 extern const int rxPin;
 extern const int txPin;
+extern float CAL_FACTOR_POWER;
 
 void initPZEM();
 void readPZEM();

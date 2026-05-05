@@ -235,14 +235,14 @@ export default function ControlCenterPage() {
 
             if (type === 'ota_ack') {
                 text = ack.status === 'ok'
-                    ? `✓ OTA ACK [${deviceId}] flash ok — v${ack.version ?? '?'}`
+                    ? `✓ OTA ACK [${deviceId}] flash ok - v${ack.version ?? '?'}`
                     : ack.status === 'noop'
                     ? `· OTA ACK [${deviceId}] already up-to-date`
-                    : `✗ OTA ACK [${deviceId}] flash failed — error ${ack.error ?? '?'}`;
+                    : `✗ OTA ACK [${deviceId}] flash failed - error ${ack.error ?? '?'}`;
             } else if (type === 'config_ack') {
                 text = ack.status === 'ok'
                     ? `✓ CONFIG ACK [${deviceId}] calibration applied`
-                    : `✗ CONFIG ACK [${deviceId}] calibration failed — ${ack.error ?? '?'}`;
+                    : `✗ CONFIG ACK [${deviceId}] calibration failed - ${ack.error ?? '?'}`;
             } else if (type === 'command_ack') {
                 text = ack.status === 'ok'
                     ? `✓ COMMAND ACK [${deviceId}] ${ack.type ?? 'actuation'} success`
@@ -354,7 +354,7 @@ export default function ControlCenterPage() {
                 method: 'POST',
                 body: JSON.stringify({ version: otaVersion, binaryLink: otaBinaryLink, updateNow: true }),
             }) as { pushed?: string[] };
-            addLog('info', `→ OTA sent to ${Array.isArray(res?.pushed) ? res.pushed.length : '?'} device(s) — awaiting ACK...`);
+            addLog('info', `→ OTA sent to ${Array.isArray(res?.pushed) ? res.pushed.length : '?'} device(s) - awaiting ACK...`);
             localStorage.setItem('ota_last_link', otaBinaryLink);
             localStorage.setItem('ota_last_version', otaVersion);
             setLastOtaLink(otaBinaryLink);
@@ -508,7 +508,7 @@ export default function ControlCenterPage() {
                 )}
             </div>
 
-            {/* Broadcast Commands — all devices */}
+            {/* Broadcast Commands - all devices */}
             <div className="rounded-lg bg-white dark:bg-gray-800 p-6 shadow-sm ring-1 ring-gray-900/5 dark:ring-gray-700 space-y-5">
                 <div className="flex items-center gap-3">
                     <div className="rounded-lg bg-primary/10 dark:bg-primary/20 p-2">

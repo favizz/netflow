@@ -203,8 +203,8 @@ INSERT IGNORE INTO transactions (id, unit_id, unit_no, amount_rp, method, status
 
 INSERT IGNORE INTO anomalies (device_id, type, severity, description, action_taken, ml_score, created_at) VALUES
   ('DEV-B-202', 'low_balance',        'warning',  'Balance below Rp 10.000 threshold',              'Relay cut off automatically',         NULL,   DATE_SUB(NOW(), INTERVAL 2  DAY)),
-  ('DEV-A-103', 'voltage_anomaly',    'warning',  'Voltage 198V — below ±10% of 220V nominal',      'Monitoring; no relay action taken',   NULL,   DATE_SUB(NOW(), INTERVAL 5  DAY)),
+  ('DEV-A-103', 'voltage_anomaly',    'warning',  'Voltage 198V - below ±10% of 220V nominal',      'Monitoring; no relay action taken',   NULL,   DATE_SUB(NOW(), INTERVAL 5  DAY)),
   ('DEV-B-101', 'usage_spike',        'warning',  'Energy 3× above 7-day average in 1 hour',        'Flagged for resident review',         NULL,   DATE_SUB(NOW(), INTERVAL 8  DAY)),
-  ('DEV-C-101', 'ml_anomaly',         'warning',  'Isolation Forest score 0.82 — statistical outlier','Rule-based checks normal; ML flagged',0.8200, DATE_SUB(NOW(), INTERVAL 3  DAY)),
+  ('DEV-C-101', 'ml_anomaly',         'warning',  'Isolation Forest score 0.82 - statistical outlier','Rule-based checks normal; ML flagged',0.8200, DATE_SUB(NOW(), INTERVAL 3  DAY)),
   ('DEV-A-201', 'sensor_malfunction', 'critical', 'Water flow sensor returning null for 15+ minutes','Device rebooted via MQTT command',    NULL,   DATE_SUB(NOW(), INTERVAL 12 DAY)),
-  ('DEV-A-102', 'low_balance',        'warning',  'Balance Rp 12.000 — approaching zero',           'Resident notified',                   NULL,   DATE_SUB(NOW(), INTERVAL 1  DAY));
+  ('DEV-A-102', 'low_balance',        'warning',  'Balance Rp 12.000 - approaching zero',           'Resident notified',                   NULL,   DATE_SUB(NOW(), INTERVAL 1  DAY));

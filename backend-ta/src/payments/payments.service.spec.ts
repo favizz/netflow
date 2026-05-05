@@ -185,7 +185,7 @@ describe('PaymentsService', () => {
       expect(unitService.creditBalanceByUnitNo).toHaveBeenCalledWith('A-101', 100_000);
     });
 
-    it('is idempotent — does not re-credit already-confirmed transaction', async () => {
+    it('is idempotent - does not re-credit already-confirmed transaction', async () => {
       const tx: Partial<Transaction> = {
         id: 'TRX-DONE',
         unit_no: 'A-101',

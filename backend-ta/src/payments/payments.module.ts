@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { BullModule } from '@nestjs/bullmq';
 import { UnitModule } from '../unit/unit.module';
+import { AuditLogModule } from '../audit-log/audit-log.module';
 import { Transaction } from './entities/transaction.entity';
 import { PaymentsController } from './payments.controller';
 import { PaymentsService } from './payments.service';
@@ -14,6 +15,7 @@ import {
   imports: [
     TypeOrmModule.forFeature([Transaction]),
     UnitModule,
+    AuditLogModule,
     BullModule.registerQueue({ name: PAYMENT_EXPIRY_QUEUE }),
   ],
   controllers: [PaymentsController],
