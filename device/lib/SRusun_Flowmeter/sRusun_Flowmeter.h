@@ -8,7 +8,7 @@
 extern float flowRate; // L/min
 extern float volume; // L   
 extern int64_t pulseCount; // Total pulse count from the flowmeter
-extern const float CALIBRATION_FACTOR; // Pulses per second for 1 L/min
+extern float CALIBRATION_FACTOR; // Pulses per second for 1 L/min (mutable — updated via MQTT config)
 extern const pcnt_unit_t pulseCountUnit; // PCNT unit used for counting pulses
 extern const int flowMeterPin; // GPIO pin connected to the flowmeter
 

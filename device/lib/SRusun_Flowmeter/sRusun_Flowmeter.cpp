@@ -18,7 +18,7 @@ const int flowMeterPin = 25;
 int64_t pulseCount = 0;
 int16_t pulseRate = 0;
 const pcnt_unit_t pulseCountUnit = PCNT_UNIT_0;
-const float CALIBRATION_FACTOR = 4.45; // Pulses per second for 1 L/min
+float CALIBRATION_FACTOR = 4.55f; // Pulses per second for 1 L/min — updated via MQTT config
 float flowRate = 0.0; //L/min
 float volume = 0.0; //L
 
