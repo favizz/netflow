@@ -40,7 +40,7 @@ rollback() {
   log "FAILED - rolling back to ${PREV_COMMIT:0:8}..."
   git -C "$REPO_DIR" checkout "$PREV_COMMIT" -- .
   cd "$REPO_DIR/backend-ta"
-  pnpm install --frozen-lockfile
+  pnpm install --no-frozen-lockfile
   npm run build
   start_backend
   pm2 save
@@ -57,7 +57,7 @@ git pull origin main
 # ── Backend ─────────────────────────────────────────────────────────────────
 log "Building backend..."
 cd backend-ta
-pnpm install --frozen-lockfile
+pnpm install --no-frozen-lockfile
 npm run build
 cd "$REPO_DIR"
 start_backend
@@ -73,11 +73,17 @@ start_ml
 log "Building dashboard..."
 cd frontend-ta/dashboard
 pnpm install --frozen-lockfile
+VITE_API_BASE_URL=https://srusun.id \
+VITE_MQTT_BROKER_URL=wss://srusun.id/mqtt \
+VITE_GOOGLE_CLIENT_ID="${VITE_GOOGLE_CLIENT_ID:-}" \
 pnpm build
 
 log "Building mobile..."
 cd ../mobile
 pnpm install --frozen-lockfile
+VITE_API_BASE_URL=https://srusun.id \
+VITE_MQTT_BROKER_URL=wss://srusun.id/mqtt \
+VITE_GOOGLE_CLIENT_ID="${VITE_GOOGLE_CLIENT_ID:-}" \
 pnpm build
 cd "$REPO_DIR"
 

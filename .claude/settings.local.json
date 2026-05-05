@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(New-Item -ItemType Directory -Path \"C:\\\\Users\\\\Lenovo\\\\Documents\\\\GitHub\\\\TA-Flowmeter\\\\infra\\\\nginx\" -Force)",
+      "Bash(Out-Null)",
+      "PowerShell(New-Item *)"
+    ]
+  }
+}
