@@ -25,7 +25,7 @@ log "Rollback point saved: ${PREV_COMMIT:0:8}"
 start_backend() {
   cd "$REPO_DIR/backend-ta"
   pm2 delete netflow-backend 2>/dev/null || true
-  pm2 start "node dist/main.js" --name netflow-backend
+  pm2 start "node -r ./dist/tracing dist/main" --name netflow-backend
   cd "$REPO_DIR"
 }
 
@@ -40,7 +40,7 @@ rollback() {
   log "FAILED — rolling back to ${PREV_COMMIT:0:8}..."
   git -C "$REPO_DIR" checkout "$PREV_COMMIT" -- .
   cd "$REPO_DIR/backend-ta"
-  npm ci --silent
+  pnpm install --frozen-lockfile
   npm run build
   start_backend
   pm2 save
@@ -57,7 +57,7 @@ git pull origin main
 # ── Backend ─────────────────────────────────────────────────────────────────
 log "Building backend..."
 cd backend-ta
-npm ci --silent
+pnpm install --frozen-lockfile
 npm run build
 cd "$REPO_DIR"
 start_backend
