@@ -8,6 +8,7 @@ import { getQueueToken } from '@nestjs/bullmq';
 import { PaymentsService } from './payments.service';
 import { Transaction } from './entities/transaction.entity';
 import { UnitService } from '../unit/unit.service';
+import { AuditLogService } from '../audit-log/audit-log.service';
 import { PAYMENT_EXPIRY_QUEUE } from './payment-expiry.processor';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -70,6 +71,7 @@ describe('PaymentsService', () => {
         { provide: getRepositoryToken(Transaction), useValue: txRepo },
         { provide: UnitService, useValue: unitService },
         { provide: getQueueToken(PAYMENT_EXPIRY_QUEUE), useValue: { add: jest.fn().mockResolvedValue(undefined) } },
+        { provide: AuditLogService, useValue: { log: jest.fn().mockResolvedValue(undefined) } },
         {
           provide: ConfigService,
           useValue: {
