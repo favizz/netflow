@@ -17,10 +17,25 @@ PREV_COMMIT_FILE="/tmp/netflow_prev_commit"
 
 log() { echo "[deploy] $(date '+%H:%M:%S') $*"; }
 
+# ── Pull latest code then re-exec so we always run the newest deploy.sh ──────
+# On the first invocation (NETFLOW_REEXEC unset) we pull and immediately
+# replace this process with the freshly-pulled version of the script.
+# The re-exec sets NETFLOW_REEXEC=1 so the second run skips this block.
+if [[ "${NETFLOW_REEXEC:-0}" == "0" ]]; then
+  PREV_COMMIT=$(git -C "$REPO_DIR" rev-parse HEAD)
+  echo "$PREV_COMMIT" > "$PREV_COMMIT_FILE"
+  log "Rollback point saved: ${PREV_COMMIT:0:8}"
+  log "Pulling origin/main..."
+  git -C "$REPO_DIR" reset --hard HEAD
+  git -C "$REPO_DIR" pull origin main
+  NETFLOW_REEXEC=1 exec bash "$REPO_DIR/infra/scripts/deploy.sh" "$@"
+fi
+
+# ── Everything below runs on the re-exec (latest version of this file) ───────
+
 # ── Save rollback point before touching anything ────────────────────────────
-PREV_COMMIT=$(git -C "$REPO_DIR" rev-parse HEAD)
-echo "$PREV_COMMIT" > "$PREV_COMMIT_FILE"
-log "Rollback point saved: ${PREV_COMMIT:0:8}"
+PREV_COMMIT=$(cat "$PREV_COMMIT_FILE" 2>/dev/null || git -C "$REPO_DIR" rev-parse HEAD~1)
+log "Rollback point: ${PREV_COMMIT:0:8}"
 
 start_backend() {
   cd "$REPO_DIR/backend-ta"
