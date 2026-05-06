@@ -88,19 +88,22 @@ start_ml
 log "Building dashboard..."
 cd frontend-ta/dashboard
 pnpm install --frozen-lockfile
-VITE_API_BASE_URL=https://srusun.id \
-VITE_MQTT_BROKER_URL=wss://srusun.id/mqtt \
+VITE_API_BASE_URL=https://ta252601002.srusun.id \
+VITE_MQTT_BROKER_URL=wss://ta252601002.srusun.id/mqtt \
 VITE_GOOGLE_CLIENT_ID="${VITE_GOOGLE_CLIENT_ID:-}" \
 pnpm build
 
 log "Building mobile..."
 cd ../mobile
 pnpm install --frozen-lockfile
-VITE_API_BASE_URL=https://srusun.id \
-VITE_MQTT_BROKER_URL=wss://srusun.id/mqtt \
+VITE_API_BASE_URL=https://ta252601002.srusun.id \
+VITE_MQTT_BROKER_URL=wss://ta252601002.srusun.id/mqtt \
 VITE_GOOGLE_CLIENT_ID="${VITE_GOOGLE_CLIENT_ID:-}" \
 pnpm build
 cd "$REPO_DIR"
+
+# ── Fix dist permissions so nginx (www-data) can read static files ────────────
+chmod -R o+rX frontend-ta/dashboard/dist frontend-ta/mobile/dist
 
 pm2 save
 
