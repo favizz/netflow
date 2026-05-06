@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { X, Check, Loader2 } from "lucide-react";
 import { fetchApi } from "@/lib/api";
+import { useToast } from "@/components/layout/ToastProvider";
 
 interface EditUnitModalProps {
     unit: { id: string; unit: string; meterSerial: string } | null;
@@ -12,6 +13,7 @@ export function EditUnitModal({ unit, onClose, onSuccess }: EditUnitModalProps) 
     const [deviceId, setDeviceId] = useState("");
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const toast = useToast();
 
     useEffect(() => {
         if (unit) {
@@ -31,6 +33,7 @@ export function EditUnitModal({ unit, onClose, onSuccess }: EditUnitModalProps) 
                 method: 'PATCH',
                 body: JSON.stringify({ device_id: deviceId.trim().toUpperCase() }),
             });
+            toast.success(`Unit ${unit.unit} updated successfully.`);
             onSuccess();
             onClose();
         } catch (err) {

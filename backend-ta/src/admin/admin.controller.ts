@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -62,6 +63,9 @@ export class AdminController {
     @Request() req: AdminRequest,
   ) {
     const role = payload.enabled === false ? 'resident' : 'admin';
+    if (payload.enabled === false && email === this.adminEmail(req)) {
+      throw new BadRequestException('Cannot revoke your own admin access');
+    }
     const result = await this.residentsService.setRole(email, role);
     void this.auditLogService.log(
       this.adminEmail(req),

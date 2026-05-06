@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { X, Check, Loader2 } from "lucide-react";
 import { fetchApi } from "@/lib/api";
+import { useToast } from "@/components/layout/ToastProvider";
 
 interface AddDeviceModalProps {
     isOpen: boolean;
@@ -12,6 +13,7 @@ export function AddDeviceModal({ isOpen, onClose, onSuccess }: AddDeviceModalPro
     const [formData, setFormData] = useState({ unit_no: "", device_id: "", balance: "0" });
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const toast = useToast();
 
     if (!isOpen) return null;
 
@@ -28,6 +30,7 @@ export function AddDeviceModal({ isOpen, onClose, onSuccess }: AddDeviceModalPro
                     balance: parseFloat(formData.balance) || 0,
                 }),
             });
+            toast.success(`Unit ${formData.unit_no} and device ${formData.device_id} registered successfully.`);
             setFormData({ unit_no: "", device_id: "", balance: "0" });
             onSuccess();
             onClose();
@@ -42,7 +45,7 @@ export function AddDeviceModal({ isOpen, onClose, onSuccess }: AddDeviceModalPro
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
             <div className="w-full max-w-md rounded-lg bg-white dark:bg-gray-800 shadow-xl ring-1 ring-gray-900/5 dark:ring-gray-700">
                 <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-700 p-4">
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Add New Unit</h3>
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Register New Unit & Device</h3>
                     <button onClick={onClose} className="rounded-full p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700">
                         <X className="h-5 w-5" />
                     </button>
@@ -116,7 +119,7 @@ export function AddDeviceModal({ isOpen, onClose, onSuccess }: AddDeviceModalPro
                             className="flex items-center space-x-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90 transition-colors disabled:opacity-60"
                         >
                             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                            <span>{loading ? "Creating..." : "Add Unit"}</span>
+                            <span>{loading ? "Registering..." : "Register Unit"}</span>
                         </button>
                     </div>
                 </form>

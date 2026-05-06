@@ -5,10 +5,12 @@ import { AddDeviceModal } from "@/components/inventory/AddDeviceModal";
 import { EditUnitModal } from "@/components/inventory/EditUnitModal";
 import type { InventoryItem } from "@/lib/mockData";
 import { fetchApi } from "@/lib/api";
+import { useToast } from "@/components/layout/ToastProvider";
 
 export default function DevicesPage() {
     const [searchParams] = useSearchParams();
     const initialFilter = searchParams.get("unit") ?? "";
+    const toast = useToast();
 
     const [data, setData] = useState<InventoryItem[]>([]);
     const [isAddOpen, setIsAddOpen] = useState(false);
@@ -56,6 +58,7 @@ export default function DevicesPage() {
             method: 'POST',
             body: JSON.stringify({ type, value }),
         });
+        toast.success(`Command sent to ${type} on device ${deviceId}`);
         loadData();
     };
 
@@ -65,6 +68,7 @@ export default function DevicesPage() {
         setDeleteError(null);
         try {
             await fetchApi(`/unit/${deleteConfirm.id}`, { method: 'DELETE' });
+            toast.success(`Unit ${deleteConfirm.unit} deleted successfully.`);
             setDeleteConfirm(null);
             loadData();
         } catch (err) {
@@ -84,7 +88,7 @@ export default function DevicesPage() {
                     onClick={() => setIsAddOpen(true)}
                     className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-primary/90 transition-colors"
                 >
-                    Add Unit
+                    Register Unit
                 </button>
             </div>
 
