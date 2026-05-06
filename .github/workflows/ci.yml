@@ -184,10 +184,13 @@ jobs:
     steps:
       - name: SSH deploy
         uses: appleboy/ssh-action@v1.0.3
+        env:
+          VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           port: ${{ secrets.DEPLOY_PORT }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_KEY }}
+          envs: VITE_GOOGLE_CLIENT_ID
           script_stop: true
           script: bash ~/TA-Flowmeter/infra/scripts/deploy.sh
