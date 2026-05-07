@@ -92,7 +92,7 @@ export default function LoginPage({ onSuccess }: LoginPageProps) {
           <div className="text-center space-y-3">
             <div className="flex justify-center mb-6">
               <img
-                src="/netflow-logo-icon.png"
+                src={`${import.meta.env.BASE_URL}netflow-logo-icon.png`}
                 alt="NETFLOW"
                 className="h-20 w-20 object-contain"
               />
