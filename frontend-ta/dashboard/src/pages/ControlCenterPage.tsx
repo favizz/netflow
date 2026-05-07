@@ -126,7 +126,7 @@ function TariffCard({ icon, label, unit, tariff, onSave }: {
     );
 }
 
-function SliderField({ label, value, min, max, step, unit, onChange }: {
+function InputField({ label, value, min, max, step, unit, onChange }: {
     label: string;
     value: number;
     min: number;
@@ -137,28 +137,22 @@ function SliderField({ label, value, min, max, step, unit, onChange }: {
 }) {
     return (
         <div>
-            <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center justify-between mb-1.5">
                 <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{label}</label>
-                <span className="text-sm font-semibold text-primary font-mono">
-                    {step < 1 ? value.toFixed(2) : value}{unit}
-                </span>
+                <span className="text-xs text-gray-400 dark:text-gray-500">range: {min}–{max}{unit}</span>
             </div>
             <input
-                type="range"
+                type="number"
                 min={min}
                 max={max}
                 step={step}
                 value={value}
                 onChange={e => {
                     const v = step < 1 ? parseFloat(e.target.value) : parseInt(e.target.value);
-                    onChange(Math.min(max, Math.max(min, v)));
+                    if (!isNaN(v)) onChange(Math.min(max, Math.max(min, v)));
                 }}
-                className="w-full accent-primary"
+                className="block w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-1.5 text-sm font-mono text-gray-900 dark:text-gray-100 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
             />
-            <div className="flex justify-between text-xs text-gray-400 dark:text-gray-500 mt-0.5">
-                <span>{min}{unit}</span>
-                <span>{max}{unit}</span>
-            </div>
         </div>
     );
 }
@@ -449,7 +443,7 @@ export default function ControlCenterPage() {
                     <p className="text-sm text-gray-400 dark:text-gray-500">Loading settings...</p>
                 ) : (
                     <div className="space-y-6">
-                        <SliderField
+                        <InputField
                             label="Flow Rate Calibration Factor"
                             value={config.CAL_FACTOR_FLOWRATE}
                             min={0}
@@ -457,7 +451,7 @@ export default function ControlCenterPage() {
                             step={0.01}
                             onChange={v => setConfig(c => ({ ...c, CAL_FACTOR_FLOWRATE: v }))}
                         />
-                        <SliderField
+                        <InputField
                             label="Power Calibration Factor"
                             value={config.CAL_FACTOR_POWER}
                             min={0}
@@ -465,7 +459,7 @@ export default function ControlCenterPage() {
                             step={0.01}
                             onChange={v => setConfig(c => ({ ...c, CAL_FACTOR_POWER: v }))}
                         />
-                        <SliderField
+                        <InputField
                             label="Sensor Sampling Time"
                             value={config.SENSOR_SAMPLING_TIME}
                             min={1}

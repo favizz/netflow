@@ -72,7 +72,7 @@ git pull origin main
 # ── Backend ─────────────────────────────────────────────────────────────────
 log "Building backend..."
 cd backend-ta
-pnpm install --no-frozen-lockfile
+npm install
 npm run build
 cd "$REPO_DIR"
 start_backend

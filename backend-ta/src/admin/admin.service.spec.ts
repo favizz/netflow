@@ -3,6 +3,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { AdminService } from './admin.service';
 import { CalibrationSetting } from './entities/calibration-setting.entity';
+import { Building } from './entities/building.entity';
 import { UnitService } from '../unit/unit.service';
 import { PaymentsService } from '../payments/payments.service';
 
@@ -35,6 +36,10 @@ describe('AdminService', () => {
         {
           provide: getRepositoryToken(CalibrationSetting),
           useValue: mockCalRepo,
+        },
+        {
+          provide: getRepositoryToken(Building),
+          useValue: { find: jest.fn().mockResolvedValue([]), findOne: jest.fn().mockResolvedValue(null) },
         },
         { provide: UnitService, useValue: mockUnitService },
         { provide: PaymentsService, useValue: mockPaymentsService },

@@ -84,6 +84,7 @@ describe('PaymentsService', () => {
             }),
           },
         },
+        { provide: 'MQTT_CLIENT', useValue: { emit: jest.fn() } },
       ],
     }).compile();
 
