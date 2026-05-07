@@ -131,7 +131,7 @@ jobs:
       - name: Build
         working-directory: frontend-ta/dashboard
         env:
-          VITE_API_BASE_URL: https://ta252601002.srusun.id
+          VITE_API_BASE_URL: https://ta252601002.srusun.id/api
           VITE_GOOGLE_CLIENT_ID: ci-placeholder
           VITE_MQTT_BROKER_URL: wss://ta252601002.srusun.id/mqtt
         run: pnpm build
@@ -169,7 +169,7 @@ jobs:
       - name: Build
         working-directory: frontend-ta/mobile
         env:
-          VITE_API_BASE_URL: https://ta252601002.srusun.id
+          VITE_API_BASE_URL: https://ta252601002.srusun.id/api
           VITE_GOOGLE_CLIENT_ID: ci-placeholder
           VITE_MQTT_BROKER_URL: wss://ta252601002.srusun.id/mqtt
         run: pnpm build
