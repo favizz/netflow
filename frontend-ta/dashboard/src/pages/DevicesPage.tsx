@@ -16,6 +16,8 @@ export default function DevicesPage() {
     const [isAddOpen, setIsAddOpen] = useState(false);
     const [editTarget, setEditTarget] = useState<InventoryItem | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [buildings, setBuildings] = useState<{id: number, code: string, name: string}[]>([]);
+    const [selectedBuilding, setSelectedBuilding] = useState<string>("all");
     const [deleteConfirm, setDeleteConfirm] = useState<InventoryItem | null>(null);
     const [deleteLoading, setDeleteLoading] = useState(false);
     const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -23,19 +25,24 @@ export default function DevicesPage() {
     const loadData = useCallback(() => {
         setIsLoading(true);
         Promise.all([
+            fetchApi('/admin/buildings').catch(() => []),
             fetchApi('/unit'),
             fetchApi('/unit/connectivity').catch(() => ({ units: [] }))
         ])
-            .then(([units, conn]) => {
-                // conn.units is the per-unit connectivity array from /unit/connectivity
+            .then(([bldgs, units, conn]) => {
+                setBuildings(bldgs || []);
+                const bldgMap = new Map((bldgs || []).map((b: any) => [b.id, b.name]));
                 const onlineIds = new Set(
                     ((conn.units || []) as { online: boolean; deviceId: string }[]).filter(u => u.online).map(u => u.deviceId)
                 );
-                const mapped: InventoryItem[] = units.map((u: { id: number; resident_email: string | null; unit_no: string; device_id: string; relay_status: number; valve_status: number }) => ({
+                const mapped: InventoryItem[] = units.map((u: { id: number; building_id: number; balance: string | number; resident_email: string | null; unit_no: string; device_id: string; relay_status: number; valve_status: number }) => ({
                     id: String(u.id),
+                    buildingId: u.building_id,
+                    buildingName: bldgMap.get(u.building_id) || "Unknown Building",
                     tenant: u.resident_email || "Unassigned",
                     unit: u.unit_no,
                     meterSerial: u.device_id,
+                    balance: Number(u.balance),
                     status: onlineIds.has(u.device_id) ? "Online" : "Offline",
                     power: !!u.relay_status,
                     water: !!u.valve_status,
@@ -84,12 +91,24 @@ export default function DevicesPage() {
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Devices</h1>
                 </div>
-                <button
-                    onClick={() => setIsAddOpen(true)}
-                    className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-primary/90 transition-colors"
-                >
-                    Register Unit
-                </button>
+                <div className="flex items-center space-x-4">
+                    <select
+                        value={selectedBuilding}
+                        onChange={(e) => setSelectedBuilding(e.target.value)}
+                        className="rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                    >
+                        <option value="all">All Buildings</option>
+                        {buildings.map(b => (
+                            <option key={b.id} value={b.id}>{b.name}</option>
+                        ))}
+                    </select>
+                    <button
+                        onClick={() => setIsAddOpen(true)}
+                        className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-primary/90 transition-colors"
+                    >
+                        Register Unit
+                    </button>
+                </div>
             </div>
 
             {isLoading ? (
@@ -98,7 +117,7 @@ export default function DevicesPage() {
                 </div>
             ) : (
                 <InventoryTable
-                    data={data}
+                    data={selectedBuilding === "all" ? data : data.filter(d => d.buildingId === Number(selectedBuilding))}
                     initialFilter={initialFilter}
                     onEdit={(item) => setEditTarget(item)}
                     onDelete={(item) => setDeleteConfirm(item)}

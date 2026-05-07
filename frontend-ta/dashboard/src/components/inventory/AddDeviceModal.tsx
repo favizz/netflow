@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { X, Check, Loader2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { X, Check, Loader2, ChevronRight, ChevronLeft } from "lucide-react";
 import { fetchApi } from "@/lib/api";
 import { useToast } from "@/components/layout/ToastProvider";
 
@@ -10,28 +10,93 @@ interface AddDeviceModalProps {
 }
 
 export function AddDeviceModal({ isOpen, onClose, onSuccess }: AddDeviceModalProps) {
+    const [step, setStep] = useState(1);
+    
+    // Step 1 data
+    const [buildings, setBuildings] = useState<{id: number, code: string, name: string}[]>([]);
+    const [selectedBuildingId, setSelectedBuildingId] = useState<number | null>(null);
+    const [loadingBuildings, setLoadingBuildings] = useState(false);
+
+    // Step 2 data
     const [formData, setFormData] = useState({ unit_no: "", device_id: "", balance: "0" });
+    
+    // Step 3 data
+    const [residents, setResidents] = useState<{email: string, name: string}[]>([]);
+    const [selectedResident, setSelectedResident] = useState<string>("");
+    const [loadingResidents, setLoadingResidents] = useState(false);
+
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const toast = useToast();
 
+    useEffect(() => {
+        if (isOpen) {
+            setStep(1);
+            setFormData({ unit_no: "", device_id: "", balance: "0" });
+            setSelectedBuildingId(null);
+            setSelectedResident("");
+            setError(null);
+            
+            // Fetch buildings
+            setLoadingBuildings(true);
+            fetchApi('/admin/buildings')
+                .then(data => setBuildings(data || []))
+                .catch(() => setBuildings([]))
+                .finally(() => setLoadingBuildings(false));
+                
+            // Fetch residents
+            setLoadingResidents(true);
+            fetchApi('/admin/residents')
+                .then(data => setResidents(data || []))
+                .catch(() => setResidents([]))
+                .finally(() => setLoadingResidents(false));
+        }
+    }, [isOpen]);
+
     if (!isOpen) return null;
+
+    const handleNext = () => {
+        if (step === 1 && !selectedBuildingId) {
+            setError("Please select a building.");
+            return;
+        }
+        if (step === 2 && (!formData.unit_no || !formData.device_id)) {
+            setError("Please fill all required fields.");
+            return;
+        }
+        setError(null);
+        setStep(s => s + 1);
+    };
+
+    const handleBack = () => {
+        setError(null);
+        setStep(s => s - 1);
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError(null);
         setLoading(true);
         try {
-            await fetchApi('/unit', {
+            // 1. Create Unit
+            const unitRes = await fetchApi('/unit', {
                 method: 'POST',
                 body: JSON.stringify({
+                    building_id: selectedBuildingId,
                     unit_no: formData.unit_no.trim().toUpperCase(),
                     device_id: formData.device_id.trim().toUpperCase(),
                     balance: parseFloat(formData.balance) || 0,
                 }),
             });
-            toast.success(`Unit ${formData.unit_no} and device ${formData.device_id} registered successfully.`);
-            setFormData({ unit_no: "", device_id: "", balance: "0" });
+
+            // 2. Assign Resident if selected
+            if (selectedResident && unitRes?.id) {
+                await fetchApi(`/admin/residents/${encodeURIComponent(selectedResident)}/units/${unitRes.id}`, {
+                    method: 'POST'
+                });
+            }
+
+            toast.success(`Unit ${formData.unit_no} registered successfully.`);
             onSuccess();
             onClose();
         } catch (err) {
@@ -41,88 +106,172 @@ export function AddDeviceModal({ isOpen, onClose, onSuccess }: AddDeviceModalPro
         }
     };
 
+    const steps = [
+        { id: 1, name: "Building" },
+        { id: 2, name: "Device Info" },
+        { id: 3, name: "Assign (Optional)" }
+    ];
+
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-            <div className="w-full max-w-md rounded-lg bg-white dark:bg-gray-800 shadow-xl ring-1 ring-gray-900/5 dark:ring-gray-700">
-                <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-700 p-4">
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Register New Unit & Device</h3>
-                    <button onClick={onClose} className="rounded-full p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700">
+            <div className="w-full max-w-lg rounded-lg bg-white dark:bg-gray-800 shadow-xl ring-1 ring-gray-900/5 dark:ring-gray-700 overflow-hidden flex flex-col max-h-[90vh]">
+                <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-700 p-4 shrink-0">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Register New Unit</h3>
+                    <button onClick={onClose} className="rounded-full p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
                         <X className="h-5 w-5" />
                     </button>
                 </div>
 
-                <form onSubmit={handleSubmit} className="p-4 space-y-4">
+                {/* Stepper */}
+                <div className="px-6 py-4 bg-gray-50 dark:bg-gray-900/50 border-b border-gray-100 dark:border-gray-700 shrink-0">
+                    <nav aria-label="Progress">
+                        <ol role="list" className="flex items-center justify-between">
+                            {steps.map((s, idx) => (
+                                <li key={s.name} className={idx !== steps.length - 1 ? "pr-8 sm:pr-20" : ""}>
+                                    <div className="flex flex-col items-start">
+                                        <span className={`text-xs font-semibold uppercase tracking-wide ${step === s.id ? "text-primary" : step > s.id ? "text-green-600 dark:text-green-500" : "text-gray-400"}`}>
+                                            Step {s.id}
+                                        </span>
+                                        <span className={`text-sm font-medium ${step === s.id ? "text-gray-900 dark:text-gray-100" : "text-gray-500"}`}>
+                                            {s.name}
+                                        </span>
+                                    </div>
+                                </li>
+                            ))}
+                        </ol>
+                    </nav>
+                </div>
+
+                <div className="p-6 overflow-y-auto">
                     {error && (
-                        <div className="rounded-md bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-600">
+                        <div className="mb-4 rounded-md bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-600">
                             {error}
                         </div>
                     )}
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                            Unit Number <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                            required
-                            type="text"
-                            value={formData.unit_no}
-                            onChange={(e) => setFormData({ ...formData, unit_no: e.target.value })}
-                            maxLength={10}
-                            pattern="[A-Za-z]-\d{3,4}"
-                            title="Format: A-101 or A-2401"
-                            className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                            placeholder="e.g. A-101"
-                        />
-                        <p className="mt-1 text-xs text-gray-400">Format: A-101 or A-2401</p>
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                            Device ID <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                            required
-                            type="text"
-                            value={formData.device_id}
-                            onChange={(e) => setFormData({ ...formData, device_id: e.target.value })}
-                            maxLength={30}
-                            pattern="[A-Za-z0-9_\-]{3,30}"
-                            title="3–30 alphanumeric characters, hyphens, or underscores"
-                            className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                            placeholder="e.g. DEV-A-101"
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                            Initial Balance (Rp)
-                        </label>
-                        <input
-                            type="number"
-                            step="1"
-                            min="0"
-                            max="999999999"
-                            value={formData.balance}
-                            onChange={(e) => setFormData({ ...formData, balance: e.target.value })}
-                            className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                        />
-                    </div>
 
-                    <div className="pt-2 flex justify-end space-x-3">
+                    {step === 1 && (
+                        <div className="space-y-4">
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                Select Building <span className="text-red-500">*</span>
+                            </label>
+                            {loadingBuildings ? (
+                                <div className="flex items-center text-sm text-gray-500"><Loader2 className="w-4 h-4 mr-2 animate-spin"/> Loading buildings...</div>
+                            ) : buildings.length === 0 ? (
+                                <p className="text-sm text-gray-500">No buildings available. The default building will be used if none exist.</p>
+                            ) : (
+                                <div className="grid gap-3">
+                                    {buildings.map(b => (
+                                        <label key={b.id} className={`flex items-center p-3 border rounded-lg cursor-pointer transition-colors ${selectedBuildingId === b.id ? 'border-primary bg-primary/5 dark:bg-primary/10' : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50'}`}>
+                                            <input type="radio" name="building" className="h-4 w-4 text-primary border-gray-300 focus:ring-primary" 
+                                                checked={selectedBuildingId === b.id} onChange={() => setSelectedBuildingId(b.id)} />
+                                            <span className="ml-3 font-medium text-gray-900 dark:text-gray-100">{b.name} <span className="text-gray-500 font-normal">({b.code})</span></span>
+                                        </label>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {step === 2 && (
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    Unit Number <span className="text-red-500">*</span>
+                                </label>
+                                <input
+                                    required
+                                    type="text"
+                                    value={formData.unit_no}
+                                    onChange={(e) => setFormData({ ...formData, unit_no: e.target.value })}
+                                    maxLength={20}
+                                    className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                                    placeholder="e.g. TOWER-A-101"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    Device ID / MAC Address <span className="text-red-500">*</span>
+                                </label>
+                                <input
+                                    required
+                                    type="text"
+                                    value={formData.device_id}
+                                    onChange={(e) => setFormData({ ...formData, device_id: e.target.value })}
+                                    maxLength={100}
+                                    className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                                    placeholder="e.g. DEV-A101-MAC"
+                                />
+                                <p className="mt-1 text-xs text-gray-500">Must exactly match the hardware identifier.</p>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    Initial Balance (Rp)
+                                </label>
+                                <input
+                                    type="number"
+                                    step="1"
+                                    min="0"
+                                    value={formData.balance}
+                                    onChange={(e) => setFormData({ ...formData, balance: e.target.value })}
+                                    className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                                />
+                            </div>
+                        </div>
+                    )}
+
+                    {step === 3 && (
+                        <div className="space-y-4">
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                Assign Resident (Optional)
+                            </label>
+                            {loadingResidents ? (
+                                <div className="flex items-center text-sm text-gray-500"><Loader2 className="w-4 h-4 mr-2 animate-spin"/> Loading users...</div>
+                            ) : (
+                                <select 
+                                    value={selectedResident} 
+                                    onChange={(e) => setSelectedResident(e.target.value)}
+                                    className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                                >
+                                    <option value="">-- No assignment yet --</option>
+                                    {residents.map(r => (
+                                        <option key={r.email} value={r.email}>{r.name || r.email} ({r.email})</option>
+                                    ))}
+                                </select>
+                            )}
+                            <p className="text-xs text-gray-500">You can also assign this later from the Users page.</p>
+                        </div>
+                    )}
+                </div>
+
+                <div className="border-t border-gray-100 dark:border-gray-700 p-4 bg-gray-50 dark:bg-gray-900/50 flex justify-between shrink-0">
+                    <button
+                        type="button"
+                        onClick={step === 1 ? onClose : handleBack}
+                        disabled={loading}
+                        className="flex items-center rounded-md border border-gray-200 dark:border-gray-600 px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50 transition-colors"
+                    >
+                        {step === 1 ? "Cancel" : <><ChevronLeft className="w-4 h-4 mr-1"/> Back</>}
+                    </button>
+                    
+                    {step < 3 ? (
                         <button
                             type="button"
-                            onClick={onClose}
-                            className="rounded-md border border-gray-200 dark:border-gray-600 px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                            onClick={handleNext}
+                            className="flex items-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90 transition-colors"
                         >
-                            Cancel
+                            Next <ChevronRight className="w-4 h-4 ml-1"/>
                         </button>
+                    ) : (
                         <button
-                            type="submit"
+                            onClick={handleSubmit}
                             disabled={loading}
                             className="flex items-center space-x-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90 transition-colors disabled:opacity-60"
                         >
                             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                            <span>{loading ? "Registering..." : "Register Unit"}</span>
+                            <span>Register Unit</span>
                         </button>
-                    </div>
-                </form>
+                    )}
+                </div>
             </div>
         </div>
     );

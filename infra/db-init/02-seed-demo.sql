@@ -12,7 +12,8 @@ USE `srusun-ta252601002`;
 INSERT IGNORE INTO buildings (id, code, name, address, floors) VALUES
   (2, 'TOWER-A', 'Tower A', 'Jl. Pahlawan No. 1, Bandung', 3),
   (3, 'TOWER-B', 'Tower B', 'Jl. Pahlawan No. 2, Bandung', 3),
-  (4, 'TOWER-C', 'Tower C', 'Jl. Pahlawan No. 3, Bandung', 2);
+  (4, 'TOWER-C', 'Tower C', 'Jl. Pahlawan No. 3, Bandung', 2),
+  (5, 'TOWER-D', 'Tower D', 'Jl. Pahlawan No. 4, Bandung', 2);
 
 -- -----------------------------------------
 -- 2. TARIFFS
