@@ -13,6 +13,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import type { Request as ExpressRequest } from 'express';
+import { IsEmail, IsOptional, IsString } from 'class-validator';
 import { AdminJwtGuard } from '../common/guards/admin-jwt.guard';
 
 interface AdminRequest extends ExpressRequest {
@@ -27,7 +28,11 @@ import { TariffService, CreateTariffDto } from '../tariff/tariff.service';
 import { AuditLogService } from '../audit-log/audit-log.service';
 
 class CreateResidentDto {
+  @IsEmail()
   email!: string;
+
+  @IsOptional()
+  @IsString()
   name?: string;
 }
 

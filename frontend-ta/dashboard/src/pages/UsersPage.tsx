@@ -238,8 +238,8 @@ export default function UsersPage() {
                                 className="h-9 rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 text-sm text-gray-700 dark:text-gray-300 outline-none focus:border-primary focus:ring-1 focus:ring-primary"
                             >
                                 <option value="all">All roles</option>
-                                <option value="admin">Admin only</option>
-                                <option value="resident">Resident only</option>
+                                <option value="admin">Admin</option>
+                                <option value="resident">Resident</option>
                             </select>
                             <button
                                 onClick={() => { setShowAddForm(v => !v); setAddError(null); }}
