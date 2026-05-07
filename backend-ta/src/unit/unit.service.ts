@@ -35,6 +35,7 @@ export class UnitService {
     }
 
     const entity = this.unitRepo.create({
+      building_id: createUnitDto.building_id ?? 1,
       unit_no: createUnitDto.unit_no,
       device_id: createUnitDto.device_id,
       balance: createUnitDto.balance ?? 0,
@@ -46,8 +47,15 @@ export class UnitService {
     return this.unitRepo.save(entity);
   }
 
-  findAll() {
+  findAll(buildingId?: number) {
+    if (buildingId) {
+      return this.unitRepo.find({ where: { building_id: buildingId }, order: { unit_no: 'ASC' } });
+    }
     return this.unitRepo.find({ order: { unit_no: 'ASC' } });
+  }
+
+  async countByBuilding(buildingId: number): Promise<number> {
+    return this.unitRepo.count({ where: { building_id: buildingId } });
   }
 
   async findOne(id: number) {

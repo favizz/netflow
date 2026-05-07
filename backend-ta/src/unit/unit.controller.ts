@@ -26,6 +26,7 @@ export class UnitController {
     return this.unitService.create(createUnitDto);
   }
 
+  @UseGuards(AdminJwtGuard)
   @Get()
   findAll() {
     return this.unitService.findAll();
@@ -41,6 +42,7 @@ export class UnitController {
     return this.unitService.getTowerConnectivity(tower);
   }
 
+  @UseGuards(AdminJwtGuard)
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.unitService.findOne(+id);

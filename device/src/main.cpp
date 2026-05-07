@@ -356,6 +356,30 @@ void handleCommand(uint8_t b) {
   mqttClient.publish(ackTopic, ackMsg);
 }
 
+static uint32_t lastTopupTimestamp = 0;
+
+void handleTopup(uint8_t* buf, unsigned int length) {
+  if (length != 8) { Serial.println("[TOPUP] Frame wrong size"); return; }
+  uint32_t amount = (buf[0] << 24) | (buf[1] << 16) | (buf[2] << 8) | buf[3];
+  uint32_t ts     = (buf[4] << 24) | (buf[5] << 16) | (buf[6] << 8) | buf[7];
+
+  char ackMsg[128];
+  if (ts <= lastTopupTimestamp && lastTopupTimestamp != 0) {
+    Serial.printf("[TOPUP] Ignored duplicate ts=%u\n", ts);
+    snprintf(ackMsg, sizeof(ackMsg), "{\"status\":\"ok\",\"amount\":%u,\"duplicate\":true}", amount);
+  } else {
+    balance += amount;
+    lastTopupTimestamp = ts;
+    Serial.printf("[TOPUP] Added Rp %u | New Balance: Rp %.0f | ts: %u\n", amount, balance, ts);
+    writeState();
+    snprintf(ackMsg, sizeof(ackMsg), "{\"status\":\"ok\",\"amount\":%u}", amount);
+  }
+
+  char ackTopic[64];
+  snprintf(ackTopic, sizeof(ackTopic), "device/%s/topup_ack", DEVICE_ID);
+  mqttClient.publish(ackTopic, ackMsg);
+}
+
 void handleCalibration(uint8_t* buf) {
   // [0:1] CALIBRATION_FACTOR×100  [2] CAL_FACTOR_POWER×100  [3] SENSOR_SAMPLING_TIME
   CALIBRATION_FACTOR   = ((buf[0] << 8) | buf[1]) / 100.0f;
@@ -432,6 +456,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
   String t = String(topic);
   Serial.printf("[MQTT] ← %s (%u B)\n", topic, length);
   if      (t.endsWith("/command") && length == 1) handleCommand(payload[0]);
+  else if (t.endsWith("/topup")   && length == 8) handleTopup(payload, length);
   else if (t.endsWith("/config")  && length == 4) handleCalibration(payload);
   else if (t.endsWith("/ota"))                    handleOta(payload, length);
 }
@@ -488,9 +513,10 @@ bool ensureMQTT() {
   Serial.println(" OK");
   String base = "device/" + String(DEVICE_ID);
   mqttClient.subscribe((base + "/command").c_str(), 1);
+  mqttClient.subscribe((base + "/topup").c_str(),   1);
   mqttClient.subscribe((base + "/config").c_str(),  1);
   mqttClient.subscribe((base + "/ota").c_str(),     1);
-  Serial.printf("[MQTT] Subscribed to %s/{command,config,ota}\n", base.c_str());
+  Serial.printf("[MQTT] Subscribed to %s/{command,topup,config,ota}\n", base.c_str());
   return true;
 }
 

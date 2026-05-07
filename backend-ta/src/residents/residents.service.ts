@@ -6,12 +6,15 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Resident } from './resident.entity';
+import { Unit } from '../unit/entities/unit.entity';
 
 @Injectable()
 export class ResidentsService {
   constructor(
     @InjectRepository(Resident)
     private readonly residentRepo: Repository<Resident>,
+    @InjectRepository(Unit)
+    private readonly unitRepo: Repository<Unit>,
   ) {}
 
   findAll(): Promise<Resident[]> {
@@ -46,6 +49,13 @@ export class ResidentsService {
   async remove(email: string): Promise<void> {
     const resident = await this.residentRepo.findOne({ where: { email } });
     if (!resident) throw new NotFoundException('Resident not found');
+    // Clear unit assignments before deleting the resident
+    await this.unitRepo
+      .createQueryBuilder()
+      .update()
+      .set({ resident_email: null })
+      .where('resident_email = :email', { email })
+      .execute();
     await this.residentRepo.remove(resident);
   }
 

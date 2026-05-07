@@ -13,12 +13,13 @@ import { TariffModule } from '../tariff/tariff.module';
 import { AuditLogModule } from '../audit-log/audit-log.module';
 import { AdminJwtGuard } from '../common/guards/admin-jwt.guard';
 import { CalibrationSetting } from './entities/calibration-setting.entity';
+import { Building } from './entities/building.entity';
 import { HealthService } from './health.service';
 
 @Module({
   imports: [
     ConfigModule,
-    TypeOrmModule.forFeature([CalibrationSetting]),
+    TypeOrmModule.forFeature([CalibrationSetting, Building]),
     ResidentsModule,
     UnitModule,
     PaymentsModule,

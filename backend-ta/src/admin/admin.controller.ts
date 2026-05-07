@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -28,6 +29,19 @@ import { AuditLogService } from '../audit-log/audit-log.service';
 class CreateResidentDto {
   email!: string;
   name?: string;
+}
+
+class CreateBuildingDto {
+  code!: string;
+  name!: string;
+  address?: string;
+  floors?: number;
+}
+
+class UpdateBuildingDto {
+  name?: string;
+  address?: string;
+  floors?: number;
 }
 
 @Controller('admin')
@@ -62,6 +76,9 @@ export class AdminController {
     @Request() req: AdminRequest,
   ) {
     const role = payload.enabled === false ? 'resident' : 'admin';
+    if (payload.enabled === false && email === this.adminEmail(req)) {
+      throw new BadRequestException('Cannot revoke your own admin access');
+    }
     const result = await this.residentsService.setRole(email, role);
     void this.auditLogService.log(
       this.adminEmail(req),
@@ -95,6 +112,61 @@ export class AdminController {
           new Date(b.detectedAt).getTime() - new Date(a.detectedAt).getTime(),
       )
       .slice(0, 20);
+  }
+
+  // ── Buildings ─────────────────────────────────────────────────────────────
+
+  @Get('buildings')
+  listBuildings() {
+    return this.adminService.getBuildings();
+  }
+
+  @Post('buildings')
+  async createBuilding(
+    @Body() dto: CreateBuildingDto,
+    @Request() req: AdminRequest,
+  ) {
+    const result = await this.adminService.createBuilding(dto);
+    void this.auditLogService.log(
+      this.adminEmail(req),
+      'CREATE',
+      'building',
+      result.id,
+      dto as unknown as Record<string, unknown>,
+    );
+    return result;
+  }
+
+  @Patch('buildings/:id')
+  async updateBuilding(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateBuildingDto,
+    @Request() req: AdminRequest,
+  ) {
+    const result = await this.adminService.updateBuilding(id, dto);
+    void this.auditLogService.log(
+      this.adminEmail(req),
+      'UPDATE',
+      'building',
+      id,
+      dto as unknown as Record<string, unknown>,
+    );
+    return result;
+  }
+
+  @Delete('buildings/:id')
+  async deleteBuilding(
+    @Param('id', ParseIntPipe) id: number,
+    @Request() req: AdminRequest,
+  ) {
+    await this.adminService.deleteBuilding(id);
+    void this.auditLogService.log(
+      this.adminEmail(req),
+      'DELETE',
+      'building',
+      id,
+    );
+    return { deleted: true };
   }
 
   // ── Residents ─────────────────────────────────────────────────────────────

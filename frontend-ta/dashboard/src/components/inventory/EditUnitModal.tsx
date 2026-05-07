@@ -1,22 +1,40 @@
 import { useState, useEffect } from "react";
 import { X, Check, Loader2 } from "lucide-react";
 import { fetchApi } from "@/lib/api";
+import { useToast } from "@/components/layout/ToastProvider";
+import { InventoryItem } from "@/lib/mockData";
 
 interface EditUnitModalProps {
-    unit: { id: string; unit: string; meterSerial: string } | null;
+    unit: InventoryItem | null;
     onClose: () => void;
     onSuccess: () => void;
 }
 
 export function EditUnitModal({ unit, onClose, onSuccess }: EditUnitModalProps) {
     const [deviceId, setDeviceId] = useState("");
+    const [balance, setBalance] = useState("0");
+    const [buildingId, setBuildingId] = useState<number | "">("");
+    
+    const [buildings, setBuildings] = useState<{id: number, name: string}[]>([]);
+    const [loadingBuildings, setLoadingBuildings] = useState(false);
+
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const toast = useToast();
 
     useEffect(() => {
         if (unit) {
             setDeviceId(unit.meterSerial);
+            setBalance(String(unit.balance || 0));
+            setBuildingId(unit.buildingId || "");
             setError(null);
+            
+            // Fetch buildings list
+            setLoadingBuildings(true);
+            fetchApi('/admin/buildings')
+                .then(data => setBuildings(data || []))
+                .catch(() => setBuildings([]))
+                .finally(() => setLoadingBuildings(false));
         }
     }, [unit]);
 
@@ -29,8 +47,13 @@ export function EditUnitModal({ unit, onClose, onSuccess }: EditUnitModalProps) 
         try {
             await fetchApi(`/unit/${unit.id}`, {
                 method: 'PATCH',
-                body: JSON.stringify({ device_id: deviceId.trim().toUpperCase() }),
+                body: JSON.stringify({ 
+                    device_id: deviceId.trim().toUpperCase(),
+                    balance: parseFloat(balance),
+                    building_id: buildingId ? Number(buildingId) : undefined
+                }),
             });
+            toast.success(`Unit ${unit.unit} updated successfully.`);
             onSuccess();
             onClose();
         } catch (err) {
@@ -59,16 +82,44 @@ export function EditUnitModal({ unit, onClose, onSuccess }: EditUnitModalProps) 
                             {error}
                         </div>
                     )}
+
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Device ID</label>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Building</label>
+                        {loadingBuildings ? (
+                            <div className="flex items-center text-sm text-gray-500 mt-2"><Loader2 className="w-4 h-4 mr-2 animate-spin"/> Loading buildings...</div>
+                        ) : (
+                            <select 
+                                value={buildingId} 
+                                onChange={(e) => setBuildingId(Number(e.target.value))}
+                                className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                            >
+                                <option value="">-- Keep current / Unknown --</option>
+                                {buildings.map(b => (
+                                    <option key={b.id} value={b.id}>{b.name}</option>
+                                ))}
+                            </select>
+                        )}
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Device ID / MAC</label>
                         <input
                             required
                             type="text"
                             value={deviceId}
                             onChange={(e) => setDeviceId(e.target.value)}
-                            maxLength={30}
-                            pattern="[A-Za-z0-9_\-]{3,30}"
-                            title="3–30 alphanumeric characters, hyphens, or underscores"
+                            maxLength={100}
+                            className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                        />
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Balance (Rp)</label>
+                        <input
+                            type="number"
+                            step="1"
+                            value={balance}
+                            onChange={(e) => setBalance(e.target.value)}
                             className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                         />
                     </div>

@@ -1,8 +1,11 @@
 export interface InventoryItem {
     id: string;
+    buildingId?: number;
+    buildingName?: string;
     tenant: string;
     unit: string;
     meterSerial: string;
+    balance?: number;
     status: string;
     power: boolean;
     water: boolean;

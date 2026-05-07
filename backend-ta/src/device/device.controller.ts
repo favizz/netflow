@@ -120,6 +120,33 @@ export class DeviceController {
     );
   }
 
+  @MessagePattern('device/+/topup_ack')
+  handleTopupAck(@Payload() data: unknown, @Ctx() ctx: MqttContext): void {
+    const topic = ctx.getTopic();
+    const deviceId = topic.split('/')[1] ?? 'unknown';
+
+    let ack: { status?: string; amount?: number; error?: string | number } = {};
+    try {
+      const raw = Buffer.isBuffer(data)
+        ? data.toString('utf8')
+        : JSON.stringify(data);
+      ack = JSON.parse(raw) as typeof ack;
+    } catch {
+      ack = { status: 'unknown' };
+    }
+
+    const result = ack.status === 'ok' ? 'success' : 'failure';
+    this.logger.log(`TOPUP ACK [${deviceId}] → ${JSON.stringify(ack)}`);
+    void this.auditLogService.log(
+      `device:${deviceId}`,
+      'TOPUP_ACK',
+      'device',
+      deviceId,
+      ack as Record<string, unknown>,
+      result,
+    );
+  }
+
   @MessagePattern('device/+/data')
   async handleSensorData(@Payload() data: any, @Ctx() ctx: MqttContext) {
     const topic: string = ctx.getTopic();

@@ -89,6 +89,7 @@ export function InventoryTable({ data, initialFilter = "", onEdit, onDelete, onC
                 <table className="w-full text-left text-sm text-gray-500 dark:text-gray-400">
                     <thead className="bg-gray-50 dark:bg-gray-800/60 text-xs uppercase text-gray-700 dark:text-gray-400">
                         <tr>
+                            <th className="px-6 py-3 font-medium">Building</th>
                             <th className="px-6 py-3 font-medium">Unit / Tenant</th>
                             <th className="px-6 py-3 font-medium">Device ID</th>
                             <th className="px-6 py-3 font-medium">Status</th>
@@ -104,6 +105,9 @@ export function InventoryTable({ data, initialFilter = "", onEdit, onDelete, onC
                                     className="hover:bg-gray-50 dark:hover:bg-gray-700/40 cursor-pointer"
                                     onClick={() => navigate(`/devices/${item.id}`)}
                                 >
+                                    <td className="px-6 py-4">
+                                        <div className="font-medium text-gray-900 dark:text-gray-100">{item.buildingName || '-'}</div>
+                                    </td>
                                     <td className="px-6 py-4">
                                         <div className="font-medium text-gray-900 dark:text-gray-100">{item.unit}</div>
                                         <div className="text-xs text-gray-500 dark:text-gray-400">{item.tenant}</div>
@@ -187,7 +191,7 @@ export function InventoryTable({ data, initialFilter = "", onEdit, onDelete, onC
                             ))
                         ) : (
                             <tr>
-                                <td colSpan={5} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
+                                <td colSpan={6} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
                                     No devices found matching your search.
                                 </td>
                             </tr>
