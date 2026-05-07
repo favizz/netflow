@@ -16,9 +16,11 @@
 // MQTT binary protocol (matches backend binary-codec.ts):
 //   TELEMETRY  21 B  →  device/{id}/data
 //   COMMAND     1 B  ←  device/{id}/command
+//   TOPUP       8 B  ←  device/{id}/topup       (payment-gateway token refill)
 //   CALIBRATION 4 B  ←  device/{id}/config
+//   ADMIN       1 B  ←  device/{id}/admin        (admin SSR latch override)
 //   OTA  binary     ←  device/{id}/ota
-//   ACKs JSON       →  device/{id}/command_ack | config_ack | ota_ack
+//   ACKs JSON       →  device/{id}/command_ack | topup_ack | config_ack | admin_ack | ota_ack
 // =============================================================================
 
 #include <Arduino.h>
@@ -64,9 +66,8 @@ const int   MQTT_PORT    = 8883;           // TLS
 const char* MQTT_SECRET  = "";
 const char* DEVICE_ID    = "DEV-A-101";   // must match units.device_id in DB
 
-// Tariffs (Rp/unit) — must match backend tariff table
-float energy_tariff = 1444.70f;  // Rp / kWh
-float water_tariff  = 5000.0f;   // Rp / m³
+// Electricity tariff used for per-second token decrement in Core 0
+static const float RP_PER_KWH = 1450.0f;  // Rp / kWh
 
 // =============================================================================
 // CALIBRATION — updated live via MQTT config frame
@@ -81,6 +82,13 @@ float balance = 999999.0f;  // Rp — high initial so device doesn't cut off
                              // before backend syncs the real value
 int rs = 1;  // relay/SSR  : 1=ON   0=OFF
 int vs = 1;  // servo valve: 1=OPEN 0=CLOSE
+
+// Admin SSR latch — set by Core 1 MQTT handler, read by Core 0 every 1 s.
+// When true: SSR stays ON even if token balance is insufficient.
+volatile bool adminSSRLatch = false;
+
+// Protects balance across Core 0 (decrement) and Core 1 (topup, state save).
+static SemaphoreHandle_t balanceMutex = NULL;
 
 // =============================================================================
 // SENSOR SNAPSHOT
@@ -174,13 +182,21 @@ void writeState() {
     xSemaphoreGive(snapMutex);
   }
 
+  float savedBalance;
+  if (xSemaphoreTake(balanceMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+    savedBalance = balance;
+    xSemaphoreGive(balanceMutex);
+  } else {
+    savedBalance = balance;
+  }
+
   JsonDocument doc;
   doc["ts"]      = (long)time(NULL);
   doc["vs"]      = (bool)vs;
   doc["rs"]      = (bool)rs;
   doc["vol_L"]   = s.vol;    // flowmeter cumulative volume in Litres
   doc["et_kWh"]  = s.et;     // PZEM cumulative energy (persists in PZEM EEPROM too)
-  doc["balance"] = balance;
+  doc["balance"] = savedBalance;
 
   serializeJson(doc, f);
   f.flush();
@@ -368,7 +384,10 @@ void handleTopup(uint8_t* buf, unsigned int length) {
     Serial.printf("[TOPUP] Ignored duplicate ts=%u\n", ts);
     snprintf(ackMsg, sizeof(ackMsg), "{\"status\":\"ok\",\"amount\":%u,\"duplicate\":true}", amount);
   } else {
-    balance += amount;
+    if (xSemaphoreTake(balanceMutex, pdMS_TO_TICKS(20)) == pdTRUE) {
+      balance += amount;
+      xSemaphoreGive(balanceMutex);
+    }
     lastTopupTimestamp = ts;
     Serial.printf("[TOPUP] Added Rp %u | New Balance: Rp %.0f | ts: %u\n", amount, balance, ts);
     writeState();
@@ -377,6 +396,27 @@ void handleTopup(uint8_t* buf, unsigned int length) {
 
   char ackTopic[64];
   snprintf(ackTopic, sizeof(ackTopic), "device/%s/topup_ack", DEVICE_ID);
+  mqttClient.publish(ackTopic, ackMsg);
+}
+
+// Admin SSR latch command — 1-byte frame, same encoding as handleCommand.
+// type 0x1 + value 0x1 → latch ON (SSR forced ON even with zero balance).
+// type 0x1 + value 0x0 → latch OFF (return to normal token-based control).
+// Flag is global volatile so Core 0 reads it immediately without a mutex.
+void handleAdminCommand(uint8_t b) {
+  uint8_t type  = (b >> 4) & 0x0F;
+  uint8_t value =  b       & 0x0F;
+  if (type != 0x1) {
+    Serial.printf("[ADMIN] Unknown type 0x%X\n", type);
+    return;
+  }
+  adminSSRLatch = (value != 0);
+  Serial.printf("[ADMIN] SSR latch → %s\n", adminSSRLatch ? "ON (override)" : "OFF (normal)");
+
+  char ackTopic[64], ackMsg[64];
+  snprintf(ackTopic, sizeof(ackTopic), "device/%s/admin_ack", DEVICE_ID);
+  snprintf(ackMsg,  sizeof(ackMsg),
+           "{\"status\":\"ok\",\"latch\":%s}", adminSSRLatch ? "true" : "false");
   mqttClient.publish(ackTopic, ackMsg);
 }
 
@@ -458,6 +498,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
   if      (t.endsWith("/command") && length == 1) handleCommand(payload[0]);
   else if (t.endsWith("/topup")   && length == 8) handleTopup(payload, length);
   else if (t.endsWith("/config")  && length == 4) handleCalibration(payload);
+  else if (t.endsWith("/admin")   && length == 1) handleAdminCommand(payload[0]);
   else if (t.endsWith("/ota"))                    handleOta(payload, length);
 }
 
@@ -478,7 +519,8 @@ void taskSensorRead(void* param) {
       readPZEM();        // → voltage, current, power, energy (kWh)
       ServoDebounce();   // hold servo angle after open/close command
 
-      // Update snapshot for Core 1
+      // Update snapshot for Core 1; capture calibrated power for decrement below
+      float localPower = 0.0f;
       if (xSemaphoreTake(snapMutex, pdMS_TO_TICKS(5)) == pdTRUE) {
         snap.p   = power   * CAL_FACTOR_POWER;
         snap.v   = voltage;
@@ -486,9 +528,30 @@ void taskSensorRead(void* param) {
         snap.wf  = flowRate;
         snap.et  = energy;   // kWh from PZEM cumulative register
         snap.vol = volume;   // Litres from flowmeter pulse counter
+        localPower = snap.p;
         xSemaphoreGive(snapMutex);
       }
       lastSensorRead += SENSOR_READ_INTERVAL;
+
+      // ── Token decrement (every 1 s) ────────────────────────────────────────
+      // cost = power_W * 1 s * (1450 Rp/kWh) / (1000 W/kW * 3600 s/h)
+      float costPerSecond = localPower * RP_PER_KWH / 3600000.0f;
+      bool tokenSufficient = false;
+      if (xSemaphoreTake(balanceMutex, pdMS_TO_TICKS(5)) == pdTRUE) {
+        tokenSufficient = (balance >= costPerSecond);
+        if (tokenSufficient) {
+          balance -= costPerSecond;
+          if (balance < 0.0f) balance = 0.0f;
+        }
+        xSemaphoreGive(balanceMutex);
+      }
+
+      // ── SSR enforcement ────────────────────────────────────────────────────
+      // Token OK  → follow server command (rs).
+      // Token low → normally OFF; admin latch keeps it ON.
+      int effectiveSSR = tokenSufficient ? rs : (adminSSRLatch ? 1 : 0);
+      if      ( effectiveSSR && !SSR_state) SSROpen();
+      else if (!effectiveSSR &&  SSR_state) SSRClose();
     }
     vTaskDelay(pdMS_TO_TICKS(10));
   }
@@ -515,8 +578,9 @@ bool ensureMQTT() {
   mqttClient.subscribe((base + "/command").c_str(), 1);
   mqttClient.subscribe((base + "/topup").c_str(),   1);
   mqttClient.subscribe((base + "/config").c_str(),  1);
+  mqttClient.subscribe((base + "/admin").c_str(),   1);
   mqttClient.subscribe((base + "/ota").c_str(),     1);
-  Serial.printf("[MQTT] Subscribed to %s/{command,topup,config,ota}\n", base.c_str());
+  Serial.printf("[MQTT] Subscribed to %s/{command,topup,config,admin,ota}\n", base.c_str());
   return true;
 }
 
@@ -611,21 +675,7 @@ void taskMQTT(void* param) {
       }
       float wt = s.vol / 1000.0f;  // L → m³
 
-      // Local balance deduction (offline protection — backend is authoritative)
-      float dt          = (float)SENSOR_SAMPLING_TIME;
-      float addedEnergy = (s.p / 3600.0f) * dt;              // kWh this interval
-      float addedWater  = (s.wf / 1000.0f) * (dt / 60.0f);  // m³ this interval
-      balance -= addedEnergy * energy_tariff + addedWater * water_tariff;
-      if (balance < 0) balance = 0;
-
-      // Local cutoff (offline failsafe — backend also sends commands when it detects zero)
-      if (balance <= 0 && (rs || vs)) {
-        rs = 0; vs = 0;
-        SSRClose();
-        ServoValveClose();
-        Serial.println("[LOCAL] Balance 0 — relay & valve OFF");
-      }
-
+      // Balance deduction and SSR cutoff are handled by Core 0 (every 1 s).
       String dataTopic = "device/" + String(DEVICE_ID) + "/data";
 
       bool online = ensureMQTT();
@@ -767,9 +817,9 @@ void setup() {
   mqttClient.setKeepAlive(30);
   mqttClient.setSocketTimeout(10);
 
-  // Shared snapshot mutex
-  snapMutex = xSemaphoreCreateMutex();
-  configASSERT(snapMutex);
+  // Shared mutexes
+  snapMutex    = xSemaphoreCreateMutex();  configASSERT(snapMutex);
+  balanceMutex = xSemaphoreCreateMutex();  configASSERT(balanceMutex);
 
   // Pin tasks to cores (mirrors HTTP Reference xTaskCreatePinnedToCore calls)
   xTaskCreatePinnedToCore(taskSensorRead, "SensorRead",  4096, NULL, 1, NULL, 0);

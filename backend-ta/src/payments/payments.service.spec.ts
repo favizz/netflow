@@ -62,7 +62,7 @@ describe('PaymentsService', () => {
 
     unitService = {
       findByUnitNo: jest.fn().mockResolvedValue({ id: 1, unit_no: 'A-101', balance: 0 }),
-      creditBalanceByUnitNo: jest.fn().mockResolvedValue(undefined),
+      creditBalanceByUnitNo: jest.fn().mockResolvedValue({ id: 1, unit_no: 'A-101', balance: 50000, device_id: null }),
     };
 
     const module: TestingModule = await Test.createTestingModule({
