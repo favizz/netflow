@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument */
 import {
   ForbiddenException,
+  Inject,
   Injectable,
   Logger,
   NotFoundException,
@@ -16,6 +17,8 @@ import { Transaction } from './entities/transaction.entity';
 import { InitiateTopupDto } from './dto/initiate-topup.dto';
 import { PAYMENT_EXPIRY_QUEUE } from './payment-expiry.processor';
 import { createHash } from 'crypto';
+import { ClientProxy } from '@nestjs/microservices';
+import { encodeTopup } from '../common/binary-codec';
 
 const PAYMENT_EXPIRY_MS = 30 * 60 * 1_000; // 30 minutes
 
@@ -30,6 +33,7 @@ export class PaymentsService {
     private readonly configService: ConfigService,
     @InjectQueue(PAYMENT_EXPIRY_QUEUE)
     private readonly expiryQueue: Queue,
+    @Inject('MQTT_CLIENT') private readonly mqttClient: ClientProxy,
   ) {}
 
   async initiateTopup(dto: InitiateTopupDto) {
@@ -163,10 +167,18 @@ export class PaymentsService {
 
       if (finalStatus === 'success') {
         tx.confirmed_at = new Date();
-        await this.unitService.creditBalanceByUnitNo(
+        const updatedUnit = await this.unitService.creditBalanceByUnitNo(
           tx.unit_no,
           Number(tx.amount_rp),
         );
+        if (updatedUnit.device_id) {
+          const payload = encodeTopup({
+            amount: Number(tx.amount_rp),
+            timestamp: Math.floor(Date.now() / 1000),
+          });
+          this.logger.log(`Pushing top-up of Rp ${tx.amount_rp} to device [${updatedUnit.device_id}]`);
+          this.mqttClient.emit(`device/${updatedUnit.device_id}/topup`, payload);
+        }
       }
 
       await this.txRepo.save(tx);
@@ -183,10 +195,18 @@ export class PaymentsService {
 
     tx.status = 'success';
     tx.confirmed_at = new Date();
-    await this.unitService.creditBalanceByUnitNo(
+    const updatedUnit = await this.unitService.creditBalanceByUnitNo(
       tx.unit_no,
       Number(tx.amount_rp),
     );
+    if (updatedUnit.device_id) {
+      const payload = encodeTopup({
+        amount: Number(tx.amount_rp),
+        timestamp: Math.floor(Date.now() / 1000),
+      });
+      this.logger.log(`Pushing top-up of Rp ${tx.amount_rp} to device [${updatedUnit.device_id}]`);
+      this.mqttClient.emit(`device/${updatedUnit.device_id}/topup`, payload);
+    }
     await this.txRepo.save(tx);
 
     return this.toResponse(tx);
