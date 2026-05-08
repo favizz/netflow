@@ -26,7 +26,7 @@ export async function fetchApi(endpoint: string, options: RequestInit = {}) {
     if (response.status === 401 || response.status === 403) {
       localStorage.removeItem('admin-token');
       if (typeof window !== 'undefined') {
-        window.location.href = '/login';
+        window.location.href = '/admin/';
       }
     }
     const errText = await response.text();

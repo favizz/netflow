@@ -16,7 +16,11 @@ declare global {
   }
 }
 
-export default function LoginPage() {
+interface LoginPageProps {
+  onSuccess?: (token: string) => void;
+}
+
+export default function LoginPage({ onSuccess }: LoginPageProps) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const buttonRef = useRef<HTMLDivElement>(null);
@@ -39,8 +43,12 @@ export default function LoginPage() {
         throw new Error(data?.message || 'Your account does not have admin access.');
       }
       const data = await res.json();
-      localStorage.setItem('admin-token', data.accessToken);
-      navigate('/');
+      if (onSuccess) {
+        onSuccess(data.accessToken);
+      } else {
+        localStorage.setItem('admin-token', data.accessToken);
+        navigate('/');
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Sign-in failed. Please try again.');
     } finally {
@@ -84,7 +92,7 @@ export default function LoginPage() {
           <div className="text-center space-y-3">
             <div className="flex justify-center mb-6">
               <img
-                src="/netflow-logo-icon.png"
+                src={`${import.meta.env.BASE_URL}netflow-logo-icon.png`}
                 alt="NETFLOW"
                 className="h-20 w-20 object-contain"
               />

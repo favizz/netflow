@@ -12,11 +12,11 @@
   --popover:             oklch(1 0 0);
   --popover-foreground:  oklch(0.13 0 0);
 
-  /* Tone 1 — Brand Green */
+  /* Tone 1 - Brand Green */
   --primary:             oklch(0.42 0.16 142);
   --primary-foreground:  oklch(0.99 0 0);
 
-  /* Tone 2 — secondary actions (neutral, not a third hue) */
+  /* Tone 2 - secondary actions (neutral, not a third hue) */
   --secondary:           oklch(0.94 0.005 142);
   --secondary-foreground:oklch(0.25 0 0);
 

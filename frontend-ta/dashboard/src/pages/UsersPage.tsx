@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from "react";
 import { Users, UserPlus, Trash2, Link, ChevronLeft, ChevronRight, Search, Loader2, Check, X, Shield } from "lucide-react";
 import { fetchApi } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { getAdminEmail } from "@/lib/auth";
+import { useToast } from "@/components/layout/ToastProvider";
 
 const PAGE_SIZE = 10;
 
@@ -56,6 +58,8 @@ export default function UsersPage() {
     const [search, setSearch] = useState('');
     const [roleFilter, setRoleFilter] = useState<'all' | 'admin' | 'resident'>('all');
     const [page, setPage] = useState(1);
+    const adminEmail = getAdminEmail();
+    const toast = useToast();
 
     const [showAddForm, setShowAddForm] = useState(false);
     const [addForm, setAddForm] = useState({ email: '', name: '' });
@@ -70,6 +74,9 @@ export default function UsersPage() {
     const [assignUnitId, setAssignUnitId] = useState('');
     const [assignLoading, setAssignLoading] = useState(false);
     const [assignError, setAssignError] = useState<string | null>(null);
+
+    const [unassignTarget, setUnassignTarget] = useState<{ email: string, unitId: number, unitNo: string } | null>(null);
+    const [unassignLoading, setUnassignLoading] = useState(false);
 
     const [toggleTarget, setToggleTarget] = useState<Resident | null>(null);
     const [toggleLoading, setToggleLoading] = useState(false);
@@ -116,6 +123,7 @@ export default function UsersPage() {
                 method: 'POST',
                 body: JSON.stringify({ email: addForm.email.trim(), name: addForm.name.trim() || undefined }),
             });
+            toast.success(`User ${addForm.email} added successfully`);
             setAddForm({ email: '', name: '' });
             setShowAddForm(false);
             loadAll();
@@ -132,6 +140,7 @@ export default function UsersPage() {
         setDeleteError(null);
         try {
             await fetchApi(`/admin/residents/${encodeURIComponent(deleteTarget)}`, { method: 'DELETE' });
+            toast.success(`User ${deleteTarget} deleted successfully`);
             setDeleteTarget(null);
             loadAll();
         } catch (err) {
@@ -148,6 +157,7 @@ export default function UsersPage() {
         setAssignLoading(true);
         try {
             await fetchApi(`/admin/residents/${encodeURIComponent(assignTarget)}/units/${assignUnitId}`, { method: 'POST' });
+            toast.success(`Unit assigned to ${assignTarget} successfully`);
             setAssignTarget(null);
             setAssignUnitId('');
             loadAll();
@@ -158,13 +168,19 @@ export default function UsersPage() {
         }
     };
 
-    const handleUnassignUnit = async (email: string, unitId: number) => {
+    const handleUnassignConfirm = async () => {
+        if (!unassignTarget) return;
         setInlineError(null);
+        setUnassignLoading(true);
         try {
-            await fetchApi(`/admin/residents/${encodeURIComponent(email)}/units/${unitId}`, { method: 'DELETE' });
+            await fetchApi(`/admin/residents/${encodeURIComponent(unassignTarget.email)}/units/${unassignTarget.unitId}`, { method: 'DELETE' });
+            toast.success(`Unit ${unassignTarget.unitNo} unassigned from ${unassignTarget.email}`);
+            setUnassignTarget(null);
             loadAll();
         } catch (err) {
             setInlineError(err instanceof Error ? err.message.replace(/^API error \(\d+\): /, '') : 'Could not unassign unit.');
+        } finally {
+            setUnassignLoading(false);
         }
     };
 
@@ -176,6 +192,7 @@ export default function UsersPage() {
                 method: 'PATCH',
                 body: JSON.stringify({ enabled: toggleTarget.role !== 'admin' }),
             });
+            toast.success(`Role updated successfully for ${toggleTarget.email}`);
             setToggleTarget(null);
             loadAll();
         } catch (err) {
@@ -221,8 +238,8 @@ export default function UsersPage() {
                                 className="h-9 rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 text-sm text-gray-700 dark:text-gray-300 outline-none focus:border-primary focus:ring-1 focus:ring-primary"
                             >
                                 <option value="all">All roles</option>
-                                <option value="admin">Admin only</option>
-                                <option value="resident">Resident only</option>
+                                <option value="admin">Admin</option>
+                                <option value="resident">Resident</option>
                             </select>
                             <button
                                 onClick={() => { setShowAddForm(v => !v); setAddError(null); }}
@@ -313,7 +330,7 @@ export default function UsersPage() {
                                                     </div>
                                                 )}
                                                 <div className="min-w-0">
-                                                    <div className="font-medium text-gray-900 dark:text-gray-100 truncate">{res.name || '—'}</div>
+                                                    <div className="font-medium text-gray-900 dark:text-gray-100 truncate">{res.name || '-'}</div>
                                                     <div className="text-xs text-gray-400 dark:text-gray-500 truncate">{res.email}</div>
                                                 </div>
                                             </div>
@@ -335,7 +352,7 @@ export default function UsersPage() {
                                                 {assigned.map(u => (
                                                     <span key={u.id} className="inline-flex items-center gap-1 rounded-full bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 px-2 py-0.5 text-xs text-blue-700 dark:text-blue-400">
                                                         {u.unit_no}
-                                                        <button onClick={() => handleUnassignUnit(res.email, u.id)} className="text-blue-400 hover:text-red-500 dark:hover:text-red-400">
+                                                        <button onClick={() => setUnassignTarget({ email: res.email, unitId: u.id, unitNo: u.unit_no })} className="text-blue-400 hover:text-red-500 dark:hover:text-red-400">
                                                             <X className="h-3 w-3" />
                                                         </button>
                                                     </span>
@@ -343,7 +360,7 @@ export default function UsersPage() {
                                             </div>
                                         </td>
                                         <td className="px-6 py-3 text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">
-                                            {res.created_at ? new Date(res.created_at).toLocaleDateString('id-ID') : '—'}
+                                            {res.created_at ? new Date(res.created_at).toLocaleDateString('id-ID') : '-'}
                                         </td>
                                         <td className="px-6 py-3 text-right">
                                             <div className="flex items-center justify-end gap-1">
@@ -356,8 +373,9 @@ export default function UsersPage() {
                                                 </button>
                                                 <button
                                                     onClick={() => setToggleTarget(res)}
-                                                    className="rounded-md border border-gray-200 dark:border-gray-600 p-1.5 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
-                                                    title={res.role === 'admin' ? 'Revoke admin' : 'Grant admin'}
+                                                    disabled={res.email === adminEmail}
+                                                    className="rounded-md border border-gray-200 dark:border-gray-600 p-1.5 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                                                    title={res.email === adminEmail ? 'Cannot change own role' : res.role === 'admin' ? 'Revoke admin' : 'Grant admin'}
                                                 >
                                                     <Shield className="h-3.5 w-3.5" />
                                                 </button>
@@ -429,6 +447,19 @@ export default function UsersPage() {
                         </form>
                     </div>
                 </div>
+            )}
+
+            {/* Unassign Unit Confirm */}
+            {unassignTarget && (
+                <ConfirmModal
+                    title="Unassign Unit"
+                    message={<>Remove unit <strong>{unassignTarget.unitNo}</strong> from <strong>{unassignTarget.email}</strong>?</>}
+                    confirmLabel="Unassign"
+                    danger={true}
+                    onConfirm={handleUnassignConfirm}
+                    onCancel={() => setUnassignTarget(null)}
+                    loading={unassignLoading}
+                />
             )}
 
             {/* Toggle Role Confirm */}

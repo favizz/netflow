@@ -26,7 +26,7 @@ export class AuthController {
     private readonly configService: ConfigService,
   ) {}
 
-  /** Development only — disabled in production (NODE_ENV=production) */
+  /** Development only - disabled in production (NODE_ENV=production) */
   @Post('dev-login')
   devLogin(@Body() dto: DevLoginDto) {
     return this.authService.devLogin(dto.email);
@@ -116,7 +116,7 @@ export class AuthController {
         const known = units.some((u) => u.device_id === username);
         if (known) return { result: 'allow' };
       } catch {
-        // DB unavailable — deny to be safe
+        // DB unavailable - deny to be safe
       }
     }
 

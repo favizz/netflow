@@ -8,6 +8,7 @@ import { getQueueToken } from '@nestjs/bullmq';
 import { PaymentsService } from './payments.service';
 import { Transaction } from './entities/transaction.entity';
 import { UnitService } from '../unit/unit.service';
+import { AuditLogService } from '../audit-log/audit-log.service';
 import { PAYMENT_EXPIRY_QUEUE } from './payment-expiry.processor';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -61,7 +62,7 @@ describe('PaymentsService', () => {
 
     unitService = {
       findByUnitNo: jest.fn().mockResolvedValue({ id: 1, unit_no: 'A-101', balance: 0 }),
-      creditBalanceByUnitNo: jest.fn().mockResolvedValue(undefined),
+      creditBalanceByUnitNo: jest.fn().mockResolvedValue({ id: 1, unit_no: 'A-101', balance: 50000, device_id: null }),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -70,6 +71,7 @@ describe('PaymentsService', () => {
         { provide: getRepositoryToken(Transaction), useValue: txRepo },
         { provide: UnitService, useValue: unitService },
         { provide: getQueueToken(PAYMENT_EXPIRY_QUEUE), useValue: { add: jest.fn().mockResolvedValue(undefined) } },
+        { provide: AuditLogService, useValue: { log: jest.fn().mockResolvedValue(undefined) } },
         {
           provide: ConfigService,
           useValue: {
@@ -82,6 +84,7 @@ describe('PaymentsService', () => {
             }),
           },
         },
+        { provide: 'MQTT_CLIENT', useValue: { emit: jest.fn() } },
       ],
     }).compile();
 
@@ -185,7 +188,7 @@ describe('PaymentsService', () => {
       expect(unitService.creditBalanceByUnitNo).toHaveBeenCalledWith('A-101', 100_000);
     });
 
-    it('is idempotent — does not re-credit already-confirmed transaction', async () => {
+    it('is idempotent - does not re-credit already-confirmed transaction', async () => {
       const tx: Partial<Transaction> = {
         id: 'TRX-DONE',
         unit_no: 'A-101',

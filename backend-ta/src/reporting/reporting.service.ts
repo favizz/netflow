@@ -39,7 +39,7 @@ export class ReportingService {
         ? `DATE_SUB(NOW(), INTERVAL 30 DAY)`
         : `DATE_SUB(NOW(), INTERVAL 12 MONTH)`;
 
-    // Single aggregation query — partition elimination applies automatically.
+    // Single aggregation query - partition elimination applies automatically.
     // Energy delta (MAX – MIN) is the physically correct consumption per period.
     const rows: Array<{
       bucket: string;

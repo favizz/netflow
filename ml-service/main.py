@@ -1,11 +1,11 @@
 """
 NetFlow ML Service  ·  v2.0
 FastAPI microservice providing:
-  POST /predict/anomaly   — Isolation Forest on sensor feature vectors
-  POST /predict/depletion — Balance depletion forecast
-  POST /train             — Retrain model with real field data
-  GET  /model/info        — Model metadata & training history
-  GET  /health            — Health probe (Prometheus-compatible)
+  POST /predict/anomaly   - Isolation Forest on sensor feature vectors
+  POST /predict/depletion - Balance depletion forecast
+  POST /train             - Retrain model with real field data
+  GET  /model/info        - Model metadata & training history
+  GET  /health            - Health probe (Prometheus-compatible)
 
 Model persistence: fitted model is saved to MODEL_PATH on every train call
 and loaded on startup, so restarts preserve field-data-trained models.
@@ -76,7 +76,7 @@ class ModelState:
         cls.history = cls.history[-20:]   # keep last 20 training runs
 
         cls._save()
-        log.info("IsolationForest fitted — samples=%d source=%s", len(X), source)
+        log.info("IsolationForest fitted - samples=%d source=%s", len(X), source)
 
     @classmethod
     def predict(cls, X: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -119,7 +119,7 @@ class ModelState:
                 cls.sample_count = meta.get("sample_count", 0)
                 cls.source       = meta.get("source", "unknown")
                 cls.history      = meta.get("history", [])
-            log.info("Loaded persisted model — samples=%d source=%s", cls.sample_count, cls.source)
+            log.info("Loaded persisted model - samples=%d source=%s", cls.sample_count, cls.source)
             return True
         except Exception as exc:
             log.warning("Could not load model: %s", exc)
@@ -180,7 +180,7 @@ class ModelInfoResponse(BaseModel):
 async def lifespan(app: FastAPI):
     loaded = ModelState.load()
     if not loaded:
-        # Pre-train on synthetic normal data — replaced on first real /train call
+        # Pre-train on synthetic normal data - replaced on first real /train call
         rng       = np.random.default_rng(42)
         synthetic = rng.normal(
             loc=[200, 220, 0.9, 0.5],
@@ -189,7 +189,7 @@ async def lifespan(app: FastAPI):
         )
         synthetic = np.clip(synthetic, 0, None)
         ModelState.fit(synthetic, source="synthetic")
-        log.info("No persisted model found — using synthetic pre-trained model")
+        log.info("No persisted model found - using synthetic pre-trained model")
     log.info("ML service ready (model source: %s)", ModelState.source)
     yield
 
@@ -217,7 +217,7 @@ def health():
 
 @app.get("/model/info", response_model=ModelInfoResponse)
 def model_info():
-    """Full model metadata — exposed via NestJS admin proxy."""
+    """Full model metadata - exposed via NestJS admin proxy."""
     return ModelInfoResponse(
         model_fitted  = ModelState.model is not None,
         sample_count  = ModelState.sample_count,
@@ -235,7 +235,7 @@ def predict_anomaly(body: AnomalyRequest):
     Run Isolation Forest on sensor readings.
 
     Auto-retrains when accumulated batch is 2× current training set AND
-    the current model was trained on synthetic data — avoids overwriting
+    the current model was trained on synthetic data - avoids overwriting
     field-data-trained models with noisy batch data.
     """
     X = np.array(
@@ -267,7 +267,7 @@ def predict_depletion(body: DepletionRequest):
         return DepletionResponse(
             days_remaining=9999.0,
             daily_cost_rp=0.0,
-            note="No consumption detected — device may be offline.",
+            note="No consumption detected - device may be offline.",
         )
     days = body.balance_rp / daily_cost
     return DepletionResponse(

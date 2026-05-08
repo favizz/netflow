@@ -12,14 +12,17 @@ const ACTION_CATEGORY: Record<string, string> = {
     ASSIGN_UNIT: 'Unit Management',
     UNASSIGN_UNIT: 'Unit Management',
     UPDATE_SETTINGS: 'Calibration',
-    'CREATE_TARIFF': 'Tariff',
-    'UPDATE_TARIFF': 'Tariff',
-    'DELETE_TARIFF': 'Tariff',
+    CONFIG_ACK: 'Calibration',
+    CREATE_TARIFF: 'Tariff',
+    UPDATE_TARIFF: 'Tariff',
+    DELETE_TARIFF: 'Tariff',
     TOKEN_PURCHASE: 'Transactions',
     ANOMALY: 'Anomaly',
     CLIENT_ERROR: 'System Error',
     OTA_PUSH: 'Firmware',
     OTA_ACK: 'Firmware',
+    SEND_COMMAND: 'Device',
+    COMMAND_ACK: 'Device',
 };
 
 function deriveCategory(action: string): string {
@@ -29,7 +32,7 @@ function deriveCategory(action: string): string {
     return 'Other';
 }
 
-const CATEGORIES = ['All', 'User Management', 'Unit Management', 'Calibration', 'Tariff', 'Transactions', 'Anomaly', 'Firmware', 'System Error', 'Other'];
+const CATEGORIES = ['All', 'User Management', 'Unit Management', 'Calibration', 'Tariff', 'Transactions', 'Anomaly', 'Firmware', 'Device', 'System Error', 'Other'];
 const RESULTS = ['All', 'success', 'failure', 'info'];
 
 const RESULT_STYLE: Record<string, string> = {
@@ -175,7 +178,7 @@ export default function LogsPage() {
             </div>
 
             <div className="rounded-lg bg-white dark:bg-gray-900 shadow-sm ring-1 ring-gray-900/5 dark:ring-gray-700 overflow-hidden">
-                {/* Filter header — same pattern as InventoryTable */}
+                {/* Filter header - same pattern as InventoryTable */}
                 <div className="border-b border-gray-200 dark:border-gray-700 px-6 py-4">
                     <div className="flex flex-col space-y-4 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
                         <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">
@@ -220,7 +223,7 @@ export default function LogsPage() {
                             {pageItems.map(log => (
                                 <tr key={log.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
                                     <td className="px-4 py-3 whitespace-nowrap font-mono text-xs text-gray-900 dark:text-gray-300">
-                                        {log.timestamp ? new Date(log.timestamp).toLocaleString('id-ID') : '—'}
+                                        {log.timestamp ? new Date(log.timestamp).toLocaleString('id-ID') : '-'}
                                     </td>
                                     <td className="px-4 py-3 text-xs text-primary font-medium whitespace-nowrap">{log.actor}</td>
                                     <td className="px-4 py-3 font-mono text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">{log.action}</td>
@@ -231,7 +234,7 @@ export default function LogsPage() {
                                     <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400">
                                         {log.details ? (
                                             <CopyCell text={(() => { try { return JSON.stringify(JSON.parse(log.details)); } catch { return log.details; } })()} />
-                                        ) : '—'}
+                                        ) : '-'}
                                     </td>
                                     <td className="px-4 py-3">
                                         <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${RESULT_STYLE[log.result] ?? RESULT_STYLE.info}`}>

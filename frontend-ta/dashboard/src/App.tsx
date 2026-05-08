@@ -1,5 +1,5 @@
-import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import React, { useState } from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import DashboardPage from '@/pages/DashboardPage';
 import DevicesPage from '@/pages/DevicesPage';
@@ -12,20 +12,25 @@ import FAQPage from '@/pages/FAQPage';
 import LoginPage from '@/pages/LoginPage';
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
-  const token = localStorage.getItem('admin-token');
-  const location = useLocation();
+  const [token, setToken] = useState(() => localStorage.getItem('admin-token'));
 
   if (!token) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
+    return (
+      <LoginPage
+        onSuccess={(t) => {
+          localStorage.setItem('admin-token', t);
+          setToken(t);
+        }}
+      />
+    );
   }
-  return children;
+  return <>{children}</>;
 }
 
 export default function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter basename="/admin">
       <Routes>
-        <Route path="/login" element={<LoginPage />} />
         <Route element={<RequireAuth><DashboardLayout /></RequireAuth>}>
           <Route index element={<DashboardPage />} />
           <Route path="devices" element={<DevicesPage />} />

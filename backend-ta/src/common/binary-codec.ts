@@ -1,6 +1,6 @@
 /**
  * Custom binary protocol for device commands and calibration config.
- * Absolute minimum wire bytes — no key names, no type tags.
+ * Absolute minimum wire bytes - no key names, no type tags.
  *
  * ─────────────────────────────────────────────────────────────
  * COMMAND FRAME  (1 byte)
@@ -124,7 +124,7 @@ export interface OtaPayload {
 }
 
 /**
- * Compact binary OTA frame — no JSON wrapper.
+ * Compact binary OTA frame - no JSON wrapper.
  *   byte[0]   major  (uint8)
  *   byte[1]   minor  (uint8)
  *   byte[2]   patch  (uint8)
@@ -144,5 +144,27 @@ export function encodeOta(payload: OtaPayload): Buffer {
   buf[2] = pat & 0xff;
   buf[3] = flags;
   urlBytes.copy(buf, 4);
+  return buf;
+}
+
+// ─────────────────────────────────────────────────────────────
+// TOPUP FRAME (8 bytes) server → device
+//   topic: device/{id}/topup
+//   bytes [0:3] uint32 BE : amount (Rp)
+//   bytes [4:7] uint32 BE : timestamp (Unix epoch in seconds)
+// ─────────────────────────────────────────────────────────────
+
+export interface TopupPayload {
+  amount: number;
+  timestamp: number;
+}
+
+/**
+ * Encode a top-up command into 8 bytes.
+ */
+export function encodeTopup(payload: TopupPayload): Buffer {
+  const buf = Buffer.allocUnsafe(8);
+  buf.writeUInt32BE(Math.round(payload.amount), 0);
+  buf.writeUInt32BE(payload.timestamp, 4);
   return buf;
 }

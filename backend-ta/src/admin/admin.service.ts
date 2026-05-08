@@ -10,6 +10,7 @@ import {
   encodeOta,
 } from '../common/binary-codec';
 import { CalibrationSetting } from './entities/calibration-setting.entity';
+import { Building } from './entities/building.entity';
 
 export interface CalibrationSettings {
   CAL_FACTOR_FLOWRATE: number;
@@ -27,12 +28,14 @@ const DEFAULTS: CalibrationSettings = {
 export class AdminService implements OnModuleInit {
   private readonly logger = new Logger(AdminService.name);
 
-  /** In-memory cache — loaded from DB on startup, written through on every update. */
+  /** In-memory cache - loaded from DB on startup, written through on every update. */
   private cached: CalibrationSettings = { ...DEFAULTS };
 
   constructor(
     @InjectRepository(CalibrationSetting)
     private readonly calRepo: Repository<CalibrationSetting>,
+    @InjectRepository(Building)
+    private readonly buildingRepo: Repository<Building>,
     private readonly unitService: UnitService,
     private readonly paymentsService: PaymentsService,
     @Inject('MQTT_CLIENT') private readonly mqttClient: ClientProxy,
@@ -42,6 +45,30 @@ export class AdminService implements OnModuleInit {
 
   async onModuleInit() {
     await this.loadFromDb();
+  }
+
+  // ── Buildings ─────────────────────────────────────────────────────────────
+
+  async getBuildings(): Promise<Building[]> {
+    return this.buildingRepo.find({ order: { code: 'ASC' } });
+  }
+
+  async createBuilding(data: { code: string; name: string; address?: string; floors?: number }): Promise<Building> {
+    const building = this.buildingRepo.create(data);
+    return this.buildingRepo.save(building);
+  }
+
+  async updateBuilding(id: number, data: Partial<Building>): Promise<Building> {
+    await this.buildingRepo.update(id, data);
+    return this.buildingRepo.findOneOrFail({ where: { id } });
+  }
+
+  async deleteBuilding(id: number): Promise<void> {
+    const count = await this.unitService.countByBuilding(id);
+    if (count > 0) {
+      throw new Error(`Cannot delete building because it has ${count} units assigned.`);
+    }
+    await this.buildingRepo.delete(id);
   }
 
   // ── Transactions ──────────────────────────────────────────────────────────
@@ -197,7 +224,7 @@ export class AdminService implements OnModuleInit {
         };
       }
     } catch {
-      // DB not ready (first boot before schema applied) — keep defaults
+      // DB not ready (first boot before schema applied) - keep defaults
     }
   }
 
@@ -219,7 +246,7 @@ export class AdminService implements OnModuleInit {
       row.sampling_time = settings.SENSOR_SAMPLING_TIME;
       await this.calRepo.save(row);
     } catch {
-      // Non-fatal — in-memory value is still updated
+      // Non-fatal - in-memory value is still updated
     }
   }
 }

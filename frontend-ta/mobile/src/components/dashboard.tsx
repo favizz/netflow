@@ -110,7 +110,7 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
     let active = true
     api.getForecast(unitId)
       .then((f) => { if (active) setForecast(f) })
-      .catch(() => { /* ML service may be down — forecast stays hidden */ })
+      .catch(() => { /* ML service may be down - forecast stays hidden */ })
     return () => { active = false }
   }, [unitId])
 

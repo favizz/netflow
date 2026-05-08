@@ -127,7 +127,7 @@ export class MlService implements OnModuleInit {
   /**
    * Pull recent readings for all units and recompute feature statistics.
    * Called daily by the scheduler. Also callable manually via admin endpoint.
-   * Uses Z-score (Gaussian) statistical model — no external service required.
+   * Uses Z-score (Gaussian) statistical model - no external service required.
    */
   async retrainWithFieldData(): Promise<{
     samplesCollected: number;
@@ -150,7 +150,7 @@ export class MlService implements OnModuleInit {
 
       if (rows.length < MlService.MIN_SAMPLES) {
         this.logger.warn(
-          `ML retraining skipped — only ${rows.length} readings available (need ≥ ${MlService.MIN_SAMPLES})`,
+          `ML retraining skipped - only ${rows.length} readings available (need ≥ ${MlService.MIN_SAMPLES})`,
         );
         return { samplesCollected: rows.length, status: 'insufficient_data' };
       }
@@ -237,11 +237,11 @@ export class MlService implements OnModuleInit {
     const result = await this.retrainWithFieldData();
     if (result.status === 'trained') {
       this.logger.log(
-        `In-process ML model ready — ${result.samplesCollected} samples, Z-score threshold ${MlService.ANOMALY_THRESHOLD}`,
+        `In-process ML model ready - ${result.samplesCollected} samples, Z-score threshold ${MlService.ANOMALY_THRESHOLD}`,
       );
     } else {
       this.logger.warn(
-        `ML model deferred — ${result.status} (${result.samplesCollected} samples). Will retry after first retraining interval.`,
+        `ML model deferred - ${result.status} (${result.samplesCollected} samples). Will retry after first retraining interval.`,
       );
     }
   }

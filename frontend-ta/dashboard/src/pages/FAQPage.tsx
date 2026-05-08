@@ -106,7 +106,7 @@ const FAQ_DATA: FAQSection[] = [
             },
             {
                 question: "What is the Queue Monitor?",
-                answer: "The Queue Monitor (accessible via the button on the Logs page) opens Bull Board — a visual interface for the BullMQ job queues. It shows the telemetry processing queue and the payment-expiry queue: pending jobs, completed jobs, failed jobs, and retry counts.",
+                answer: "The Queue Monitor (accessible via the button on the Logs page) opens Bull Board - a visual interface for the BullMQ job queues. It shows the telemetry processing queue and the payment-expiry queue: pending jobs, completed jobs, failed jobs, and retry counts.",
             },
             {
                 question: "Can I filter logs?",
@@ -119,11 +119,11 @@ const FAQ_DATA: FAQSection[] = [
         items: [
             {
                 question: "How does anomaly detection work?",
-                answer: "The system uses a two-layer detection approach. The rule-based layer checks 11 conditions in real time (low balance, voltage out of range, MCB trip, water leak, sensor malfunction, etc.). The statistical ML layer computes a Z-score across power, voltage, current, and water flow using the last 30 days of historical readings — readings with a Z-score above 2.5 are flagged as anomalies. Both layers run in-process without any external dependency.",
+                answer: "The system uses a two-layer detection approach. The rule-based layer checks 11 conditions in real time (low balance, voltage out of range, MCB trip, water leak, sensor malfunction, etc.). The statistical ML layer computes a Z-score across power, voltage, current, and water flow using the last 30 days of historical readings - readings with a Z-score above 2.5 are flagged as anomalies. Both layers run in-process without any external dependency.",
             },
             {
                 question: "Who gets notified about anomalies?",
-                answer: "When a Critical or Warning anomaly is detected — including low balance alerts — the system automatically sends an email to the resident assigned to that unit via nodemailer (SMTP). Admins see anomalies in the dashboard Overview.",
+                answer: "When a Critical or Warning anomaly is detected - including low balance alerts - the system automatically sends an email to the resident assigned to that unit via nodemailer (SMTP). Admins see anomalies in the dashboard Overview.",
             },
         ],
     },
@@ -132,7 +132,7 @@ const FAQ_DATA: FAQSection[] = [
         items: [
             {
                 question: "What can I do in Control Center?",
-                answer: "Control Center lets you send batch relay and valve commands across multiple units simultaneously — for example, cutting power to an entire tower during maintenance or restoring service after a billing event.",
+                answer: "Control Center lets you send batch relay and valve commands across multiple units simultaneously - for example, cutting power to an entire tower during maintenance or restoring service after a billing event.",
             },
         ],
     },
@@ -150,7 +150,7 @@ const FAQ_DATA: FAQSection[] = [
         items: [
             {
                 question: "Which MQTT topics does the system use?",
-                answer: "device/{id}/telemetry — device publishes sensor readings. device/{id}/relay/set — backend sends relay on/off. device/{id}/valve/set — backend sends valve open/close. device/{id}/status — device heartbeat.",
+                answer: "device/{id}/telemetry - device publishes sensor readings. device/{id}/relay/set - backend sends relay on/off. device/{id}/valve/set - backend sends valve open/close. device/{id}/status - device heartbeat.",
             },
             {
                 question: "Why does the mobile app use WebSocket instead of TCP for MQTT?",

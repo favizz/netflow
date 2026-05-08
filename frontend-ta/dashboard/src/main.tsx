@@ -24,8 +24,12 @@ window.addEventListener('unhandledrejection', (e) => {
     sendClientError(msg, e.reason?.stack);
 });
 
+import { ToastProvider } from '@/components/layout/ToastProvider';
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <ToastProvider>
+      <App />
+    </ToastProvider>
   </StrictMode>,
 );

@@ -32,7 +32,7 @@ export function Sidebar() {
 
     const confirmLogout = () => {
         localStorage.removeItem('admin-token');
-        navigate('/login');
+        navigate('/');
     };
 
     return (
@@ -40,12 +40,12 @@ export function Sidebar() {
             <div className="flex h-full w-64 flex-col bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700">
                 <div className="flex h-16 items-center gap-2.5 border-b border-gray-200 dark:border-gray-700 px-5">
                     <img
-                        src="/netflow-logo-black.png"
+                        src={`${import.meta.env.BASE_URL}netflow-logo-black.png`}
                         alt="NETFLOW"
                         className="h-7 object-contain dark:hidden"
                     />
                     <img
-                        src="/netflow-logo-white.png"
+                        src={`${import.meta.env.BASE_URL}netflow-logo-white.png`}
                         alt="NETFLOW"
                         className="h-7 object-contain hidden dark:block"
                     />

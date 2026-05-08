@@ -131,9 +131,9 @@ jobs:
       - name: Build
         working-directory: frontend-ta/dashboard
         env:
-          VITE_API_BASE_URL: http://localhost:5000
+          VITE_API_BASE_URL: https://ta252601002.srusun.id/api
           VITE_GOOGLE_CLIENT_ID: ci-placeholder
-          VITE_MQTT_BROKER_URL: ws://localhost:8083/mqtt
+          VITE_MQTT_BROKER_URL: wss://ta252601002.srusun.id/mqtt
         run: pnpm build
 
   # ── Mobile: lint + test + build ─────────────────────────────────────────────
@@ -169,9 +169,9 @@ jobs:
       - name: Build
         working-directory: frontend-ta/mobile
         env:
-          VITE_API_BASE_URL: http://localhost:5000
+          VITE_API_BASE_URL: https://ta252601002.srusun.id/api
           VITE_GOOGLE_CLIENT_ID: ci-placeholder
-          VITE_MQTT_BROKER_URL: ws://localhost:8083/mqtt
+          VITE_MQTT_BROKER_URL: wss://ta252601002.srusun.id/mqtt
         run: pnpm build
 
   # ── Auto-deploy to server (push to main only, after all checks pass) ─────────
@@ -184,10 +184,13 @@ jobs:
     steps:
       - name: SSH deploy
         uses: appleboy/ssh-action@v1.0.3
+        env:
+          VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           port: ${{ secrets.DEPLOY_PORT }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_KEY }}
+          envs: VITE_GOOGLE_CLIENT_ID
           script_stop: true
           script: bash ~/TA-Flowmeter/infra/scripts/deploy.sh

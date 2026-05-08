@@ -57,7 +57,7 @@ try {
     });
     sdk.start();
     console.log(
-      `[OTel] Tracing active — service="${serviceName}" exporter="${otlpEndpoint ?? 'console'}"`,
+      `[OTel] Tracing active - service="${serviceName}" exporter="${otlpEndpoint ?? 'console'}"`,
     );
     process.on('SIGTERM', () => {
       sdk.shutdown().catch(console.error);
@@ -65,6 +65,6 @@ try {
   }
 } catch {
   console.warn(
-    '[OTel] Packages not installed — tracing disabled. Run: npm install',
+    '[OTel] Packages not installed - tracing disabled. Run: npm install',
   );
 }

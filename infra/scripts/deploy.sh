@@ -17,15 +17,30 @@ PREV_COMMIT_FILE="/tmp/netflow_prev_commit"
 
 log() { echo "[deploy] $(date '+%H:%M:%S') $*"; }
 
+# ── Pull latest code then re-exec so we always run the newest deploy.sh ──────
+# On the first invocation (NETFLOW_REEXEC unset) we pull and immediately
+# replace this process with the freshly-pulled version of the script.
+# The re-exec sets NETFLOW_REEXEC=1 so the second run skips this block.
+if [[ "${NETFLOW_REEXEC:-0}" == "0" ]]; then
+  PREV_COMMIT=$(git -C "$REPO_DIR" rev-parse HEAD)
+  echo "$PREV_COMMIT" > "$PREV_COMMIT_FILE"
+  log "Rollback point saved: ${PREV_COMMIT:0:8}"
+  log "Pulling origin/main..."
+  git -C "$REPO_DIR" reset --hard HEAD
+  git -C "$REPO_DIR" pull origin main
+  NETFLOW_REEXEC=1 exec bash "$REPO_DIR/infra/scripts/deploy.sh" "$@"
+fi
+
+# ── Everything below runs on the re-exec (latest version of this file) ───────
+
 # ── Save rollback point before touching anything ────────────────────────────
-PREV_COMMIT=$(git -C "$REPO_DIR" rev-parse HEAD)
-echo "$PREV_COMMIT" > "$PREV_COMMIT_FILE"
-log "Rollback point saved: ${PREV_COMMIT:0:8}"
+PREV_COMMIT=$(cat "$PREV_COMMIT_FILE" 2>/dev/null || git -C "$REPO_DIR" rev-parse HEAD~1)
+log "Rollback point: ${PREV_COMMIT:0:8}"
 
 start_backend() {
   cd "$REPO_DIR/backend-ta"
   pm2 delete netflow-backend 2>/dev/null || true
-  pm2 start "node dist/main.js" --name netflow-backend
+  pm2 start "node -r ./dist/tracing dist/main" --name netflow-backend
   cd "$REPO_DIR"
 }
 
@@ -37,10 +52,10 @@ start_ml() {
 }
 
 rollback() {
-  log "FAILED — rolling back to ${PREV_COMMIT:0:8}..."
+  log "FAILED - rolling back to ${PREV_COMMIT:0:8}..."
   git -C "$REPO_DIR" checkout "$PREV_COMMIT" -- .
   cd "$REPO_DIR/backend-ta"
-  npm ci --silent
+  pnpm install --no-frozen-lockfile
   npm run build
   start_backend
   pm2 save
@@ -57,7 +72,7 @@ git pull origin main
 # ── Backend ─────────────────────────────────────────────────────────────────
 log "Building backend..."
 cd backend-ta
-npm ci --silent
+npm install
 npm run build
 cd "$REPO_DIR"
 start_backend
@@ -69,17 +84,26 @@ pip3 install -r requirements.txt -q
 cd "$REPO_DIR"
 start_ml
 
-# ── Frontends (static builds — nginx serves the dist/ folders) ───────────────
+# ── Frontends (static builds - nginx serves the dist/ folders) ───────────────
 log "Building dashboard..."
 cd frontend-ta/dashboard
 pnpm install --frozen-lockfile
+VITE_API_BASE_URL=https://ta252601002.srusun.id/api \
+VITE_MQTT_BROKER_URL=wss://ta252601002.srusun.id/mqtt \
+VITE_GOOGLE_CLIENT_ID="${VITE_GOOGLE_CLIENT_ID:-}" \
 pnpm build
 
 log "Building mobile..."
 cd ../mobile
 pnpm install --frozen-lockfile
+VITE_API_BASE_URL=https://ta252601002.srusun.id/api \
+VITE_MQTT_BROKER_URL=wss://ta252601002.srusun.id/mqtt \
+VITE_GOOGLE_CLIENT_ID="${VITE_GOOGLE_CLIENT_ID:-}" \
 pnpm build
 cd "$REPO_DIR"
+
+# ── Fix dist permissions so nginx (www-data) can read static files ────────────
+chmod -R o+rX frontend-ta/dashboard/dist frontend-ta/mobile/dist
 
 pm2 save
 
@@ -97,5 +121,5 @@ if [[ -z "$OVERALL" || "$OVERALL" == "critical" ]]; then
   rollback
 fi
 
-log "Deploy complete — status: $OVERALL"
+log "Deploy complete - status: $OVERALL"
 log "Run 'pm2 list' and 'curl -s http://localhost:5000/health' to verify."

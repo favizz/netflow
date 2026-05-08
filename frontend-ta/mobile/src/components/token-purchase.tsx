@@ -95,7 +95,7 @@ const BCA_STEPS = {
       "Pilih m-Transfer → BCA Virtual Account",
       "Masukkan nomor Virtual Account di atas",
       "Masukkan pin m-BCA dan konfirmasi",
-      "Pembayaran selesai — simpan notifikasi sebagai bukti",
+      "Pembayaran selesai - simpan notifikasi sebagai bukti",
     ],
   },
   internet: {

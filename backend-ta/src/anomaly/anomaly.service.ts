@@ -82,7 +82,7 @@ export class AnomalyService implements OnModuleInit {
       const vv = voltage ?? 0;
       const wf = waterFlow ?? 0;
 
-      // Safety cutoffs — use binary-encoded commands for hardware compatibility
+      // Safety cutoffs - use binary-encoded commands for hardware compatibility
       if (balance <= 0 && !relayStatus && (pw > 5 || wf > 0.1)) {
         this.mqttClient.emit(
           `device/${deviceId}/command`,
@@ -134,7 +134,7 @@ export class AnomalyService implements OnModuleInit {
         }),
       );
     } catch {
-      // DB not ready — retry next interval
+      // DB not ready - retry next interval
     }
   }
 

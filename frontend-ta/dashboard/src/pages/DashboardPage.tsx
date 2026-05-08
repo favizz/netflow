@@ -61,7 +61,7 @@ function HealthPanel() {
 
     const refresh = useCallback(() => {
         setLoading(true);
-        // Use plain fetch — /health is public (no auth) and may return 503 when degraded.
+        // Use plain fetch - /health is public (no auth) and may return 503 when degraded.
         // fetchApi would throw on non-2xx, so we'd lose the body. Read it unconditionally.
         fetch(`${API_BASE_URL}/health`)
             .then(res => res.json())
@@ -209,7 +209,7 @@ export default function DashboardPage() {
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <StatCard
                     title="Total Energy"
-                    value={stats.loaded ? `${stats.totalPower.toLocaleString(undefined, { maximumFractionDigits: 1 })} kWh` : "—"}
+                    value={stats.loaded ? `${stats.totalPower.toLocaleString(undefined, { maximumFractionDigits: 1 })} kWh` : "-"}
                     icon={Zap}
                     trend="Cumulative from all units"
                     trendDirection="neutral"
@@ -218,7 +218,7 @@ export default function DashboardPage() {
                 />
                 <StatCard
                     title="Total Water"
-                    value={stats.loaded ? `${stats.totalWater.toLocaleString(undefined, { maximumFractionDigits: 1 })} m³` : "—"}
+                    value={stats.loaded ? `${stats.totalWater.toLocaleString(undefined, { maximumFractionDigits: 1 })} m³` : "-"}
                     icon={Droplets}
                     trend="Cumulative from all units"
                     trendDirection="neutral"
@@ -227,7 +227,7 @@ export default function DashboardPage() {
                 />
                 <StatCard
                     title="Online Devices"
-                    value={stats.loaded ? `${stats.onlineDevices} / ${stats.totalDevices}` : "—"}
+                    value={stats.loaded ? `${stats.onlineDevices} / ${stats.totalDevices}` : "-"}
                     icon={Activity}
                     trend="System connectivity"
                     trendDirection="neutral"
@@ -236,7 +236,7 @@ export default function DashboardPage() {
                 />
                 <StatCard
                     title="Active Alerts"
-                    value={stats.loaded ? String(stats.alerts) : "—"}
+                    value={stats.loaded ? String(stats.alerts) : "-"}
                     icon={AlertTriangle}
                     trend={stats.alerts > 0 ? "Needs attention" : "All clear"}
                     trendDirection={stats.alerts > 0 ? "down" : "neutral"}

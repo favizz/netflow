@@ -4,7 +4,7 @@ export NVM_DIR="${HOME}/.nvm"
 # shellcheck source=/dev/null
 [[ -s "$NVM_DIR/nvm.sh" ]] && source "$NVM_DIR/nvm.sh"
 
-# Manual rollback — run on server when you need to undo the last deploy.
+# Manual rollback - run on server when you need to undo the last deploy.
 # Usage:
 #   ./infra/scripts/rollback.sh            # rolls back to the commit saved by deploy.sh
 #   ./infra/scripts/rollback.sh <sha>      # rolls back to a specific commit
@@ -41,5 +41,5 @@ pm2 restart netflow-backend
 cd ..
 
 pm2 save
-log "Rollback complete — now at ${TARGET:0:8}"
+log "Rollback complete - now at ${TARGET:0:8}"
 log "Verify: curl -s http://localhost:5000/health | python3 -m json.tool"

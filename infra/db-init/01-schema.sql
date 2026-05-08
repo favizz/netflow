@@ -55,7 +55,7 @@ CREATE INDEX idx_units_resident  ON units (resident_email);
 
 -- -----------------------------------------
 -- 4. METER READINGS  (partitioned time-series)
---    No FK on device_id — MySQL forbids FK on partitioned tables.
+--    No FK on device_id - MySQL forbids FK on partitioned tables.
 --    Referential integrity is enforced at application layer.
 --    Partitioned monthly: full partition elimination on date-range queries.
 --    At 10 k units × 1 reading/5 s → ~172 M rows/day; each monthly
@@ -238,8 +238,8 @@ CREATE TABLE IF NOT EXISTS legend_anomaly_severity (
   description VARCHAR(150) NOT NULL
 );
 INSERT IGNORE INTO legend_anomaly_severity VALUES
-  ('critical', 'Critical', 'Immediate action required — service may be offline'),
-  ('warning',  'Warning',  'Attention recommended — early signs of a problem');
+  ('critical', 'Critical', 'Immediate action required - service may be offline'),
+  ('warning',  'Warning',  'Attention recommended - early signs of a problem');
 
 CREATE TABLE IF NOT EXISTS legend_anomaly_type (
   code        VARCHAR(50) PRIMARY KEY,
@@ -247,17 +247,17 @@ CREATE TABLE IF NOT EXISTS legend_anomaly_type (
   description VARCHAR(200) NOT NULL
 );
 INSERT IGNORE INTO legend_anomaly_type VALUES
-  ('jailbreak',          'Jailbreak Detected',    'Tamper event — meter cover opened without authorisation'),
+  ('jailbreak',          'Jailbreak Detected',    'Tamper event - meter cover opened without authorisation'),
   ('water_leak',         'Water Leak',             'Sustained flow detected while valve is commanded closed'),
   ('device_offline',     'Device Offline',         'No telemetry received within the expected heartbeat window'),
-  ('mcb_trip',           'MCB Trip',               'Circuit breaker tripped — power cut detected'),
+  ('mcb_trip',           'MCB Trip',               'Circuit breaker tripped - power cut detected'),
   ('low_balance',        'Low Balance',            'Remaining credit is below the threshold for normal operation'),
   ('voltage_anomaly',    'Voltage Anomaly',        'Measured voltage outside +/- 10% of 220 V nominal'),
   ('sensor_malfunction', 'Sensor Malfunction',     'Sensor returning implausible or missing readings'),
-  ('low_power_factor',   'Low Power Factor',       'Power factor below 0.7 — inefficient load detected'),
+  ('low_power_factor',   'Low Power Factor',       'Power factor below 0.7 - inefficient load detected'),
   ('zero_flow',          'Zero Flow',              'Meter reports zero flow while valve is open'),
   ('usage_spike',        'Usage Spike',            'Consumption jumped beyond normal variance'),
-  ('backflow',           'Backflow',               'Reverse water flow detected — possible contamination risk'),
+  ('backflow',           'Backflow',               'Reverse water flow detected - possible contamination risk'),
   ('ml_anomaly',         'ML Anomaly',             'Isolation Forest detected statistically anomalous sensor pattern');
 
 CREATE TABLE IF NOT EXISTS legend_payment_method (
@@ -285,7 +285,7 @@ INSERT IGNORE INTO legend_transaction_status VALUES
 --     Partitions are pre-defined through 2027; p_future catches anything beyond.
 --     New partitions can be added manually via ALTER TABLE ... REORGANIZE.
 -- -----------------------------------------
--- NOTE: Run this as MySQL root (requires SUPER privilege) — not in this script:
+-- NOTE: Run this as MySQL root (requires SUPER privilege) - not in this script:
 --   SET GLOBAL event_scheduler = ON;
 --   Or ask server admin: sudo mysql -e "SET GLOBAL event_scheduler = ON;"
 
