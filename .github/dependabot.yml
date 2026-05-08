@@ -5,18 +5,27 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    groups:
+      backend-deps:
+        patterns: ["*"]
 
   - package-ecosystem: npm
     directory: /frontend-ta/dashboard
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    groups:
+      dashboard-deps:
+        patterns: ["*"]
 
   - package-ecosystem: npm
     directory: /frontend-ta/mobile
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    groups:
+      mobile-deps:
+        patterns: ["*"]
 
   - package-ecosystem: pip
     directory: /ml-service
