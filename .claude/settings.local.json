@@ -7,7 +7,14 @@
       "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\Lenovo\\\\Documents\\\\GitHub\\\\TA-Flowmeter\" -Recurse -Directory)",
       "Bash(Select-Object -ExpandProperty FullName)",
       "Bash(git add *)",
-      "Bash(git commit -m ' *)"
+      "Bash(git commit -m ' *)",
+      "Bash(npx tsc *)",
+      "Bash(gh pr *)",
+      "Bash(not exist *)",
+      "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\(p.dependencies['@opentelemetry/auto-instrumentations-node']\\)\")",
+      "Bash(npm install *)",
+      "Bash(node -e \"const l=require\\('./package-lock.json'\\); const pkg=l.packages['node_modules/@opentelemetry/auto-instrumentations-node']; console.log\\(pkg?.version\\)\")",
+      "Bash(node -e \"const lock = require\\('./package-lock.json'\\); const pkg = lock.packages['node_modules/@opentelemetry/auto-instrumentations-node']; console.log\\(pkg ? pkg.version : 'not found'\\)\")"
     ]
   }
 }

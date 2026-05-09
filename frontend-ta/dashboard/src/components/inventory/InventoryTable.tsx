@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, Power, Droplets, ChevronDown, ChevronLeft, ChevronRight, Filter, Pencil, Trash2 } from "lucide-react";
+import { Search, Power, Droplets, ChevronDown, ChevronLeft, ChevronRight, Filter, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { InventoryItem } from "@/lib/mockData";
 import { PAGE_SIZE } from "@/lib/constants";
@@ -8,18 +8,17 @@ import { PAGE_SIZE } from "@/lib/constants";
 interface InventoryTableProps {
     data: InventoryItem[];
     initialFilter?: string;
+    buildings?: { id: number; code: string; name: string }[];
     onEdit?: (item: InventoryItem) => void;
-    onDelete?: (item: InventoryItem) => void;
-    onCommand?: (deviceId: string, type: 'relay' | 'valve', value: 0 | 1) => Promise<void>;
 }
 
-export function InventoryTable({ data, initialFilter = "", onEdit, onDelete, onCommand }: InventoryTableProps) {
+export function InventoryTable({ data, initialFilter = "", buildings = [], onEdit }: InventoryTableProps) {
     const navigate = useNavigate();
     const [searchQuery, setSearchQuery] = useState(initialFilter);
     const [statusFilter, setStatusFilter] = useState<"All" | "Online" | "Offline">("All");
     const [isFilterOpen, setIsFilterOpen] = useState(false);
+    const [selectedBuilding, setSelectedBuilding] = useState<string>("all");
     const [page, setPage] = useState(1);
-    const [cmdPending, setCmdPending] = useState<string | null>(null);
 
     const filteredData = useMemo(() => {
         setPage(1);
@@ -29,10 +28,11 @@ export function InventoryTable({ data, initialFilter = "", onEdit, onDelete, onC
                 item.unit.toLowerCase().includes(searchQuery.toLowerCase()) ||
                 item.meterSerial.toLowerCase().includes(searchQuery.toLowerCase());
             const matchesFilter = statusFilter === "All" || item.status === statusFilter;
-            return matchesSearch && matchesFilter;
+            const matchesBuilding = selectedBuilding === "all" || item.buildingId === Number(selectedBuilding);
+            return matchesSearch && matchesFilter && matchesBuilding;
         });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [data, searchQuery, statusFilter]);
+    }, [data, searchQuery, statusFilter, selectedBuilding]);
 
     const totalPages = Math.max(1, Math.ceil(filteredData.length / PAGE_SIZE));
     const pageData = filteredData.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -45,6 +45,18 @@ export function InventoryTable({ data, initialFilter = "", onEdit, onDelete, onC
                 <div className="flex flex-col space-y-4 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
                     <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">Device Inventory &amp; Control</h2>
                     <div className="flex space-x-3">
+                        {buildings.length > 0 && (
+                            <select
+                                value={selectedBuilding}
+                                onChange={(e) => setSelectedBuilding(e.target.value)}
+                                className="h-9 rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 text-sm text-gray-900 dark:text-gray-100 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                            >
+                                <option value="all">All Buildings</option>
+                                {buildings.map(b => (
+                                    <option key={b.id} value={b.id}>{b.name}</option>
+                                ))}
+                            </select>
+                        )}
                         <div className="relative">
                             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400 dark:text-gray-500" />
                             <input
@@ -90,7 +102,8 @@ export function InventoryTable({ data, initialFilter = "", onEdit, onDelete, onC
                     <thead className="bg-gray-50 dark:bg-gray-800/60 text-xs uppercase text-gray-700 dark:text-gray-400">
                         <tr>
                             <th className="px-6 py-3 font-medium">Building</th>
-                            <th className="px-6 py-3 font-medium">Unit / Tenant</th>
+                            <th className="px-6 py-3 font-medium">Unit</th>
+                            <th className="px-6 py-3 font-medium">Tenant</th>
                             <th className="px-6 py-3 font-medium">Device ID</th>
                             <th className="px-6 py-3 font-medium">Status</th>
                             <th className="px-6 py-3 font-medium">Utilities</th>
@@ -110,7 +123,9 @@ export function InventoryTable({ data, initialFilter = "", onEdit, onDelete, onC
                                     </td>
                                     <td className="px-6 py-4">
                                         <div className="font-medium text-gray-900 dark:text-gray-100">{item.unit}</div>
-                                        <div className="text-xs text-gray-500 dark:text-gray-400">{item.tenant}</div>
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <div className="text-sm text-gray-600 dark:text-gray-300">{item.tenant}</div>
                                     </td>
                                     <td className="px-6 py-4 font-mono text-xs">{item.meterSerial}</td>
                                     <td className="px-6 py-4">
@@ -125,73 +140,44 @@ export function InventoryTable({ data, initialFilter = "", onEdit, onDelete, onC
                                     </td>
                                     <td className="px-6 py-4">
                                         <div className="flex space-x-2">
-                                            <button
-                                                disabled={!onCommand || cmdPending === `relay-${item.id}`}
-                                                title={onCommand ? (item.power ? "Click to turn OFF relay" : "Click to turn ON relay") : (item.power ? "Power ON" : "Power OFF")}
-                                                onClick={async (e) => {
-                                                    e.stopPropagation();
-                                                    if (!onCommand) return;
-                                                    const newVal: 0 | 1 = item.power ? 0 : 1;
-                                                    setCmdPending(`relay-${item.id}`);
-                                                    await onCommand(item.meterSerial, 'relay', newVal).finally(() => setCmdPending(null));
-                                                }}
-                                                className={cn("flex h-8 w-8 items-center justify-center rounded-md border transition-colors disabled:cursor-not-allowed",
+                                            <span
+                                                title={item.power ? "Power ON" : "Power OFF"}
+                                                className={cn("flex h-8 w-8 items-center justify-center rounded-md border",
                                                     item.power
-                                                        ? "border-primary bg-primary/10 text-primary hover:bg-primary/20"
-                                                        : "border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-600",
-                                                    !onCommand && "cursor-default"
+                                                        ? "border-primary bg-primary/10 text-primary"
+                                                        : "border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-400"
                                                 )}
                                             >
                                                 <Power className="h-4 w-4" />
-                                            </button>
-                                            <button
-                                                disabled={!onCommand || cmdPending === `valve-${item.id}`}
-                                                title={onCommand ? (item.water ? "Click to CLOSE valve" : "Click to OPEN valve") : (item.water ? "Water ON" : "Water OFF")}
-                                                onClick={async (e) => {
-                                                    e.stopPropagation();
-                                                    if (!onCommand) return;
-                                                    const newVal: 0 | 1 = item.water ? 0 : 1;
-                                                    setCmdPending(`valve-${item.id}`);
-                                                    await onCommand(item.meterSerial, 'valve', newVal).finally(() => setCmdPending(null));
-                                                }}
-                                                className={cn("flex h-8 w-8 items-center justify-center rounded-md border transition-colors disabled:cursor-not-allowed",
+                                            </span>
+                                            <span
+                                                title={item.water ? "Water ON" : "Water OFF"}
+                                                className={cn("flex h-8 w-8 items-center justify-center rounded-md border",
                                                     item.water
-                                                        ? "border-cyan-500 bg-cyan-50 dark:bg-cyan-900/30 text-cyan-600 dark:text-cyan-400 hover:bg-cyan-100 dark:hover:bg-cyan-900/50"
-                                                        : "border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-600",
-                                                    !onCommand && "cursor-default"
+                                                        ? "border-cyan-500 bg-cyan-50 dark:bg-cyan-900/30 text-cyan-600 dark:text-cyan-400"
+                                                        : "border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-400"
                                                 )}
                                             >
                                                 <Droplets className="h-4 w-4" />
-                                            </button>
+                                            </span>
                                         </div>
                                     </td>
                                     <td className="px-6 py-4 text-right">
-                                        <div className="flex items-center justify-end space-x-2">
-                                            {onEdit && (
-                                                <button
-                                                    className="rounded-md border border-blue-200 dark:border-blue-800 px-2 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
-                                                    onClick={(e) => { e.stopPropagation(); onEdit(item); }}
-                                                    title="Edit unit"
-                                                >
-                                                    <Pencil className="h-3.5 w-3.5" />
-                                                </button>
-                                            )}
-                                            {onDelete && (
-                                                <button
-                                                    className="rounded-md border border-red-200 dark:border-red-800 px-2 py-1 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                                                    onClick={(e) => { e.stopPropagation(); onDelete(item); }}
-                                                    title="Delete unit"
-                                                >
-                                                    <Trash2 className="h-3.5 w-3.5" />
-                                                </button>
-                                            )}
-                                        </div>
+                                        {onEdit && (
+                                            <button
+                                                className="rounded-md border border-blue-200 dark:border-blue-800 px-2 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                                                onClick={(e) => { e.stopPropagation(); onEdit(item); }}
+                                                title="Edit unit"
+                                            >
+                                                <Pencil className="h-3.5 w-3.5" />
+                                            </button>
+                                        )}
                                     </td>
                                 </tr>
                             ))
                         ) : (
                             <tr>
-                                <td colSpan={6} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
+                                <td colSpan={7} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
                                     No devices found matching your search.
                                 </td>
                             </tr>
