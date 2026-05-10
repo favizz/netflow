@@ -53,7 +53,12 @@ export class AdminService implements OnModuleInit {
     return this.buildingRepo.find({ order: { code: 'ASC' } });
   }
 
-  async createBuilding(data: { code: string; name: string; address?: string; floors?: number }): Promise<Building> {
+  async createBuilding(data: {
+    code: string;
+    name: string;
+    address?: string;
+    floors?: number;
+  }): Promise<Building> {
     const building = this.buildingRepo.create(data);
     return this.buildingRepo.save(building);
   }
@@ -66,7 +71,9 @@ export class AdminService implements OnModuleInit {
   async deleteBuilding(id: number): Promise<void> {
     const count = await this.unitService.countByBuilding(id);
     if (count > 0) {
-      throw new Error(`Cannot delete building because it has ${count} units assigned.`);
+      throw new Error(
+        `Cannot delete building because it has ${count} units assigned.`,
+      );
     }
     await this.buildingRepo.delete(id);
   }

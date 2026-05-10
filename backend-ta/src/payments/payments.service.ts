@@ -135,7 +135,9 @@ export class PaymentsService {
       };
     } catch (e: any) {
       this.logger.error('Midtrans Error:', e);
-      throw new Error('Gagal initiate pembayaran dengan Midtrans', { cause: e });
+      throw new Error('Gagal initiate pembayaran dengan Midtrans', {
+        cause: e,
+      });
     }
   }
 
@@ -187,8 +189,13 @@ export class PaymentsService {
             amount: Number(tx.amount_rp),
             timestamp: Math.floor(Date.now() / 1000),
           });
-          this.logger.log(`Pushing top-up of Rp ${tx.amount_rp} to device [${updatedUnit.device_id}]`);
-          this.mqttClient.emit(`device/${updatedUnit.device_id}/topup`, payload);
+          this.logger.log(
+            `Pushing top-up of Rp ${tx.amount_rp} to device [${updatedUnit.device_id}]`,
+          );
+          this.mqttClient.emit(
+            `device/${updatedUnit.device_id}/topup`,
+            payload,
+          );
         }
       }
 
@@ -200,7 +207,12 @@ export class PaymentsService {
           'TOKEN_PURCHASE',
           'transaction',
           tx.id,
-          { amount: Number(tx.amount_rp), method: tx.method, status: finalStatus, gateway_status: mStatus },
+          {
+            amount: Number(tx.amount_rp),
+            method: tx.method,
+            status: finalStatus,
+            gateway_status: mStatus,
+          },
           finalStatus === 'success' ? 'success' : 'failure',
         );
       }
@@ -226,7 +238,9 @@ export class PaymentsService {
         amount: Number(tx.amount_rp),
         timestamp: Math.floor(Date.now() / 1000),
       });
-      this.logger.log(`Pushing top-up of Rp ${tx.amount_rp} to device [${updatedUnit.device_id}]`);
+      this.logger.log(
+        `Pushing top-up of Rp ${tx.amount_rp} to device [${updatedUnit.device_id}]`,
+      );
       this.mqttClient.emit(`device/${updatedUnit.device_id}/topup`, payload);
     }
     await this.txRepo.save(tx);

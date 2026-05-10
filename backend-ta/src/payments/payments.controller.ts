@@ -29,7 +29,9 @@ export class PaymentsController {
   }
 
   @Post('webhook/callback')
-  @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: false }))
+  @UsePipes(
+    new ValidationPipe({ whitelist: true, forbidNonWhitelisted: false }),
+  )
   callback(@Req() req: Request, @Body() dto: PaymentWebhookDto) {
     this.assertWebhookSource(req);
     return this.paymentsService.handleWebhook(dto);
