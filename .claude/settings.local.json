@@ -25,7 +25,8 @@
       "Bash(node -e \"const l=require\\('./package-lock.json'\\); const p=l.packages['node_modules/@eslint/js']; console.log\\('@eslint/js:', p?.version\\); const e=l.packages['node_modules/eslint']; console.log\\('eslint:', e?.version\\)\")",
       "Bash(node -e \"const l=require\\('./package-lock.json'\\); const e=l.packages['node_modules/@eslint/js']; console.log\\(JSON.stringify\\(e?.peerDependencies\\)\\)\")",
       "Bash(node -e \"const l=require\\('./package-lock.json'\\); console.log\\('eslint:', l.packages['node_modules/eslint']?.version\\); console.log\\('@eslint/js:', l.packages['node_modules/@eslint/js']?.version\\)\")",
-      "Bash(node -e ' *)"
+      "Bash(node -e ' *)",
+      "Bash(git *)"
     ]
   }
 }
