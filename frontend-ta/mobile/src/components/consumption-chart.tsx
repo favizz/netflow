@@ -60,11 +60,11 @@ export default function ConsumptionChart({
   const [activePoint, setActivePoint] = useState<{ value: number; label: string } | null>(null)
 
   const handleMouseMove = useCallback(
-    (e: { activePayload?: { value: number }[]; activeLabel?: string }) => {
+    (e: { activePayload?: { value: number }[]; activeLabel?: string | number }) => {
       if (e?.activePayload?.[0]) {
         setActivePoint({
           value: e.activePayload[0].value,
-          label: e.activeLabel ?? "",
+          label: e.activeLabel != null ? String(e.activeLabel) : "",
         })
       }
     },
