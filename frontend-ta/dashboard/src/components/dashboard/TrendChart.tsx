@@ -7,7 +7,7 @@ import { fetchApi } from "@/lib/api";
 import { useIsDark } from "@/lib/useIsDark";
 
 type Utility = 'electricity' | 'water';
-type Period = 'monthly' | 'yearly';
+type Period = 'daily' | 'monthly' | 'yearly';
 
 const COLORS: Record<Utility, string> = {
     electricity: '#f59e0b',
@@ -22,7 +22,8 @@ const LABELS: Record<Utility, { title: string; unit: string }> = {
 function getCurrentPeriodKey(period: Period): string {
     const now = new Date();
     if (period === 'monthly') return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-    return String(now.getFullYear());
+    if (period === 'yearly') return String(now.getFullYear());
+    return 'last7';
 }
 
 function offsetPeriodKey(key: string, period: Period, delta: number): string {
@@ -31,7 +32,8 @@ function offsetPeriodKey(key: string, period: Period, delta: number): string {
         const date = new Date(y, m - 1 + delta);
         return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
     }
-    return String(Number(key) + delta);
+    if (period === 'yearly') return String(Number(key) + delta);
+    return 'last7';
 }
 
 function periodLabel(key: string, period: Period): string {
@@ -39,7 +41,8 @@ function periodLabel(key: string, period: Period): string {
         const [y, m] = key.split('-').map(Number);
         return new Date(y, m - 1).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
     }
-    return `Year ${key}`;
+    if (period === 'yearly') return `Year ${key}`;
+    return 'Last 7 days';
 }
 
 interface TrendData {
@@ -93,43 +96,54 @@ export function TrendChart() {
                 if (!units || units.length === 0) { setData([]); setHasPrev(false); setHasNext(false); return; }
 
                 const firstUnit = units[0].unit_no;
-                const apiPeriod = period === 'monthly' ? 'daily' : 'monthly';
+                const apiPeriod = period === 'yearly' ? 'monthly' : 'daily';
                 const trends = await fetchApi(`/reporting/trends/${encodeURIComponent(firstUnit)}?period=${apiPeriod}`);
                 if (cancelled) return;
 
                 const raw = (trends || []) as TrendResponse[];
 
-                const filtered = raw.filter(t => {
-                    const d = new Date(t.bucket);
-                    if (period === 'monthly') {
-                        const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-                        return k === periodKey;
-                    }
-                    return String(d.getFullYear()) === periodKey;
-                });
+                let filtered: TrendResponse[];
+                if (period === 'daily') {
+                    filtered = raw.slice(-7);
+                } else {
+                    filtered = raw.filter(t => {
+                        const d = new Date(t.bucket);
+                        if (period === 'monthly') {
+                            const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                            return k === periodKey;
+                        }
+                        return String(d.getFullYear()) === periodKey;
+                    });
+                }
 
                 const mapped: TrendData[] = filtered.map(t => ({
                     name: period === 'monthly'
                         ? new Date(t.bucket).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })
-                        : new Date(t.bucket).toLocaleDateString('id-ID', { month: 'short' }),
+                        : period === 'yearly'
+                        ? new Date(t.bucket).toLocaleDateString('id-ID', { month: 'short' })
+                        : new Date(t.bucket).toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric' }),
                     electricity: Number(t.kwh || 0),
                     water: Number(t.waterM3 || t.water_m3 || 0),
                 }));
 
                 setData(mapped);
 
-                const allKeys = raw.map(t => {
-                    const d = new Date(t.bucket);
-                    return period === 'monthly'
-                        ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-                        : String(d.getFullYear());
-                });
-                const unique = [...new Set(allKeys)];
-
-                const prevKey = offsetPeriodKey(periodKey, period, -1);
-                const nextKey = offsetPeriodKey(periodKey, period, 1);
-                setHasPrev(unique.includes(prevKey));
-                setHasNext(nextKey <= todayKey.current && unique.includes(nextKey));
+                if (period !== 'daily') {
+                    const allKeys = raw.map(t => {
+                        const d = new Date(t.bucket);
+                        return period === 'monthly'
+                            ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+                            : String(d.getFullYear());
+                    });
+                    const unique = [...new Set(allKeys)];
+                    const prevKey = offsetPeriodKey(periodKey, period, -1);
+                    const nextKey = offsetPeriodKey(periodKey, period, 1);
+                    setHasPrev(unique.includes(prevKey));
+                    setHasNext(nextKey <= todayKey.current && unique.includes(nextKey));
+                } else {
+                    setHasPrev(false);
+                    setHasNext(false);
+                }
             })
             .catch(() => { if (!cancelled) { setData([]); setHasPrev(false); setHasNext(false); } })
             .finally(() => { if (!cancelled) setLoading(false); });
@@ -140,6 +154,12 @@ export function TrendChart() {
     const color = COLORS[utility];
     const gradId = `grad-${utility}`;
 
+    const PERIOD_OPTIONS: { id: Period; label: string }[] = [
+        { id: 'daily',   label: 'Daily' },
+        { id: 'monthly', label: 'Monthly' },
+        { id: 'yearly',  label: 'Yearly' },
+    ];
+
     return (
         <div className="rounded-lg bg-white dark:bg-gray-800 p-6 shadow-sm ring-1 ring-gray-900/5 dark:ring-gray-700">
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -148,54 +168,55 @@ export function TrendChart() {
                     <div className="flex rounded-md overflow-hidden border border-gray-200 dark:border-gray-600 text-xs font-medium">
                         <button
                             onClick={() => setUtility('electricity')}
-                            className={`flex items-center gap-1 px-3 py-1.5 transition-colors ${utility === 'electricity' ? 'bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
+                            title="Electricity"
+                            className={`flex items-center justify-center w-8 h-7 transition-colors ${utility === 'electricity' ? 'bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
                         >
-                            <Zap className="h-3.5 w-3.5" /> Electricity
+                            <Zap className="h-3.5 w-3.5" />
                         </button>
                         <button
                             onClick={() => setUtility('water')}
-                            className={`flex items-center gap-1 px-3 py-1.5 border-l border-gray-200 dark:border-gray-600 transition-colors ${utility === 'water' ? 'bg-cyan-50 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-400' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
+                            title="Water"
+                            className={`flex items-center justify-center w-8 h-7 border-l border-gray-200 dark:border-gray-600 transition-colors ${utility === 'water' ? 'bg-cyan-50 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-400' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
                         >
-                            <Droplets className="h-3.5 w-3.5" /> Water
+                            <Droplets className="h-3.5 w-3.5" />
                         </button>
                     </div>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1">
                     <div className="flex rounded-md overflow-hidden border border-gray-200 dark:border-gray-600 text-xs font-medium">
-                        <button
-                            onClick={() => setPeriod('monthly')}
-                            className={`px-3 py-1.5 transition-colors ${period === 'monthly' ? 'bg-primary text-white' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
-                        >
-                            Monthly
-                        </button>
-                        <button
-                            onClick={() => setPeriod('yearly')}
-                            className={`px-3 py-1.5 border-l border-gray-200 dark:border-gray-600 transition-colors ${period === 'yearly' ? 'bg-primary text-white' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
-                        >
-                            Yearly
-                        </button>
+                        {PERIOD_OPTIONS.map(({ id, label }) => (
+                            <button
+                                key={id}
+                                onClick={() => setPeriod(id)}
+                                className={`px-2.5 py-1.5 transition-colors border-l first:border-l-0 border-gray-200 dark:border-gray-600 ${period === id ? 'bg-primary text-white' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
+                            >
+                                {label}
+                            </button>
+                        ))}
                     </div>
 
-                    <div className="flex items-center gap-1">
-                        <button
-                            onClick={() => setPeriodKey(k => offsetPeriodKey(k, period, -1))}
-                            disabled={!hasPrev}
-                            className="rounded p-1 text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                        >
-                            <ChevronLeft className="h-4 w-4" />
-                        </button>
-                        <span className="text-xs font-medium text-gray-700 dark:text-gray-300 min-w-[110px] text-center">
-                            {periodLabel(periodKey, period)}
-                        </span>
-                        <button
-                            onClick={() => setPeriodKey(k => offsetPeriodKey(k, period, 1))}
-                            disabled={!hasNext}
-                            className="rounded p-1 text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                        >
-                            <ChevronRight className="h-4 w-4" />
-                        </button>
-                    </div>
+                    {period !== 'daily' && (
+                        <div className="flex items-center">
+                            <button
+                                onClick={() => setPeriodKey(k => offsetPeriodKey(k, period, -1))}
+                                disabled={!hasPrev}
+                                className="rounded p-1 text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                            >
+                                <ChevronLeft className="h-4 w-4" />
+                            </button>
+                            <span className="text-xs font-medium text-gray-700 dark:text-gray-300 min-w-[100px] text-center">
+                                {periodLabel(periodKey, period)}
+                            </span>
+                            <button
+                                onClick={() => setPeriodKey(k => offsetPeriodKey(k, period, 1))}
+                                disabled={!hasNext}
+                                className="rounded p-1 text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                            >
+                                <ChevronRight className="h-4 w-4" />
+                            </button>
+                        </div>
+                    )}
                 </div>
             </div>
 

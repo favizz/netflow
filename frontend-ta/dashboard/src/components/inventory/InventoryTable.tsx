@@ -52,7 +52,7 @@ export function InventoryTable({ data, initialFilter = "", buildings = [], selec
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
                                 placeholder="Search unit, tenant, or serial..."
-                                className="h-9 w-64 rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 pl-9 pr-4 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary placeholder:text-gray-400 dark:placeholder:text-gray-500"
+                                className="h-9 w-full sm:w-64 rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 pl-9 pr-4 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary placeholder:text-gray-400 dark:placeholder:text-gray-500"
                             />
                         </div>
                         <div className="relative">
@@ -89,13 +89,13 @@ export function InventoryTable({ data, initialFilter = "", buildings = [], selec
                 <table className="w-full text-left text-sm text-gray-500 dark:text-gray-400">
                     <thead className="bg-gray-50 dark:bg-gray-800/60 text-xs uppercase text-gray-700 dark:text-gray-400">
                         <tr>
-                            <th className="px-6 py-3 font-medium">Building</th>
-                            <th className="px-6 py-3 font-medium">Unit</th>
-                            <th className="px-6 py-3 font-medium">Tenant</th>
-                            <th className="px-6 py-3 font-medium">Device ID</th>
-                            <th className="px-6 py-3 font-medium">Status</th>
-                            <th className="px-6 py-3 font-medium">Utilities</th>
-                            <th className="px-6 py-3 font-medium text-right">Actions</th>
+                            <th className="hidden sm:table-cell px-3 sm:px-6 py-3 font-medium">Building</th>
+                            <th className="px-3 sm:px-6 py-3 font-medium">Unit</th>
+                            <th className="px-3 sm:px-6 py-3 font-medium">Tenant</th>
+                            <th className="hidden md:table-cell px-3 sm:px-6 py-3 font-medium">Device ID</th>
+                            <th className="px-3 sm:px-6 py-3 font-medium">Status</th>
+                            <th className="hidden sm:table-cell px-3 sm:px-6 py-3 font-medium">Utilities</th>
+                            <th className="px-3 sm:px-6 py-3 font-medium text-right">Actions</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
@@ -106,17 +106,17 @@ export function InventoryTable({ data, initialFilter = "", buildings = [], selec
                                     className="hover:bg-gray-50 dark:hover:bg-gray-700/40 cursor-pointer"
                                     onClick={() => navigate(`/devices/${item.id}`)}
                                 >
-                                    <td className="px-6 py-4">
-                                        <div className="font-medium text-gray-900 dark:text-gray-100">{item.buildingName || '-'}</div>
+                                    <td className="hidden sm:table-cell px-3 sm:px-6 py-3">
+                                        <div className="font-medium text-gray-900 dark:text-gray-100 truncate max-w-[120px]">{item.buildingName || '-'}</div>
                                     </td>
-                                    <td className="px-6 py-4">
+                                    <td className="px-3 sm:px-6 py-3">
                                         <div className="font-medium text-gray-900 dark:text-gray-100">{item.unit}</div>
                                     </td>
-                                    <td className="px-6 py-4">
-                                        <div className="text-sm text-gray-600 dark:text-gray-300">{item.tenant}</div>
+                                    <td className="px-3 sm:px-6 py-3">
+                                        <div className="text-sm text-gray-600 dark:text-gray-300 truncate max-w-[140px]">{item.tenant}</div>
                                     </td>
-                                    <td className="px-6 py-4 font-mono text-xs">{item.meterSerial}</td>
-                                    <td className="px-6 py-4">
+                                    <td className="hidden md:table-cell px-3 sm:px-6 py-3 font-mono text-xs">{item.meterSerial}</td>
+                                    <td className="px-3 sm:px-6 py-3">
                                         <span className={cn(
                                             "inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ring-1 ring-inset",
                                             item.status === "Online"
@@ -126,7 +126,7 @@ export function InventoryTable({ data, initialFilter = "", buildings = [], selec
                                             {item.status}
                                         </span>
                                     </td>
-                                    <td className="px-6 py-4">
+                                    <td className="hidden sm:table-cell px-3 sm:px-6 py-3">
                                         <div className="flex space-x-2">
                                             <span
                                                 title={item.power ? "Power ON" : "Power OFF"}
@@ -150,7 +150,7 @@ export function InventoryTable({ data, initialFilter = "", buildings = [], selec
                                             </span>
                                         </div>
                                     </td>
-                                    <td className="px-6 py-4 text-right">
+                                    <td className="px-3 sm:px-6 py-3 text-right">
                                         {onEdit && (
                                             <button
                                                 className="rounded-md border border-blue-200 dark:border-blue-800 px-2 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"

@@ -215,7 +215,7 @@ export default function UsersPage() {
             )}
 
             <div className="rounded-lg bg-white dark:bg-gray-800 shadow-sm ring-1 ring-gray-900/5 dark:ring-gray-700 overflow-hidden">
-                <div className="border-b border-gray-200 dark:border-gray-700 px-6 py-4">
+                <div className="border-b border-gray-200 dark:border-gray-700 px-3 sm:px-6 py-4">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <div className="flex items-center gap-2">
                             <Users className="h-5 w-5 text-gray-400 dark:text-gray-500" />
@@ -229,7 +229,7 @@ export default function UsersPage() {
                                     placeholder="Search name, email, unit..."
                                     value={search}
                                     onChange={e => { setSearch(e.target.value); setPage(1); }}
-                                    className="h-9 w-56 rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 pl-9 pr-4 text-sm text-gray-900 dark:text-gray-100 outline-none focus:border-primary focus:ring-1 focus:ring-primary placeholder:text-gray-400 dark:placeholder:text-gray-500"
+                                    className="h-9 w-full sm:w-56 rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 pl-9 pr-4 text-sm text-gray-900 dark:text-gray-100 outline-none focus:border-primary focus:ring-1 focus:ring-primary placeholder:text-gray-400 dark:placeholder:text-gray-500"
                                 />
                             </div>
                             <select
@@ -242,7 +242,7 @@ export default function UsersPage() {
                                 <option value="resident">Resident</option>
                             </select>
                             <button
-                                onClick={() => { setShowAddForm(v => !v); setAddError(null); }}
+                                onClick={() => { setShowAddForm(true); setAddError(null); setAddForm({ email: '', name: '' }); }}
                                 className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary/90 transition-colors"
                             >
                                 <UserPlus className="h-4 w-4" />
@@ -250,63 +250,17 @@ export default function UsersPage() {
                             </button>
                         </div>
                     </div>
-
-                    {showAddForm && (
-                        <form onSubmit={handleAddResident} className="mt-4 rounded-md border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/30 p-4 space-y-3">
-                            {addError && (
-                                <div className="rounded-md bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-3 py-2 text-xs text-red-700 dark:text-red-400">
-                                    {addError}
-                                </div>
-                            )}
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                <div>
-                                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Email address *</label>
-                                    <input
-                                        required
-                                        type="email"
-                                        placeholder="resident@example.com"
-                                        value={addForm.email}
-                                        onChange={e => setAddForm(f => ({ ...f, email: e.target.value }))}
-                                        maxLength={255}
-                                        className="block w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Display name</label>
-                                    <input
-                                        type="text"
-                                        placeholder="Full name (optional)"
-                                        value={addForm.name}
-                                        onChange={e => setAddForm(f => ({ ...f, name: e.target.value }))}
-                                        maxLength={100}
-                                        className="block w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                                    />
-                                </div>
-                            </div>
-                            <div className="flex justify-end gap-2">
-                                <button type="button" onClick={() => { setShowAddForm(false); setAddError(null); }}
-                                    className="rounded-md border border-gray-200 dark:border-gray-600 px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
-                                    Cancel
-                                </button>
-                                <button type="submit" disabled={addLoading}
-                                    className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-white hover:bg-primary/90 disabled:opacity-60">
-                                    {addLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-                                    Add
-                                </button>
-                            </div>
-                        </form>
-                    )}
                 </div>
 
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm text-left">
                         <thead className="bg-gray-50 dark:bg-gray-700/50 text-xs uppercase text-gray-600 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700">
                             <tr>
-                                <th className="px-6 py-3 font-medium">User</th>
-                                <th className="px-6 py-3 font-medium">Role</th>
-                                <th className="px-6 py-3 font-medium">Units</th>
-                                <th className="px-6 py-3 font-medium">Joined</th>
-                                <th className="px-6 py-3 font-medium text-right">Actions</th>
+                                <th className="px-3 sm:px-6 py-3 font-medium">User</th>
+                                <th className="px-3 sm:px-6 py-3 font-medium">Role</th>
+                                <th className="hidden sm:table-cell px-3 sm:px-6 py-3 font-medium">Units</th>
+                                <th className="hidden md:table-cell px-3 sm:px-6 py-3 font-medium">Joined</th>
+                                <th className="px-3 sm:px-6 py-3 font-medium text-right">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
@@ -320,7 +274,7 @@ export default function UsersPage() {
                                 const assigned = residentUnits(res.email);
                                 return (
                                     <tr key={res.email} className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
-                                        <td className="px-6 py-3">
+                                        <td className="px-3 sm:px-6 py-3">
                                             <div className="flex items-center gap-3">
                                                 {res.picture ? (
                                                     <img src={res.picture} alt="" className="h-8 w-8 rounded-full shrink-0 object-cover" referrerPolicy="no-referrer" />
@@ -331,11 +285,11 @@ export default function UsersPage() {
                                                 )}
                                                 <div className="min-w-0">
                                                     <div className="font-medium text-gray-900 dark:text-gray-100 truncate">{res.name || '-'}</div>
-                                                    <div className="text-xs text-gray-400 dark:text-gray-500 truncate">{res.email}</div>
+                                                    <div className="text-xs text-gray-400 dark:text-gray-500 truncate max-w-[120px] sm:max-w-none">{res.email}</div>
                                                 </div>
                                             </div>
                                         </td>
-                                        <td className="px-6 py-3">
+                                        <td className="px-3 sm:px-6 py-3">
                                             <span className={cn(
                                                 "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium",
                                                 res.role === 'admin'
@@ -346,7 +300,7 @@ export default function UsersPage() {
                                                 {res.role}
                                             </span>
                                         </td>
-                                        <td className="px-6 py-3">
+                                        <td className="hidden sm:table-cell px-3 sm:px-6 py-3">
                                             <div className="flex flex-wrap gap-1">
                                                 {assigned.length === 0 && <span className="text-xs text-gray-400 dark:text-gray-500">None</span>}
                                                 {assigned.map(u => (
@@ -359,10 +313,10 @@ export default function UsersPage() {
                                                 ))}
                                             </div>
                                         </td>
-                                        <td className="px-6 py-3 text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">
+                                        <td className="hidden md:table-cell px-3 sm:px-6 py-3 text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">
                                             {res.created_at ? new Date(res.created_at).toLocaleDateString('id-ID') : '-'}
                                         </td>
-                                        <td className="px-6 py-3 text-right">
+                                        <td className="px-3 sm:px-6 py-3 text-right">
                                             <div className="flex items-center justify-end gap-1">
                                                 <button
                                                     onClick={() => { setAssignTarget(res.email); setAssignUnitId(''); setAssignError(null); }}
@@ -395,7 +349,7 @@ export default function UsersPage() {
                     </table>
                 </div>
 
-                <div className="flex items-center justify-between border-t border-gray-200 dark:border-gray-700 px-6 py-3">
+                <div className="flex items-center justify-between border-t border-gray-200 dark:border-gray-700 px-3 sm:px-6 py-3">
                     <span className="text-xs text-gray-400 dark:text-gray-500">
                         {filtered.length === 0 ? 'No results' : `${(page - 1) * PAGE_SIZE + 1}–${Math.min(page * PAGE_SIZE, filtered.length)} of ${filtered.length}`}
                     </span>
@@ -412,6 +366,73 @@ export default function UsersPage() {
                     </div>
                 </div>
             </div>
+
+            {/* Add User Modal */}
+            {showAddForm && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                    <div className="w-full max-w-md rounded-lg bg-white dark:bg-gray-800 shadow-xl ring-1 ring-gray-900/5 dark:ring-gray-700 flex flex-col max-h-[85vh]">
+                        <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-700 p-4 shrink-0">
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Add User</h3>
+                            <button onClick={() => setShowAddForm(false)} className="rounded-full p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                                <X className="h-5 w-5" />
+                            </button>
+                        </div>
+                        <form id="add-user-form" onSubmit={handleAddResident} className="p-6 space-y-4 overflow-y-auto flex-1">
+                            {addError && (
+                                <div className="rounded-md bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-3 py-2 text-sm text-red-600 dark:text-red-400">
+                                    {addError}
+                                </div>
+                            )}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                    Email <span className="text-red-500">*</span>
+                                </label>
+                                <input
+                                    required
+                                    type="email"
+                                    value={addForm.email}
+                                    onChange={e => setAddForm(f => ({ ...f, email: e.target.value }))}
+                                    placeholder="user@example.com"
+                                    className="block w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                    Display Name
+                                </label>
+                                <input
+                                    type="text"
+                                    value={addForm.name}
+                                    onChange={e => setAddForm(f => ({ ...f, name: e.target.value }))}
+                                    placeholder="Full name (optional)"
+                                    maxLength={100}
+                                    className="block w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                                />
+                            </div>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">The user will be added as a resident. You can grant admin access afterwards.</p>
+                        </form>
+                        <div className="border-t border-gray-100 dark:border-gray-700 p-4 bg-gray-50 dark:bg-gray-900/50 flex justify-end gap-3 shrink-0">
+                            <button
+                                type="button"
+                                onClick={() => setShowAddForm(false)}
+                                disabled={addLoading}
+                                className="rounded-md border border-gray-200 dark:border-gray-600 px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50 transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="submit"
+                                form="add-user-form"
+                                disabled={addLoading}
+                                className="flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90 transition-colors disabled:opacity-60"
+                            >
+                                {addLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                                <span>Add User</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Assign Unit Modal */}
             {assignTarget && (

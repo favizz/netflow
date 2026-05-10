@@ -17,11 +17,19 @@ const FAQ_DATA: FAQSection[] = [
         items: [
             {
                 question: "What does the Overview page show?",
-                answer: "The Overview page displays real-time statistics: total units registered, how many are currently online/offline (refreshed every 30 seconds), units with low balance, active anomaly alerts, and recent audit log entries. It gives a bird's-eye view of the entire building system.",
+                answer: "The Overview page displays three real-time stat cards: total units registered, how many are currently online, and units with low balance. It also shows a compact system health bar, recent audit log entries, and the consumption trend chart. Stats are refreshed every 30 seconds.",
             },
             {
                 question: "How is 'online' status determined?",
                 answer: "A unit is considered Online if its device has sent telemetry data within the last 5 minutes. The backend checks the latest entry in meter_readings for each device. If no reading exists or the last reading is older than 5 minutes, the unit is Offline.",
+            },
+            {
+                question: "What is the System Health bar?",
+                answer: "The System Health bar shows the status of each backend service (API, MQTT broker, database, payment gateway, etc.) as compact inline pills with a colored dot and a latency progress bar. It is refreshed once when you open the Overview page. No continuous polling is used.",
+            },
+            {
+                question: "What do the consumption trend periods mean?",
+                answer: "The chart supports three periods: Daily (last 7 days with no navigation), Monthly (navigate month by month), and Yearly (navigate year by year). Use the electricity/water toggle icons to switch utilities. Navigation arrows are only shown for Monthly and Yearly views.",
             },
         ],
     },
@@ -30,11 +38,11 @@ const FAQ_DATA: FAQSection[] = [
         items: [
             {
                 question: "How do I add a new unit?",
-                answer: "On the Devices page, click 'Add Unit'. Provide the unit number (e.g. A-101) and the device ID of the physical smart meter. The unit starts with zero balance and relay ON.",
+                answer: "On the Devices page, click 'Add Unit'. A single-page form opens where you search and select a building, enter the unit number and device ID, optionally set an initial balance, and assign the unit to a user (admin or resident). Assignment is required — you cannot add a unit without linking it to someone.",
             },
             {
                 question: "How do I assign a resident to a unit?",
-                answer: "Click the edit icon on any unit row in the Devices table. Enter the resident's email address in the 'Resident Email' field. This links the resident's mobile app to that unit.",
+                answer: "Assignment is handled during unit creation via the 'Add Unit' form. Search by name or email in the 'Assign To' field and select the user. To reassign later, go to the Users page and use the assign icon on the user row.",
             },
             {
                 question: "What do the relay and valve toggles do?",
@@ -72,7 +80,7 @@ const FAQ_DATA: FAQSection[] = [
         items: [
             {
                 question: "How does the prepaid top-up work?",
-                answer: "Residents purchase tokens via the mobile app through the payment gateway. On successful payment, a webhook credits the unit's balance. Balances are stored directly on the units table for fast reads.",
+                answer: "Residents purchase tokens via the mobile app. They enter separate amounts for electricity (Rp) and water (Rp), then pay through the payment gateway. On successful payment, the backend sends a single MQTT topup message to the device with the total credited amount. Balances are stored on the units table for fast reads.",
             },
             {
                 question: "What happens when balance runs out?",
@@ -92,6 +100,10 @@ const FAQ_DATA: FAQSection[] = [
                 answer: "Admins access the dashboard (this app) and have full control over all units, tariffs, and settings. Residents access the mobile web app and can only see their own unit's data and purchase tokens.",
             },
             {
+                question: "How do I add a new user?",
+                answer: "On the Users page, click 'Add User'. A popup modal opens where you enter the user's email (required) and display name (optional). The user is added as a resident. You can grant admin access afterwards using the shield icon on their row.",
+            },
+            {
                 question: "How does admin authentication work?",
                 answer: "Admins log in via Google OAuth. The backend validates the Google ID token and returns a signed JWT stored as 'admin-token' in localStorage. The token must belong to an email in the allowed admin list.",
             },
@@ -106,7 +118,7 @@ const FAQ_DATA: FAQSection[] = [
             },
             {
                 question: "What is the Queue Monitor?",
-                answer: "The Queue Monitor (accessible via the button on the Logs page) opens Bull Board - a visual interface for the BullMQ job queues. It shows the telemetry processing queue and the payment-expiry queue: pending jobs, completed jobs, failed jobs, and retry counts.",
+                answer: "The Queue Monitor is embedded at the bottom of the Logs page as a collapsible section. Click 'Queue Monitor (Bull Board)' to expand it — the iframe loads on demand. It shows the BullMQ job queues: telemetry processing, payment expiry, pending/completed/failed jobs, and retry counts.",
             },
             {
                 question: "Can I filter logs?",
@@ -124,6 +136,10 @@ const FAQ_DATA: FAQSection[] = [
             {
                 question: "Who gets notified about anomalies?",
                 answer: "When a Critical or Warning anomaly is detected - including low balance alerts - the system automatically sends an email to the resident assigned to that unit via nodemailer (SMTP). Admins see anomalies in the dashboard Overview.",
+            },
+            {
+                question: "How do dashboard notifications work?",
+                answer: "The bell icon in the header shows unread alerts sourced from the audit log — specifically anomaly events and failed device/firmware commands. Clicking the bell opens the panel. Closing the panel marks all shown notifications as read; they will no longer appear on next visit. Read state is stored in localStorage.",
             },
         ],
     },
@@ -150,7 +166,7 @@ const FAQ_DATA: FAQSection[] = [
         items: [
             {
                 question: "Which MQTT topics does the system use?",
-                answer: "device/{id}/telemetry - device publishes sensor readings. device/{id}/relay/set - backend sends relay on/off. device/{id}/valve/set - backend sends valve open/close. device/{id}/status - device heartbeat.",
+                answer: "device/{id}/telemetry - device publishes sensor readings. device/{id}/relay/set - backend sends relay on/off. device/{id}/valve/set - backend sends valve open/close. device/{id}/topup - backend sends top-up credit (total amount). device/{id}/status - device heartbeat.",
             },
             {
                 question: "Why does the mobile app use WebSocket instead of TCP for MQTT?",

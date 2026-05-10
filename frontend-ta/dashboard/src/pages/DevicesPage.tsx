@@ -76,7 +76,7 @@ export default function DevicesPage() {
                         onClick={() => setIsAddOpen(true)}
                         className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-primary/90 transition-colors"
                     >
-                        Register Unit
+                        Add Unit
                     </button>
                 </div>
             </div>

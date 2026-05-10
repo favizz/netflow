@@ -39,7 +39,12 @@
       "Bash(Get-Content \"C:\\\\Users\\\\Lenovo\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-Lenovo-Documents-GitHub-TA-Flowmeter\\\\4599e4f2-f704-4577-814f-7228fbfc11a3\\\\tasks\\\\bypuvk15n.output\")",
       "Bash(npx eslint *)",
       "Bash(awk 'NR>=28 && NR<=40 {printf \"%d: %s\\\\n\", NR, $0}' src/main.ts)",
-      "Bash(awk 'NR>=20 && NR<=45 {printf \"%d: %s\\\\n\", NR, $0}' src/main.ts)"
+      "Bash(awk 'NR>=20 && NR<=45 {printf \"%d: %s\\\\n\", NR, $0}' src/main.ts)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\Lenovo\\\\Documents\\\\GitHub\\\\TA-Flowmeter\" -Directory)",
+      "Bash(Get-ChildItem \"C:\\\\Users\\\\Lenovo\\\\Documents\\\\GitHub\\\\TA-Flowmeter\\\\frontend-ta\\\\dashboard\\\\src\\\\pages\")",
+      "PowerShell(Get-ChildItem \"C:\\\\Users\\\\Lenovo\\\\Documents\\\\GitHub\\\\TA-Flowmeter\\\\frontend-ta\\\\dashboard\\\\src\\\\pages\" | Select-Object Name; Get-ChildItem \"C:\\\\Users\\\\Lenovo\\\\Documents\\\\GitHub\\\\TA-Flowmeter\\\\frontend-ta\\\\dashboard\\\\src\\\\components\" -Recurse | Where-Object { !$_.PSIsContainer } | Select-Object Name, FullName)",
+      "PowerShell(dir \"C:\\\\Users\\\\Lenovo\\\\Documents\\\\GitHub\\\\TA-Flowmeter\\\\frontend-ta\\\\dashboard\\\\src\\\\components\" -Recurse | Where-Object { !$_.PSIsContainer })",
+      "PowerShell(Copy-Item *)"
     ]
   }
 }
