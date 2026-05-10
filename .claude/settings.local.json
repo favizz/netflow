@@ -18,7 +18,14 @@
       "Bash(git check-ignore *)",
       "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); p=d['packages'].get\\('node_modules/@opentelemetry/auto-instrumentations-node',{}\\); print\\(p.get\\('version','not found'\\)\\)\")",
       "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); [print\\(k,v\\) for k,v in d['dependencies'].items\\(\\) if 'opentelemetry' in k]\")",
-      "Bash(python -c ' *)"
+      "Bash(python -c ' *)",
+      "Bash(git pull *)",
+      "Bash(node -e \"const l=require\\('./package-lock.json'\\); console.log\\(l.packages['node_modules/@opentelemetry/auto-instrumentations-node']?.version\\)\")",
+      "Bash(npm ci *)",
+      "Bash(node -e \"const l=require\\('./package-lock.json'\\); const p=l.packages['node_modules/@eslint/js']; console.log\\('@eslint/js:', p?.version\\); const e=l.packages['node_modules/eslint']; console.log\\('eslint:', e?.version\\)\")",
+      "Bash(node -e \"const l=require\\('./package-lock.json'\\); const e=l.packages['node_modules/@eslint/js']; console.log\\(JSON.stringify\\(e?.peerDependencies\\)\\)\")",
+      "Bash(node -e \"const l=require\\('./package-lock.json'\\); console.log\\('eslint:', l.packages['node_modules/eslint']?.version\\); console.log\\('@eslint/js:', l.packages['node_modules/@eslint/js']?.version\\)\")",
+      "Bash(node -e ' *)"
     ]
   }
 }
