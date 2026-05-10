@@ -29,7 +29,7 @@ export class HealthService {
   ) {}
 
   async check(): Promise<HealthReport> {
-    const [database, redis, mqtt, ml, smtp] = await Promise.all([
+    const [database, redis, mqtt, ml, smtp, telegram] = await Promise.all([
       this.checkDatabase(),
       this.checkTcpService(
         'Redis',
@@ -39,6 +39,7 @@ export class HealthService {
       this.checkMqtt(),
       this.checkMl(),
       Promise.resolve(this.checkSmtp()),
+      Promise.resolve(this.checkTelegram()),
     ]);
 
     const critical = database.status === 'error' || mqtt.status === 'error';
@@ -52,7 +53,7 @@ export class HealthService {
     return {
       checkedAt: new Date().toISOString(),
       overall,
-      services: { database, redis, mqtt, ml, smtp },
+      services: { database, redis, mqtt, ml, smtp, telegram },
     };
   }
 
@@ -128,6 +129,14 @@ export class HealthService {
       this.cfg.get<string>('SMTP_USER') &&
       this.cfg.get<string>('SMTP_PASS')
     );
+    return {
+      status: configured ? 'configured' : 'not_configured',
+      latencyMs: null,
+    };
+  }
+
+  private checkTelegram(): ServiceHealth {
+    const configured = !!this.cfg.get<string>('TELEGRAM_BOT_TOKEN');
     return {
       status: configured ? 'configured' : 'not_configured',
       latencyMs: null,

@@ -80,7 +80,7 @@ export default function LoginForm({ onGoogleLogin }: LoginFormProps) {
           <div className="text-center space-y-3">
             <div className="flex justify-center mb-6">
               <img
-                src={`${import.meta.env.BASE_URL}netflow-logo-icon.png`}
+                src={`${import.meta.env.BASE_URL}netflow-logo-white.png`}
                 alt="NETFLOW"
                 className="h-20 w-20 object-contain"
               />

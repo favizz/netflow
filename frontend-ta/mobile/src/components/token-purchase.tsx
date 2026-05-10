@@ -1,15 +1,15 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { CheckCircle, QrCode, Building2, Copy, Check, ArrowLeft, Info, Clock, Wallet } from "lucide-react"
+import { CheckCircle, Zap, Droplets, QrCode, Building2, Copy, Check, ArrowLeft, Info, Clock, Wallet } from "lucide-react"
 import { toast } from "sonner"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { api } from "@/lib/api"
-import { cta, interactive, TOKEN_AMOUNTS, POPULAR_IDX, DEFAULT_TARIFF, type PaymentMethod } from "@/lib/styles"
+import { cta, interactive, DEFAULT_TARIFF, type PaymentMethod } from "@/lib/styles"
 
-// ── Payment method catalogue ──────────────────────────────────────────────────
+const MIN_AMOUNT = 1_000
+const MAX_AMOUNT = 10_000_000
 
 interface PaymentOption {
   id: string
@@ -17,7 +17,6 @@ interface PaymentOption {
   sublabel: string
   method: PaymentMethod
   icon: React.ReactNode
-  subOptions?: string[]
 }
 
 const PAYMENT_OPTIONS: PaymentOption[] = [
@@ -35,55 +34,6 @@ const PAYMENT_OPTIONS: PaymentOption[] = [
     method: "transfer",
     icon: <Building2 size={22} />,
   },
-  // {
-  //   id: "va-bni",
-  //   label: "BNI Virtual Account",
-  //   sublabel: "Transfer via BNI Mobile / ATM BNI",
-  //   method: "transfer",
-  //   icon: <Building2 size={22} />,
-  // },
-  // {
-  //   id: "va-bri",
-  //   label: "BRI Virtual Account",
-  //   sublabel: "Transfer via BRImo / ATM BRI",
-  //   method: "transfer",
-  //   icon: <Building2 size={22} />,
-  // },
-  // {
-  //   id: "va-mandiri",
-  //   label: "Mandiri Virtual Account",
-  //   sublabel: "Transfer via Livin' / ATM Mandiri",
-  //   method: "transfer",
-  //   icon: <Building2 size={22} />,
-  // },
-  // {
-  //   id: "gopay",
-  //   label: "GoPay",
-  //   sublabel: "Bayar langsung via aplikasi Gojek",
-  //   method: "ewallet",
-  //   icon: <Wallet size={22} />,
-  // },
-  // {
-  //   id: "ovo",
-  //   label: "OVO",
-  //   sublabel: "Bayar langsung via aplikasi OVO",
-  //   method: "ewallet",
-  //   icon: <Wallet size={22} />,
-  // },
-  // {
-  //   id: "dana",
-  //   label: "Dana",
-  //   sublabel: "Bayar langsung via aplikasi Dana",
-  //   method: "ewallet",
-  //   icon: <Wallet size={22} />,
-  // },
-  // {
-  //   id: "shopeepay",
-  //   label: "ShopeePay",
-  //   sublabel: "Bayar langsung via aplikasi Shopee",
-  //   method: "ewallet",
-  //   icon: <Wallet size={22} />,
-  // },
 ]
 
 const BCA_STEPS = {
@@ -119,8 +69,6 @@ const BCA_STEPS = {
   },
 }
 
-// ── Component ─────────────────────────────────────────────────────────────────
-
 type Step = "amount" | "method" | "instruction" | "success"
 
 interface TokenPurchaseProps {
@@ -128,22 +76,32 @@ interface TokenPurchaseProps {
   onBack?: () => void
 }
 
+function parseRp(val: string): number {
+  const n = parseInt(val.replace(/\D/g, ""), 10)
+  return isNaN(n) ? 0 : n
+}
+
 export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
   const [step, setStep] = useState<Step>("amount")
-  const [selectedPackage, setSelectedPackage] = useState<number | null>(null)
-  const [customAmount, setCustomAmount] = useState("")
+  const [electricityRaw, setElectricityRaw] = useState("")
+  const [waterRaw, setWaterRaw] = useState("")
   const [selectedOption, setSelectedOption] = useState<PaymentOption | null>(null)
   const [energyTariff, setEnergyTariff] = useState<number>(DEFAULT_TARIFF.kwh)
-  const [balanceRp, setBalanceRp] = useState<number | null>(null)
+  const [waterTariff]  = useState<number>(DEFAULT_TARIFF.water)
   const [balanceKwh, setBalanceKwh] = useState<number | null>(null)
   const [loading, setLoading] = useState(false)
-  const [initResult, setInitResult] = useState<{ transactionId: string; gatewayReference: string; vaNumber?: string; qrUrl?: string } | null>(null)
+  const [initResult, setInitResult] = useState<{ transactionId: string; vaNumber?: string; qrUrl?: string } | null>(null)
   const [transactionId, setTransactionId] = useState("")
   const [copied, setCopied] = useState(false)
   const [timeLeft, setTimeLeft] = useState(0)
   const [bcaExpandedSection, setBcaExpandedSection] = useState<string | null>("mbca")
+  const [elecError, setElecError] = useState("")
+  const [waterError, setWaterError] = useState("")
 
-  // Countdown timer when instruction screen is shown
+  const elecAmount  = parseRp(electricityRaw)
+  const waterAmount = parseRp(waterRaw)
+  const totalAmount = elecAmount + waterAmount
+
   useEffect(() => {
     if (step !== "instruction") return
     const limit = selectedOption?.method === "qris" ? 15 * 60 : 24 * 60 * 60
@@ -154,30 +112,38 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
 
   useEffect(() => {
     let active = true
-    const loadSummary = async () => {
+    const load = async () => {
       try {
         const data = await api.getDashboard(unitId)
         if (!active) return
-        setBalanceRp(data.summary.balance)
         setBalanceKwh(data.summary.remainingEstimate.kwh)
         setEnergyTariff(data.summary.energyTariff)
-      } catch {
-        /* balance stays null — UI shows dash */
-      }
+      } catch { /* balance stays null */ }
     }
-    void loadSummary()
+    void load()
     return () => { active = false }
   }, [unitId])
 
-  const selectedAmount = selectedPackage
-    ? TOKEN_AMOUNTS[selectedPackage - 1] ?? 0
-    : Number(customAmount || 0)
-
-  // ── Handlers ────────────────────────────────────────────────────────────────
+  const validateField = (val: string, setter: (e: string) => void): boolean => {
+    const n = parseRp(val)
+    if (val !== "" && n < MIN_AMOUNT) {
+      setter(`Minimum Rp ${MIN_AMOUNT.toLocaleString("id-ID")}`)
+      return false
+    }
+    if (n > MAX_AMOUNT) {
+      setter(`Maksimum Rp ${MAX_AMOUNT.toLocaleString("id-ID")}`)
+      return false
+    }
+    setter("")
+    return true
+  }
 
   const goToMethod = () => {
-    if (selectedAmount < 1000) {
-      toast.error("Nominal minimum Rp 1.000")
+    const elecOk  = validateField(electricityRaw, setElecError)
+    const waterOk = validateField(waterRaw, setWaterError)
+    if (!elecOk || !waterOk) return
+    if (totalAmount < MIN_AMOUNT) {
+      toast.error("Isi minimal satu jenis tagihan (min. Rp 1.000)")
       return
     }
     setStep("method")
@@ -187,12 +153,11 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
     if (!selectedOption) return
     setLoading(true)
     try {
-      const result = await api.initiateTopup(unitId, selectedAmount, selectedOption.method)
+      const result = await api.initiateTopup(unitId, totalAmount, selectedOption.method)
       setInitResult({
         transactionId: result.transactionId,
-        gatewayReference: result.transactionId.replace("TRX-", ""),
         vaNumber: result.vaNumber,
-        qrUrl: result.qrUrl
+        qrUrl: result.qrUrl,
       })
       setStep("instruction")
     } catch (err) {
@@ -225,8 +190,10 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
 
   const restart = () => {
     setStep("amount")
-    setSelectedPackage(null)
-    setCustomAmount("")
+    setElectricityRaw("")
+    setWaterRaw("")
+    setElecError("")
+    setWaterError("")
     setSelectedOption(null)
     setInitResult(null)
     setTransactionId("")
@@ -239,12 +206,20 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
     return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${sec.toString().padStart(2, "0")}`
   }
 
-  // ── Virtual Account number derived from reference ─────────────────────────
-  // Replace the complex slice logic with:
-const vaNumber = initResult?.vaNumber || "Mendapatkan nomor..."
+  const vaNumber = initResult?.vaNumber ?? "Mendapatkan nomor..."
 
-  // ── Render ───────────────────────────────────────────────────────────────
-  if (step === "success") return <SuccessScreen transactionId={transactionId} amount={selectedAmount} method={selectedOption} onBuyAgain={restart} onBack={onBack} />
+  if (step === "success") {
+    return (
+      <SuccessScreen
+        transactionId={transactionId}
+        elecAmount={elecAmount}
+        waterAmount={waterAmount}
+        method={selectedOption}
+        onBuyAgain={restart}
+        onBack={onBack}
+      />
+    )
+  }
 
   return (
     <div className="bg-background pb-36">
@@ -269,80 +244,133 @@ const vaNumber = initResult?.vaNumber || "Mendapatkan nomor..."
         </div>
       </div>
 
-      <div className="px-5 pt-4 space-y-6">
-        {/* ── STEP 1: Amount ──────────────────────────────────────────────── */}
+      <div className="px-5 pt-4 space-y-5">
+
+        {/* ── STEP 1: Amount ─────────────────────────────────────────────── */}
         {step === "amount" && (
           <>
             {/* Balance card */}
-            <div className="bg-primary/5 rounded-3xl p-5 text-center">
-              <p className="text-xs text-muted-foreground font-medium mb-1">Sisa Saldo</p>
-              <p className="text-4xl font-bold text-primary font-mono tracking-tight">
-                {balanceRp !== null ? `Rp ${balanceRp.toLocaleString("id-ID")}` : "—"}
-              </p>
-              {balanceKwh !== null && (
-                <p className="text-xs text-muted-foreground mt-1.5">
-                  ⚡ {balanceKwh.toFixed(2)} KWh · 💧 {(balanceKwh / 2.5).toFixed(3)} m³
-                </p>
-              )}
-              <p className="text-xs text-muted-foreground mt-0.5">Unit {unitId}</p>
-            </div>
-
-            {/* Package grid */}
-            <div className="space-y-2">
-              <h3 className="font-bold text-sm text-muted-foreground uppercase tracking-wider">Pilih Nominal</h3>
-              <div className="grid grid-cols-2 gap-3">
-                {TOKEN_AMOUNTS.map((nominal, idx) => {
-                  const pkgId = idx + 1
-                  const isSelected = selectedPackage === pkgId
-                  const isPopular = idx === POPULAR_IDX
-                  return (
-                    <button
-                      key={pkgId}
-                      onClick={() => { setSelectedPackage(pkgId); setCustomAmount("") }}
-                      className={`relative p-4 text-left ${interactive.cardSel} ${isSelected ? interactive.cardSelActive : interactive.cardSelInactive}`}
-                    >
-                      {isPopular && (
-                        <span className="absolute top-0 right-0 bg-primary text-primary-foreground text-[9px] font-bold px-2 py-0.5 rounded-bl-lg rounded-tr-2xl tracking-wide">
-                          TERLARIS
-                        </span>
-                      )}
-                      <p className="font-bold text-base text-foreground">Rp {nominal.toLocaleString("id-ID")}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        ⚡ {(nominal / energyTariff).toFixed(1)} KWh
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        💧 {(nominal / (energyTariff * 2.5)).toFixed(2)} m³
-                      </p>
-                    </button>
-                  )
-                })}
+            <div className="flex items-center justify-between bg-muted/40 rounded-xl px-4 py-2.5">
+              <span className="text-xs text-muted-foreground">Unit {unitId}</span>
+              <div className="flex items-center gap-3 text-xs font-semibold">
+                <span className="flex items-center gap-1 text-foreground">
+                  <Zap size={11} className="text-primary" />
+                  {balanceKwh !== null ? `${balanceKwh.toFixed(2)} KWh` : "—"}
+                </span>
+                <span className="flex items-center gap-1 text-foreground">
+                  <Droplets size={11} className="text-cyan-500" />
+                  {balanceKwh !== null ? `${(balanceKwh / 2.5).toFixed(3)} m³` : "—"}
+                </span>
               </div>
             </div>
 
-            {/* Custom input */}
-            <div className="space-y-2">
-              <h3 className="font-bold text-sm text-muted-foreground uppercase tracking-wider">Nominal Lainnya</h3>
+            {/* Electricity input */}
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-2">
+                <Zap size={15} className="text-primary flex-shrink-0" />
+                <label className="text-sm font-semibold text-foreground">Token Listrik</label>
+              </div>
               <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-semibold text-sm">Rp</span>
-                <Input
-                  type="number"
-                  placeholder="Minimal 1.000"
-                  value={customAmount}
-                  onChange={(e) => { setCustomAmount(e.target.value); setSelectedPackage(null) }}
-                  className="pl-12 h-14 rounded-xl text-base bg-muted/30 border-none shadow-none focus-visible:ring-1 focus-visible:ring-primary"
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-medium pointer-events-none select-none">Rp</span>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  value={electricityRaw}
+                  onChange={(e) => {
+                    setElectricityRaw(e.target.value.replace(/[^0-9]/g, ""))
+                    setElecError("")
+                  }}
+                  onBlur={() => validateField(electricityRaw, setElecError)}
+                  placeholder="0"
+                  className={`w-full pl-10 pr-4 py-3 rounded-xl border text-base bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary transition-colors ${elecError ? "border-destructive" : "border-border"}`}
                 />
               </div>
+              {elecError ? (
+                <p className="text-xs text-destructive pl-1">{elecError}</p>
+              ) : elecAmount >= MIN_AMOUNT ? (
+                <p className="text-xs text-muted-foreground pl-1">
+                  {(elecAmount / energyTariff).toFixed(2)} KWh listrik
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground pl-1">
+                  Min. Rp {MIN_AMOUNT.toLocaleString("id-ID")} · Maks. Rp {MAX_AMOUNT.toLocaleString("id-ID")}
+                </p>
+              )}
             </div>
+
+            {/* Water input */}
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-2">
+                <Droplets size={15} className="text-cyan-500 flex-shrink-0" />
+                <label className="text-sm font-semibold text-foreground">Token Air</label>
+              </div>
+              <div className="relative">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-medium pointer-events-none select-none">Rp</span>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  value={waterRaw}
+                  onChange={(e) => {
+                    setWaterRaw(e.target.value.replace(/[^0-9]/g, ""))
+                    setWaterError("")
+                  }}
+                  onBlur={() => validateField(waterRaw, setWaterError)}
+                  placeholder="0"
+                  className={`w-full pl-10 pr-4 py-3 rounded-xl border text-base bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary transition-colors ${waterError ? "border-destructive" : "border-border"}`}
+                />
+              </div>
+              {waterError ? (
+                <p className="text-xs text-destructive pl-1">{waterError}</p>
+              ) : waterAmount >= MIN_AMOUNT ? (
+                <p className="text-xs text-muted-foreground pl-1">
+                  {(waterAmount / waterTariff).toFixed(3)} m³ air
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground pl-1">
+                  Min. Rp {MIN_AMOUNT.toLocaleString("id-ID")} · Maks. Rp {MAX_AMOUNT.toLocaleString("id-ID")}
+                </p>
+              )}
+            </div>
+
+            {/* Total summary */}
+            {totalAmount >= MIN_AMOUNT && (
+              <div className="flex items-center justify-between rounded-xl bg-muted/40 px-4 py-3">
+                <span className="text-sm text-muted-foreground font-medium">Total Pembayaran</span>
+                <span className="font-bold text-lg text-foreground">Rp {totalAmount.toLocaleString("id-ID")}</span>
+              </div>
+            )}
           </>
         )}
 
-        {/* ── STEP 2: Method ──────────────────────────────────────────────── */}
+        {/* ── STEP 2: Method ─────────────────────────────────────────────── */}
         {step === "method" && (
           <>
-            {/* Amount summary */}
-            <div className="flex items-center justify-between bg-muted/40 rounded-2xl px-4 py-3">
-              <span className="text-sm text-muted-foreground">Total Pembayaran</span>
-              <span className="font-bold text-lg text-foreground">Rp {selectedAmount.toLocaleString("id-ID")}</span>
+            {/* Breakdown */}
+            <div className="rounded-2xl border border-border overflow-hidden">
+              {elecAmount > 0 && (
+                <div className="flex items-center justify-between px-4 py-3 border-b border-border last:border-0">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Zap size={14} className="text-primary" />
+                    <span>Token Listrik</span>
+                  </div>
+                  <span className="font-semibold text-foreground text-sm">Rp {elecAmount.toLocaleString("id-ID")}</span>
+                </div>
+              )}
+              {waterAmount > 0 && (
+                <div className="flex items-center justify-between px-4 py-3 border-b border-border last:border-0">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Droplets size={14} className="text-cyan-500" />
+                    <span>Token Air</span>
+                  </div>
+                  <span className="font-semibold text-foreground text-sm">Rp {waterAmount.toLocaleString("id-ID")}</span>
+                </div>
+              )}
+              <div className="flex items-center justify-between px-4 py-3 bg-muted/30">
+                <span className="text-sm font-semibold text-foreground">Total</span>
+                <span className="font-bold text-lg text-foreground">Rp {totalAmount.toLocaleString("id-ID")}</span>
+              </div>
             </div>
 
             {/* QRIS */}
@@ -353,7 +381,7 @@ const vaNumber = initResult?.vaNumber || "Mendapatkan nomor..."
               ))}
             </div>
 
-            {/* BCA Virtual Account */}
+            {/* Transfer */}
             <div className="space-y-2">
               <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Transfer Bank</p>
               {PAYMENT_OPTIONS.filter((o) => o.method === "transfer").map((opt) => (
@@ -363,21 +391,20 @@ const vaNumber = initResult?.vaNumber || "Mendapatkan nomor..."
           </>
         )}
 
-        {/* ── STEP 3: Instruction ─────────────────────────────────────────── */}
+        {/* ── STEP 3: Instruction ────────────────────────────────────────── */}
         {step === "instruction" && initResult && selectedOption && (
           <>
-            {/* Amount */}
+            {/* Total */}
             <div className="text-center py-2">
               <p className="text-sm text-muted-foreground">Total Tagihan</p>
-              <p className="text-3xl font-bold text-foreground mt-1">Rp {selectedAmount.toLocaleString("id-ID")}</p>
+              <p className="text-3xl font-bold text-foreground mt-1">Rp {totalAmount.toLocaleString("id-ID")}</p>
               <p className="text-xs text-muted-foreground mt-1">Ref: {initResult.transactionId}</p>
             </div>
 
-            {/* QRIS instruction */}
+            {/* QRIS */}
             {selectedOption.method === "qris" && (
               <Card className="p-6 flex flex-col items-center gap-4">
                 <p className="text-sm font-semibold text-foreground">Scan kode QRIS berikut</p>
-                {/* QR placeholder */}
                 <div className="w-48 h-48 bg-white rounded-2xl border-2 border-border flex flex-col items-center justify-center gap-2 shadow-inner overflow-hidden">
                   {initResult.qrUrl ? (
                     <img src={initResult.qrUrl} alt="QRIS Code" className="w-full h-full object-contain" />
@@ -395,10 +422,9 @@ const vaNumber = initResult?.vaNumber || "Mendapatkan nomor..."
               </Card>
             )}
 
-            {/* BCA Virtual Account instruction */}
+            {/* BCA Virtual Account */}
             {selectedOption.method === "transfer" && (
               <Card className="overflow-hidden">
-                {/* Bank header + countdown */}
                 <div className="flex items-center justify-between px-5 py-4 border-b border-border">
                   <div className="flex items-center gap-3">
                     <div className="p-2 bg-blue-50 dark:bg-blue-950/60 rounded-xl">
@@ -418,7 +444,6 @@ const vaNumber = initResult?.vaNumber || "Mendapatkan nomor..."
                 </div>
 
                 <div className="p-5 space-y-4">
-                  {/* VA Number */}
                   <div className="bg-muted/40 rounded-xl p-4">
                     <p className="text-xs text-muted-foreground mb-2">Nomor Virtual Account</p>
                     <div className="flex items-center justify-between gap-3">
@@ -435,16 +460,14 @@ const vaNumber = initResult?.vaNumber || "Mendapatkan nomor..."
                     </div>
                   </div>
 
-                  {/* Total */}
                   <div className="flex items-center justify-between px-1">
                     <div>
                       <p className="text-xs text-muted-foreground">Total Pembayaran</p>
-                      <p className="text-xl font-bold text-foreground">Rp {selectedAmount.toLocaleString("id-ID")}</p>
+                      <p className="text-xl font-bold text-foreground">Rp {totalAmount.toLocaleString("id-ID")}</p>
                     </div>
                     <p className="text-xs text-muted-foreground">Ref: {initResult.transactionId.slice(-8)}</p>
                   </div>
 
-                  {/* Important info box */}
                   <div className="flex gap-2.5 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 rounded-xl p-3">
                     <Info size={14} className="text-blue-500 flex-shrink-0 mt-0.5" />
                     <p className="text-xs text-blue-700 dark:text-blue-300 leading-relaxed">
@@ -453,7 +476,6 @@ const vaNumber = initResult?.vaNumber || "Mendapatkan nomor..."
                     </p>
                   </div>
 
-                  {/* Accordion-style step sections */}
                   {Object.entries(BCA_STEPS).map(([key, section]) => (
                     <div key={key} className="border border-border rounded-xl overflow-hidden">
                       <button
@@ -481,7 +503,7 @@ const vaNumber = initResult?.vaNumber || "Mendapatkan nomor..."
               </Card>
             )}
 
-            {/* E-Wallet instruction */}
+            {/* E-Wallet */}
             {selectedOption.method === "ewallet" && (
               <Card className="p-5 space-y-4">
                 <div className="flex items-center gap-3">
@@ -493,23 +515,21 @@ const vaNumber = initResult?.vaNumber || "Mendapatkan nomor..."
                     <p className="text-xs text-muted-foreground">Pembayaran dompet digital</p>
                   </div>
                 </div>
-
                 <div className="bg-muted/40 rounded-xl p-4 space-y-2 text-sm text-muted-foreground">
                   <div className="flex justify-between">
                     <span>Nominal</span>
-                    <span className="font-semibold text-foreground">Rp {selectedAmount.toLocaleString("id-ID")}</span>
+                    <span className="font-semibold text-foreground">Rp {totalAmount.toLocaleString("id-ID")}</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Kode Referensi</span>
                     <span className="font-mono text-foreground">{initResult.transactionId.slice(-10)}</span>
                   </div>
                 </div>
-
                 <ol className="space-y-2">
                   {[
                     `Buka aplikasi ${selectedOption.label}`,
                     "Pilih menu Bayar / Scan QR",
-                    `Masukkan kode referensi atau nominal yang tertera`,
+                    "Masukkan kode referensi atau nominal yang tertera",
                     "Konfirmasi dan selesaikan pembayaran",
                   ].map((s, i) => (
                     <li key={i} className="flex items-start gap-3 text-sm text-muted-foreground">
@@ -531,8 +551,8 @@ const vaNumber = initResult?.vaNumber || "Mendapatkan nomor..."
       {/* Bottom CTA */}
       <div className="fixed bottom-16 left-0 right-0 p-4 bg-background/95 backdrop-blur-sm border-t border-border space-y-2">
         {step === "amount" && (
-          <Button onClick={goToMethod} disabled={selectedAmount < 1000} className={cta.primary}>
-            Pilih Metode Pembayaran Listrik &amp; Air
+          <Button onClick={goToMethod} disabled={totalAmount < MIN_AMOUNT} className={cta.primary}>
+            Pilih Metode Pembayaran
           </Button>
         )}
         {step === "method" && (
@@ -549,8 +569,6 @@ const vaNumber = initResult?.vaNumber || "Mendapatkan nomor..."
     </div>
   )
 }
-
-// ── Sub-components ─────────────────────────────────────────────────────────────
 
 function StepIndicator({ current }: { current: Step }) {
   const steps: Step[] = ["amount", "method", "instruction"]
@@ -592,13 +610,15 @@ function MethodRow({ option, selected, onSelect }: { option: PaymentOption; sele
   )
 }
 
-function SuccessScreen({ transactionId, amount, method, onBuyAgain, onBack }: {
+function SuccessScreen({ transactionId, elecAmount, waterAmount, method, onBuyAgain, onBack }: {
   transactionId: string
-  amount: number
+  elecAmount: number
+  waterAmount: number
   method: PaymentOption | null
   onBuyAgain: () => void
   onBack?: () => void
 }) {
+  const total = elecAmount + waterAmount
   return (
     <div className="min-h-full bg-background flex flex-col items-center justify-center px-5 py-10 space-y-6">
       <div className="bg-status-good/10 p-6 rounded-full">
@@ -607,7 +627,7 @@ function SuccessScreen({ transactionId, amount, method, onBuyAgain, onBack }: {
 
       <div className="text-center">
         <h1 className="text-2xl font-bold text-foreground">Pembayaran Berhasil</h1>
-        <p className="text-muted-foreground text-sm mt-1">Token telah dikreditkan ke unit Anda</p>
+        <p className="text-muted-foreground text-sm mt-1">Saldo telah dikreditkan ke unit Anda</p>
       </div>
 
       <Card className="w-full bg-muted/30 p-5 space-y-3">
@@ -615,9 +635,21 @@ function SuccessScreen({ transactionId, amount, method, onBuyAgain, onBack }: {
           <span className="text-muted-foreground text-sm">ID Transaksi</span>
           <span className="font-mono text-xs font-medium text-foreground">{transactionId.slice(-12)}</span>
         </div>
-        <div className="flex justify-between items-center">
-          <span className="text-muted-foreground text-sm">Nominal</span>
-          <span className="font-bold text-foreground">Rp {amount.toLocaleString("id-ID")}</span>
+        {elecAmount > 0 && (
+          <div className="flex justify-between items-center">
+            <span className="text-muted-foreground text-sm">Token Listrik</span>
+            <span className="font-semibold text-foreground">Rp {elecAmount.toLocaleString("id-ID")}</span>
+          </div>
+        )}
+        {waterAmount > 0 && (
+          <div className="flex justify-between items-center">
+            <span className="text-muted-foreground text-sm">Token Air</span>
+            <span className="font-semibold text-foreground">Rp {waterAmount.toLocaleString("id-ID")}</span>
+          </div>
+        )}
+        <div className="flex justify-between items-center pt-2 border-t border-border">
+          <span className="text-foreground text-sm font-semibold">Total</span>
+          <span className="font-bold text-foreground">Rp {total.toLocaleString("id-ID")}</span>
         </div>
         <div className="flex justify-between items-center">
           <span className="text-muted-foreground text-sm">Metode</span>
@@ -626,7 +658,7 @@ function SuccessScreen({ transactionId, amount, method, onBuyAgain, onBack }: {
       </Card>
 
       <div className="w-full space-y-3 pt-4">
-        <Button className={cta.primary} onClick={onBuyAgain}>Beli Lagi</Button>
+        <Button className={cta.primary} onClick={onBuyAgain}>Isi Saldo Lagi</Button>
         <Button variant="outline" className={`${cta.secondary} border-primary text-primary`} onClick={onBack}>
           Kembali ke Beranda
         </Button>

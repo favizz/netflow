@@ -79,4 +79,12 @@ export class ResidentsService {
     resident.role = role;
     return this.residentRepo.save(resident);
   }
+
+  async setTelegramChatId(email: string, chatId: string | null): Promise<void> {
+    await this.residentRepo.update({ email }, { telegram_chat_id: chatId });
+  }
+
+  findByTelegramChatId(chatId: string): Promise<Resident | null> {
+    return this.residentRepo.findOne({ where: { telegram_chat_id: chatId } });
+  }
 }

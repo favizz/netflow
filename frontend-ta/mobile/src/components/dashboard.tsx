@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
-import { Zap, Droplets, Wifi, WifiOff, Radio, CalendarDays, TrendingDown, AlertTriangle } from "lucide-react"
+import { Zap, Droplets, Wifi, WifiOff, Radio } from "lucide-react"
 import mqtt from "mqtt"
 import { decode as msgpackDecode } from "@msgpack/msgpack"
 import { toast } from "sonner"
@@ -22,7 +22,7 @@ import StatusBar from "./status-bar"
 import ConsumptionChart from "./consumption-chart"
 import { MQTT_CONFIG } from "@/lib/config"
 import { api, type UnitSummary } from "@/lib/api"
-import { STATUS_MAP, type BalanceStatus, type TimePeriod } from "@/lib/styles"
+import { type BalanceStatus, type TimePeriod, STATUS_MAP } from "@/lib/styles"
 
 interface DashboardProps {
   unitId: string
@@ -74,15 +74,6 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
   const [trendData, setTrendData]       = useState<TrendPoint[]>([])
   const [trendLoading, setTrendLoading] = useState(false)
 
-  // ── ML Forecast ──────────────────────────────────────────────────────────
-  const [forecast, setForecast] = useState<{
-    estimatedDaysRemaining: number;
-    avgDailyKwh: number;
-    avgDailyM3: number;
-    dailyCostRp: number;
-    confidence: 'high' | 'medium' | 'low';
-  } | null>(null)
-
   // ── MQTT live ────────────────────────────────────────────────────────────
   const [liveData, setLiveData]           = useState<LivePoint[]>([])
   const [mqttConnected, setMqttConnected] = useState(false)
@@ -103,15 +94,6 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
       finally { if (active) setLoading(false) }
     }
     void load()
-    return () => { active = false }
-  }, [unitId])
-
-  // ── Load ML forecast (once on mount / unit change) ───────────────────────
-  useEffect(() => {
-    let active = true
-    api.getForecast(unitId)
-      .then((f) => { if (active) setForecast(f) })
-      .catch(() => { /* ML service may be down - forecast stays hidden */ })
     return () => { active = false }
   }, [unitId])
 
@@ -356,42 +338,6 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
         />
       </div>
 
-      {/* ML Forecast card */}
-      {forecast && (() => {
-        const days = forecast.estimatedDaysRemaining
-        const fStatus: BalanceStatus =
-          days <= 0 ? "terputus" :
-          days <= 3 ? "kritis"   :
-          days <= 7 ? "kurang"   : "aman"
-        const { textColor, bgColor, borderColor } = STATUS_MAP[fStatus]
-        const ForecastIcon = fStatus === "aman" ? CalendarDays : fStatus === "kurang" ? AlertTriangle : TrendingDown
-        return (
-          <div className={`border rounded-2xl p-4 flex items-center gap-4 ${bgColor} ${borderColor}`}>
-            <div className={`p-2.5 rounded-xl bg-card/80`}>
-              <ForecastIcon size={20} className={textColor} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs text-muted-foreground">Estimasi Saldo Habis</p>
-              <p className={`text-xl font-bold leading-tight ${textColor}`}>
-                {days <= 0 ? "Habis" : `${days.toFixed(1)} hari`}
-              </p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Rp {forecast.dailyCostRp.toLocaleString("id-ID", { maximumFractionDigits: 0 })}/hari
-              </p>
-              <p className="text-xs text-muted-foreground">
-                ⚡ {forecast.avgDailyKwh.toFixed(2)} kWh · 💧 {forecast.avgDailyM3.toFixed(3)} m³
-              </p>
-            </div>
-            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
-              forecast.confidence === 'high'   ? "bg-primary/15 text-primary" :
-              forecast.confidence === 'medium' ? "bg-status-warn/15 text-status-warn" :
-                                                 "bg-muted text-muted-foreground"
-            }`}>
-              {forecast.confidence === 'high' ? "Tinggi" : forecast.confidence === 'medium' ? "Sedang" : "Rendah"}
-            </span>
-          </div>
-        )
-      })()}
 
       {/* Konsumsi card */}
       <div className="bg-card border border-border rounded-2xl p-4 space-y-4">
@@ -405,12 +351,12 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
               <button
                 key={u}
                 onClick={() => setChartUtility(u)}
-                className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold transition-all ${
+                title={u === "electricity" ? "Listrik" : "Air"}
+                className={`flex items-center justify-center w-8 h-7 rounded-md text-xs font-semibold transition-all ${
                   chartUtility === u ? "bg-card text-primary shadow-sm" : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                {u === "electricity" ? <Zap size={11} /> : <Droplets size={11} />}
-                {u === "electricity" ? "Listrik" : "Air"}
+                {u === "electricity" ? <Zap size={13} /> : <Droplets size={13} />}
               </button>
             ))}
           </div>

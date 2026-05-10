@@ -116,10 +116,11 @@ export function EditUnitModal({ unit, onClose, onSuccess }: EditUnitModalProps) 
                     <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Balance (Rp)</label>
                         <input
-                            type="number"
-                            step="1"
+                            type="text"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
                             value={balance}
-                            onChange={(e) => setBalance(e.target.value)}
+                            onChange={(e) => setBalance(e.target.value.replace(/[^0-9]/g, ""))}
                             className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                         />
                     </div>

@@ -23,12 +23,13 @@ INSERT IGNORE INTO buildings (id, code, name) VALUES (1, 'DEFAULT', 'Default Bui
 -- 2. RESIDENTS
 -- -----------------------------------------
 CREATE TABLE IF NOT EXISTS residents (
-  email      VARCHAR(255) PRIMARY KEY,
-  google_id  VARCHAR(255) UNIQUE,
-  name       VARCHAR(255),
-  picture    TEXT,
-  role       ENUM('resident','admin') NOT NULL DEFAULT 'resident',
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+  email              VARCHAR(255) PRIMARY KEY,
+  google_id          VARCHAR(255) UNIQUE,
+  name               VARCHAR(255),
+  picture            TEXT,
+  role               ENUM('resident','admin') NOT NULL DEFAULT 'resident',
+  telegram_chat_id   VARCHAR(64)  NULL DEFAULT NULL,
+  created_at         DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- -----------------------------------------
