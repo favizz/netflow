@@ -27,7 +27,8 @@
       "Bash(node -e \"const l=require\\('./package-lock.json'\\); console.log\\('eslint:', l.packages['node_modules/eslint']?.version\\); console.log\\('@eslint/js:', l.packages['node_modules/@eslint/js']?.version\\)\")",
       "Bash(node -e ' *)",
       "Bash(git *)",
-      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\Lenovo\\\\Documents\\\\GitHub\\\\TA-Flowmeter\\\\backend-ta\\\\src\" -Recurse -Directory)"
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\Lenovo\\\\Documents\\\\GitHub\\\\TA-Flowmeter\\\\backend-ta\\\\src\" -Recurse -Directory)",
+      "Bash(Get-ChildItem C:\\\\Users\\\\Lenovo\\\\Documents\\\\GitHub\\\\TA-Flowmeter\\\\dev *)"
     ]
   }
 }
