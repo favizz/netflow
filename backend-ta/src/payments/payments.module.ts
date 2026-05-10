@@ -5,6 +5,7 @@ import { ClientsModule, Transport } from '@nestjs/microservices';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { UnitModule } from '../unit/unit.module';
 import { AuditLogModule } from '../audit-log/audit-log.module';
+import { NotificationModule } from '../notification/notification.module';
 import { Transaction } from './entities/transaction.entity';
 import { PaymentsController } from './payments.controller';
 import { PaymentsService } from './payments.service';
@@ -18,6 +19,7 @@ import {
     TypeOrmModule.forFeature([Transaction]),
     UnitModule,
     AuditLogModule,
+    NotificationModule,
     BullModule.registerQueue({ name: PAYMENT_EXPIRY_QUEUE }),
     ClientsModule.registerAsync([
       {

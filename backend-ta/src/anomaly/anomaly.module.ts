@@ -4,6 +4,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { Anomaly } from './entities/anomaly.entity';
 import { UnitModule } from '../unit/unit.module';
+import { ResidentsModule } from '../residents/residents.module';
 import { AnomalyService } from './anomaly.service';
 import { NotificationModule } from '../notification/notification.module';
 
@@ -12,6 +13,7 @@ import { NotificationModule } from '../notification/notification.module';
     ConfigModule,
     // UnitModule exports UnitService + TypeOrmModule (includes MeterReading repository)
     UnitModule,
+    ResidentsModule,
     TypeOrmModule.forFeature([Anomaly]),
     NotificationModule,
     ClientsModule.registerAsync([
