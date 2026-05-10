@@ -78,6 +78,7 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
   const [forecast, setForecast] = useState<{
     estimatedDaysRemaining: number;
     avgDailyKwh: number;
+    avgDailyM3: number;
     dailyCostRp: number;
     confidence: 'high' | 'medium' | 'low';
   } | null>(null)
@@ -375,7 +376,10 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
                 {days <= 0 ? "Habis" : `${days.toFixed(1)} hari`}
               </p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Rp {forecast.dailyCostRp.toLocaleString("id-ID", { maximumFractionDigits: 0 })}/hari · {forecast.avgDailyKwh.toFixed(2)} kWh rata-rata
+                Rp {forecast.dailyCostRp.toLocaleString("id-ID", { maximumFractionDigits: 0 })}/hari
+              </p>
+              <p className="text-xs text-muted-foreground">
+                ⚡ {forecast.avgDailyKwh.toFixed(2)} kWh · 💧 {forecast.avgDailyM3.toFixed(3)} m³
               </p>
             </div>
             <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${

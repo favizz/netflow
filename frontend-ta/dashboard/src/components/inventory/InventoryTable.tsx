@@ -9,15 +9,15 @@ interface InventoryTableProps {
     data: InventoryItem[];
     initialFilter?: string;
     buildings?: { id: number; code: string; name: string }[];
+    selectedBuilding?: string;
     onEdit?: (item: InventoryItem) => void;
 }
 
-export function InventoryTable({ data, initialFilter = "", buildings = [], onEdit }: InventoryTableProps) {
+export function InventoryTable({ data, initialFilter = "", buildings = [], selectedBuilding = "all", onEdit }: InventoryTableProps) {
     const navigate = useNavigate();
     const [searchQuery, setSearchQuery] = useState(initialFilter);
     const [statusFilter, setStatusFilter] = useState<"All" | "Online" | "Offline">("All");
     const [isFilterOpen, setIsFilterOpen] = useState(false);
-    const [selectedBuilding, setSelectedBuilding] = useState<string>("all");
     const [page, setPage] = useState(1);
 
     const filteredData = useMemo(() => {
@@ -45,18 +45,6 @@ export function InventoryTable({ data, initialFilter = "", buildings = [], onEdi
                 <div className="flex flex-col space-y-4 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
                     <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">Device Inventory &amp; Control</h2>
                     <div className="flex space-x-3">
-                        {buildings.length > 0 && (
-                            <select
-                                value={selectedBuilding}
-                                onChange={(e) => setSelectedBuilding(e.target.value)}
-                                className="h-9 rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 text-sm text-gray-900 dark:text-gray-100 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                            >
-                                <option value="all">All Buildings</option>
-                                {buildings.map(b => (
-                                    <option key={b.id} value={b.id}>{b.name}</option>
-                                ))}
-                            </select>
-                        )}
                         <div className="relative">
                             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400 dark:text-gray-500" />
                             <input

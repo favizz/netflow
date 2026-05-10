@@ -126,11 +126,8 @@ export default function App() {
 
       {/* ── Header ─────────────────────────────────────────────────────── */}
       <header className="flex-none z-30 bg-card border-b border-border flex items-center justify-between px-5 h-14">
-        <div className="flex items-center gap-2">
-          <div className="bg-primary text-primary-foreground p-1.5 rounded-lg">
-            <Zap size={16} />
-          </div>
-          <span className="font-bold text-base text-foreground tracking-tight">NETFLOW</span>
+        <div className="flex items-center">
+          <img src="/netflow-logo-icon.png" alt="NetFlow" className="h-8 w-auto" />
         </div>
 
         <div className="flex items-center gap-1">

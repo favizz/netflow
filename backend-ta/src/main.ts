@@ -1,5 +1,5 @@
 import { ValidationPipe } from '@nestjs/common';
-import { NestFactory } from '@nestjs/core';
+import { NestFactory, HttpAdapterHost } from '@nestjs/core';
 import { MicroserviceOptions, Transport } from '@nestjs/microservices';
 import { AppModule } from './app.module';
 import compression from 'compression';
@@ -20,6 +20,17 @@ process.on('unhandledRejection', (reason: unknown) => {
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  // ── Bull-board: mount directly on Express so sub-paths (/static/...) are handled ──
+  // NestJS middleware forRoutes only matches the exact path, not sub-paths.
+  // Mounting directly on the Express app handles /admin/queues and all sub-paths.
+  const { httpAdapter } = app.get(HttpAdapterHost);
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call
+  const bullAdapter = app.get<{ setBasePath(p: string): void; getRouter(): unknown }>('bull_board_adapter');
+  bullAdapter.setBasePath('/api/admin/queues');
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+  (httpAdapter.getInstance() as import('express').Application).use('/admin/queues', bullAdapter.getRouter() as import('express').RequestHandler);
+
   app.setGlobalPrefix('api');
 
   // ── Security headers ────────────────────────────────────────────────────────

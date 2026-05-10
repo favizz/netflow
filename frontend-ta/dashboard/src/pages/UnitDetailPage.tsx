@@ -1,12 +1,13 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useIsDark } from "@/lib/useIsDark";
-import { ArrowLeft, Power, Droplets, Zap, FileText, ChevronDown, ChevronUp, Wifi, WifiOff, Activity } from "lucide-react";
+import { ArrowLeft, Power, Droplets, Zap, FileText, ChevronDown, ChevronUp, Wifi, WifiOff, Activity, Trash2, Radio } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, AreaChart, Area } from "recharts";
 import { cn } from "@/lib/utils";
 import mqtt from "mqtt";
 import { decode as msgpackDecode } from "@msgpack/msgpack";
 import { fetchApi } from "@/lib/api";
+import { useToast } from "@/components/layout/ToastProvider";
 
 function encodeCommand(type: 'relay' | 'valve', value: 0 | 1): Uint8Array {
     const typeNibble = type === 'relay' ? 0x10 : 0x20;
@@ -28,7 +29,14 @@ function decodeTelemetry(buf: Uint8Array): IoTPayload | null {
     };
 }
 
-type TimeRange = "Real-Time" | "Today" | "Custom";
+type TimePeriod = "live" | "daily" | "weekly" | "monthly";
+
+const PERIODS: { id: TimePeriod; label: string }[] = [
+    { id: "live",    label: "Live"     },
+    { id: "daily",   label: "Harian"   },
+    { id: "weekly",  label: "Mingguan" },
+    { id: "monthly", label: "Bulanan"  },
+];
 
 interface LogEntry {
     timestamp: string;
@@ -58,10 +66,14 @@ const MQTT_CONFIG = {
     }
 };
 
+type ConfirmAction = { type: 'power'; next: boolean } | { type: 'water'; next: boolean } | { type: 'delete' } | null;
+
 export default function UnitDetailPage() {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
     const isDark = useIsDark();
+    const toast = useToast();
+
     const gridColor = isDark ? '#374151' : '#E5E7EB';
     const tickColor = '#9CA3AF';
     const tooltipStyle = {
@@ -78,8 +90,12 @@ export default function UnitDetailPage() {
 
     const [powerState, setPowerState] = useState(false);
     const [waterState, setWaterState] = useState(false);
-    const [timeRange, setTimeRange] = useState<TimeRange>("Real-Time");
+    const [period, setPeriod] = useState<TimePeriod>("live");
     const [isLogsOpen, setIsLogsOpen] = useState(false);
+
+    // Confirmation modal state
+    const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
+    const [actionPending, setActionPending] = useState(false);
 
     const [isConnected, setIsConnected] = useState(false);
     const [mqttClient, setMqttClient] = useState<mqtt.MqttClient | null>(null);
@@ -88,6 +104,7 @@ export default function UnitDetailPage() {
     const [liveLogs, setLiveLogs] = useState<LogEntry[]>([]);
 
     const [historicalTrends, setHistoricalTrends] = useState<{ time: string; powerVal: number; waterVal: number; }[]>([]);
+    const [trendLoading, setTrendLoading] = useState(false);
 
     const [energyStats, setEnergyStats] = useState({ total_kwh: 0, active_power_w: 0 });
     const [waterStats, setWaterStats] = useState({ total_m3: 0, flow_rate_lpm: 0 });
@@ -121,23 +138,32 @@ export default function UnitDetailPage() {
             .finally(() => setLoadingInfo(false));
     }, [id]);
 
+    // Load historical trends
     useEffect(() => {
-        if (!unitInfo?.unit || timeRange === "Real-Time") return;
-        const period = timeRange === "Today" ? "daily" : "monthly";
-        fetchApi(`/reporting/trends/${encodeURIComponent(unitInfo.unit)}?period=${period}`)
+        if (!unitInfo?.unit || period === "live") return;
+        setTrendLoading(true);
+        const apiPeriod = period === "monthly" ? "monthly" : "daily";
+        fetchApi(`/reporting/trends/${encodeURIComponent(unitInfo.unit)}?period=${apiPeriod}`)
             .then(data => {
-                const mapped = (data || []).map((t: { bucket: string; kwh?: string; waterM3?: string; water_m3?: string; }) => ({
-                    time: new Date(t.bucket).toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric' }),
+                let mapped = (data || []).map((t: { bucket: string; kwh?: string; waterM3?: string; water_m3?: string; }) => ({
+                    time: period === "monthly"
+                        ? new Date(t.bucket).toLocaleDateString('id-ID', { month: 'short', year: '2-digit' })
+                        : new Date(t.bucket).toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric' }),
                     powerVal: parseFloat(t.kwh || "0"),
                     waterVal: parseFloat(t.waterM3 || t.water_m3 || "0"),
                 }));
+                if (period === "weekly") mapped = mapped.slice(-7);
                 setHistoricalTrends(mapped);
             })
-            .catch(() => {});
-    }, [unitInfo?.unit, timeRange]);
+            .catch(() => setHistoricalTrends([]))
+            .finally(() => setTrendLoading(false));
+    }, [unitInfo?.unit, period]);
 
+    // MQTT live connection
     useEffect(() => {
-        if (!unitInfo?.meterSerial) return;
+        if (!unitInfo?.meterSerial || period !== "live") {
+            return;
+        }
 
         const client = mqtt.connect(MQTT_CONFIG.brokerUrl, MQTT_CONFIG.options);
         const telemetryTopic = `device/${unitInfo.meterSerial}/data`;
@@ -153,15 +179,13 @@ export default function UnitDetailPage() {
 
             try {
                 let parsed: IoTPayload | null = null;
-                
-                // Try MessagePack first (standard for v2 / mobile)
+
                 try {
                     const decoded = msgpackDecode(new Uint8Array(message)) as IoTPayload;
                     if (decoded && (decoded.p !== undefined || decoded.wf !== undefined)) {
                         parsed = decoded;
                     }
                 } catch {
-                    // Fallback to legacy fixed-length binary
                     parsed = decodeTelemetry(new Uint8Array(message));
                 }
 
@@ -176,10 +200,10 @@ export default function UnitDetailPage() {
                     if (parsed.rs !== undefined) setPowerState(parsed.rs === 1);
 
                     if (parsed.p !== undefined) {
-                        setRealTimePower(prev => [...prev.slice(-59), { time: timeStr, value: parsed.p ?? 0, timestamp: now.toISOString() }]);
+                        setRealTimePower(prev => [...prev.slice(-59), { time: timeStr, value: parsed!.p ?? 0, timestamp: now.toISOString() }]);
                     }
                     if (parsed.wf !== undefined) {
-                        setRealTimeWater(prev => [...prev.slice(-59), { time: timeStr, value: parsed.wf ?? 0, timestamp: now.toISOString() }]);
+                        setRealTimeWater(prev => [...prev.slice(-59), { time: timeStr, value: parsed!.wf ?? 0, timestamp: now.toISOString() }]);
                     }
 
                     setWaterStats({ total_m3: parsed.wt ?? waterStats.total_m3, flow_rate_lpm: parsed.wf ?? 0 });
@@ -203,37 +227,59 @@ export default function UnitDetailPage() {
         });
 
         setMqttClient(client);
-        return () => { client.end(); };
-    }, [unitInfo?.meterSerial]);
+        return () => {
+            client.end();
+            setIsConnected(false);
+            setMqttClient(null);
+        };
+    }, [unitInfo?.meterSerial, period]);
 
-    const handlePowerToggle = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const newState = e.target.checked;
-        setPowerState(newState);
-        if (id) {
-            fetchApi(`/unit/${id}/relay`, { method: 'PATCH', body: JSON.stringify({ relayStatus: newState }) }).catch(() => {});
-        }
-        if (unitInfo?.meterSerial && mqttClient && isConnected) {
-            const cmdTopic = `device/${unitInfo.meterSerial}/command`;
-            const payload = encodeCommand('relay', newState ? 1 : 0);
-            mqttClient.publish(cmdTopic, payload as unknown as string);
-            setLiveLogs(prev => [{
-                timestamp: new Date().toISOString(), value: newState ? 1 : 0, unit: 'CMD',
-                rawPayload: `OUTGOING [Binary] ${cmdTopic}: relay=${newState ? 1 : 0} (0x${payload[0].toString(16).toUpperCase()}) 1B`,
-            }, ...prev.slice(0, 49)]);
-        }
-    };
-
-    const handleWaterToggle = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const newState = e.target.checked;
-        setWaterState(newState);
-        if (unitInfo?.meterSerial && mqttClient && isConnected) {
-            const cmdTopic = `device/${unitInfo.meterSerial}/command`;
-            const payload = encodeCommand('valve', newState ? 1 : 0);
-            mqttClient.publish(cmdTopic, payload as unknown as string);
-            setLiveLogs(prev => [{
-                timestamp: new Date().toISOString(), value: newState ? 1 : 0, unit: 'CMD',
-                rawPayload: `OUTGOING [Binary] ${cmdTopic}: valve=${newState ? 1 : 0} (0x${payload[0].toString(16).toUpperCase()}) 1B`,
-            }, ...prev.slice(0, 49)]);
+    const handleConfirm = async () => {
+        if (!confirmAction) return;
+        setActionPending(true);
+        try {
+            if (confirmAction.type === 'delete') {
+                await fetchApi(`/unit/${id}`, { method: 'DELETE' });
+                toast.success(`Unit ${unitInfo?.unit} deleted.`);
+                navigate('/devices');
+                return;
+            }
+            if (confirmAction.type === 'power') {
+                const newState = confirmAction.next;
+                setPowerState(newState);
+                if (id) {
+                    await fetchApi(`/unit/${id}/relay`, { method: 'PATCH', body: JSON.stringify({ relayStatus: newState }) });
+                }
+                if (unitInfo?.meterSerial && mqttClient && isConnected) {
+                    const cmdTopic = `device/${unitInfo.meterSerial}/command`;
+                    const payload = encodeCommand('relay', newState ? 1 : 0);
+                    mqttClient.publish(cmdTopic, payload as unknown as string);
+                    setLiveLogs(prev => [{
+                        timestamp: new Date().toISOString(), value: newState ? 1 : 0, unit: 'CMD',
+                        rawPayload: `OUTGOING [Binary] ${cmdTopic}: relay=${newState ? 1 : 0} (0x${payload[0].toString(16).toUpperCase()}) 1B`,
+                    }, ...prev.slice(0, 49)]);
+                }
+                toast.success(`Power supply ${newState ? 'enabled' : 'disabled'}.`);
+            }
+            if (confirmAction.type === 'water') {
+                const newState = confirmAction.next;
+                setWaterState(newState);
+                if (unitInfo?.meterSerial && mqttClient && isConnected) {
+                    const cmdTopic = `device/${unitInfo.meterSerial}/command`;
+                    const payload = encodeCommand('valve', newState ? 1 : 0);
+                    mqttClient.publish(cmdTopic, payload as unknown as string);
+                    setLiveLogs(prev => [{
+                        timestamp: new Date().toISOString(), value: newState ? 1 : 0, unit: 'CMD',
+                        rawPayload: `OUTGOING [Binary] ${cmdTopic}: valve=${newState ? 1 : 0} (0x${payload[0].toString(16).toUpperCase()}) 1B`,
+                    }, ...prev.slice(0, 49)]);
+                }
+                toast.success(`Water valve ${newState ? 'opened' : 'closed'}.`);
+            }
+        } catch (err) {
+            toast.error(err instanceof Error ? err.message : 'Action failed');
+        } finally {
+            setActionPending(false);
+            setConfirmAction(null);
         }
     };
 
@@ -245,12 +291,63 @@ export default function UnitDetailPage() {
     }
 
     const isOnline = unitInfo.status === "Online";
-    const displayPowerData = timeRange === "Real-Time" ? realTimePower : historicalTrends.map(t => ({ time: t.time, value: t.powerVal }));
-    const displayWaterData = timeRange === "Real-Time" ? realTimeWater : historicalTrends.map(t => ({ time: t.time, value: t.waterVal }));
+    const isLive = period === "live";
+    const displayPowerData = isLive ? realTimePower : historicalTrends.map(t => ({ time: t.time, value: t.powerVal }));
+    const displayWaterData = isLive ? realTimeWater : historicalTrends.map(t => ({ time: t.time, value: t.waterVal }));
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center justify-between">
+            {/* Confirmation Modal */}
+            {confirmAction && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                    <div className="w-full max-w-sm rounded-xl bg-white dark:bg-gray-800 shadow-xl ring-1 ring-gray-900/5 dark:ring-gray-700 p-6 space-y-4">
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                            {confirmAction.type === 'delete'
+                                ? 'Delete Unit'
+                                : confirmAction.type === 'power'
+                                ? `${confirmAction.next ? 'Enable' : 'Disable'} Power Supply`
+                                : `${confirmAction.next ? 'Open' : 'Close'} Water Valve`
+                            }
+                        </h3>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                            {confirmAction.type === 'delete'
+                                ? `This will permanently delete unit ${unitInfo.unit}. This action cannot be undone.`
+                                : confirmAction.type === 'power'
+                                ? confirmAction.next
+                                    ? 'Main grid will be reconnected. Ensure the unit is ready.'
+                                    : 'Power to this unit will be cut. All electrical appliances will turn off.'
+                                : confirmAction.next
+                                    ? 'Water valve will be opened. Water supply will resume.'
+                                    : 'Water supply to this unit will be stopped.'
+                            }
+                        </p>
+                        <div className="flex gap-3 justify-end">
+                            <button
+                                disabled={actionPending}
+                                onClick={() => setConfirmAction(null)}
+                                className="rounded-md border border-gray-200 dark:border-gray-600 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                disabled={actionPending}
+                                onClick={() => void handleConfirm()}
+                                className={cn(
+                                    "rounded-md px-4 py-2 text-sm font-medium text-white disabled:opacity-60 transition-colors",
+                                    confirmAction.type === 'delete' || ('next' in confirmAction && confirmAction.next === false)
+                                        ? "bg-red-600 hover:bg-red-700"
+                                        : "bg-primary hover:bg-primary/90"
+                                )}
+                            >
+                                {actionPending ? 'Processing...' : 'Confirm'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Header */}
+            <div className="flex items-center justify-between flex-wrap gap-3">
                 <div className="flex items-center space-x-4">
                     <button
                         onClick={() => navigate(-1)}
@@ -273,14 +370,24 @@ export default function UnitDetailPage() {
                         <p className="text-gray-500 dark:text-gray-400">{unitInfo.tenant} · {unitInfo.meterSerial}</p>
                     </div>
                 </div>
-                <div className={cn("px-3 py-1 rounded-full text-xs font-medium flex items-center gap-2 border", isConnected ? "bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800" : "bg-gray-50 dark:bg-gray-700 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-600")}>
-                    {isConnected ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
-                    {isConnected ? "Live Data Connected" : "Connecting..."}
+                <div className="flex items-center gap-3">
+                    <div className={cn("px-3 py-1 rounded-full text-xs font-medium flex items-center gap-2 border", isConnected ? "bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800" : "bg-gray-50 dark:bg-gray-700 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-600")}>
+                        {isConnected ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
+                        {isConnected ? "Live Data Connected" : "Connecting..."}
+                    </div>
+                    <button
+                        onClick={() => setConfirmAction({ type: 'delete' })}
+                        className="flex items-center gap-1.5 rounded-md border border-red-200 dark:border-red-800 px-3 py-1.5 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                    >
+                        <Trash2 className="w-4 h-4" />
+                        Delete Unit
+                    </button>
                 </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-1 space-y-6">
+                    {/* Utility Controls */}
                     <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-6">
                         <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Utility Controls</h2>
 
@@ -293,7 +400,12 @@ export default function UnitDetailPage() {
                                     <span className="font-medium text-gray-900 dark:text-gray-100">Power Supply</span>
                                 </div>
                                 <label className="relative inline-flex items-center cursor-pointer">
-                                    <input type="checkbox" checked={powerState} onChange={handlePowerToggle} className="sr-only peer" />
+                                    <input
+                                        type="checkbox"
+                                        checked={powerState}
+                                        onChange={(e) => setConfirmAction({ type: 'power', next: e.target.checked })}
+                                        className="sr-only peer"
+                                    />
                                     <div className="w-11 h-6 bg-gray-200 dark:bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
                                 </label>
                             </div>
@@ -311,7 +423,12 @@ export default function UnitDetailPage() {
                                     <span className="font-medium text-gray-900 dark:text-gray-100">Water Supply</span>
                                 </div>
                                 <label className="relative inline-flex items-center cursor-pointer">
-                                    <input type="checkbox" checked={waterState} onChange={handleWaterToggle} className="sr-only peer" />
+                                    <input
+                                        type="checkbox"
+                                        checked={waterState}
+                                        onChange={(e) => setConfirmAction({ type: 'water', next: e.target.checked })}
+                                        className="sr-only peer"
+                                    />
                                     <div className="w-11 h-6 bg-gray-200 dark:bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-cyan-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500"></div>
                                 </label>
                             </div>
@@ -321,6 +438,7 @@ export default function UnitDetailPage() {
                         </div>
                     </div>
 
+                    {/* Stats */}
                     <div className="grid grid-cols-1 gap-4">
                         <div className="bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm relative overflow-hidden">
                             <div className="absolute top-0 right-0 p-3">
@@ -377,58 +495,86 @@ export default function UnitDetailPage() {
                 </div>
 
                 <div className="lg:col-span-2 space-y-6">
-                    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-6">
-                        <div className="flex items-center justify-between mb-6">
-                            <h3 className="font-semibold text-gray-900 dark:text-gray-100">Power Consumption</h3>
-                            <select
-                                value={timeRange}
-                                onChange={(e) => setTimeRange(e.target.value as TimeRange)}
-                                className="text-sm border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md px-2 py-1 focus:ring-primary focus:border-primary outline-none"
-                            >
-                                <option value="Real-Time">Real-Time (60m)</option>
-                                <option value="Today">Today</option>
-                                <option value="Custom">Custom Range</option>
-                            </select>
-                        </div>
-                        <div className="h-[250px] w-full min-w-0 min-h-0">
-                            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
-                                <AreaChart data={displayPowerData}>
-                                    <defs>
-                                        <linearGradient id="colorPower" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.2} />
-                                            <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                                        </linearGradient>
-                                    </defs>
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
-                                    <XAxis dataKey="time" axisLine={false} tickLine={false} tick={{ fill: tickColor, fontSize: 11 }} />
-                                    <YAxis axisLine={false} tickLine={false} tick={{ fill: tickColor, fontSize: 11 }} width={36} />
-                                    <RechartsTooltip contentStyle={tooltipStyle} />
-                                    <Area type="stepAfter" dataKey="value" stroke="#3b82f6" strokeWidth={2} fillOpacity={1} fill="url(#colorPower)" dot={false} activeDot={{ r: 4 }} />
-                                </AreaChart>
-                            </ResponsiveContainer>
+                    {/* Period tabs - same style as mobile */}
+                    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-4">
+                        <div className="flex gap-1">
+                            {PERIODS.map(({ id: pid, label }) => (
+                                <button
+                                    key={pid}
+                                    onClick={() => setPeriod(pid)}
+                                    className={cn(
+                                        "flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-xs font-semibold transition-all",
+                                        period === pid
+                                            ? pid === "live"
+                                                ? "bg-red-500 text-white shadow-sm"
+                                                : "bg-primary text-white shadow-sm"
+                                            : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700"
+                                    )}
+                                >
+                                    {pid === "live" && <Radio className={cn("w-2.5 h-2.5", period === "live" && isConnected ? "animate-pulse" : "")} />}
+                                    {label}
+                                </button>
+                            ))}
                         </div>
                     </div>
 
+                    {/* Power Chart */}
+                    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-6">
+                        <div className="flex items-center justify-between mb-6">
+                            <h3 className="font-semibold text-gray-900 dark:text-gray-100">Power Consumption</h3>
+                            <span className="text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
+                                {isLive ? "Live (W)" : period === "daily" ? "Harian (KWh)" : period === "weekly" ? "Mingguan (KWh)" : "Bulanan (KWh)"}
+                            </span>
+                        </div>
+                        {trendLoading ? (
+                            <div className="h-[250px] flex items-center justify-center text-sm text-gray-400">Loading...</div>
+                        ) : (
+                            <div className="h-[250px] w-full min-w-0 min-h-0">
+                                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+                                    <AreaChart data={displayPowerData}>
+                                        <defs>
+                                            <linearGradient id="colorPower" x1="0" y1="0" x2="0" y2="1">
+                                                <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.2} />
+                                                <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                                            </linearGradient>
+                                        </defs>
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
+                                        <XAxis dataKey="time" axisLine={false} tickLine={false} tick={{ fill: tickColor, fontSize: 11 }} />
+                                        <YAxis axisLine={false} tickLine={false} tick={{ fill: tickColor, fontSize: 11 }} width={36} />
+                                        <RechartsTooltip contentStyle={tooltipStyle} />
+                                        <Area type="stepAfter" dataKey="value" stroke="#3b82f6" strokeWidth={2} fillOpacity={1} fill="url(#colorPower)" dot={false} activeDot={{ r: 4 }} />
+                                    </AreaChart>
+                                </ResponsiveContainer>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Water Chart */}
                     <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-6">
                         <div className="flex items-center justify-between mb-6">
                             <h3 className="font-semibold text-gray-900 dark:text-gray-100">Water Consumption</h3>
                             <span className="text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
-                                {timeRange} View
+                                {isLive ? "Live (L/min)" : period === "daily" ? "Harian (m³)" : period === "weekly" ? "Mingguan (m³)" : "Bulanan (m³)"}
                             </span>
                         </div>
-                        <div className="h-[250px] w-full min-w-0 min-h-0">
-                            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
-                                <LineChart data={displayWaterData}>
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
-                                    <XAxis dataKey="time" axisLine={false} tickLine={false} tick={{ fill: tickColor, fontSize: 11 }} />
-                                    <YAxis axisLine={false} tickLine={false} tick={{ fill: tickColor, fontSize: 11 }} width={36} />
-                                    <RechartsTooltip contentStyle={tooltipStyle} />
-                                    <Line type="stepAfter" dataKey="value" stroke="#06b6d4" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
-                                </LineChart>
-                            </ResponsiveContainer>
-                        </div>
+                        {trendLoading ? (
+                            <div className="h-[250px] flex items-center justify-center text-sm text-gray-400">Loading...</div>
+                        ) : (
+                            <div className="h-[250px] w-full min-w-0 min-h-0">
+                                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+                                    <LineChart data={displayWaterData}>
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
+                                        <XAxis dataKey="time" axisLine={false} tickLine={false} tick={{ fill: tickColor, fontSize: 11 }} />
+                                        <YAxis axisLine={false} tickLine={false} tick={{ fill: tickColor, fontSize: 11 }} width={36} />
+                                        <RechartsTooltip contentStyle={tooltipStyle} />
+                                        <Line type="stepAfter" dataKey="value" stroke="#06b6d4" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
+                                    </LineChart>
+                                </ResponsiveContainer>
+                            </div>
+                        )}
                     </div>
 
+                    {/* Raw Logs */}
                     <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
                         <button
                             onClick={() => setIsLogsOpen(!isLogsOpen)}

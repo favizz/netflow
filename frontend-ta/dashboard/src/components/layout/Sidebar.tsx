@@ -24,7 +24,11 @@ const navigation = [
     { name: "FAQ", href: "/faq", icon: HelpCircle },
 ];
 
-export function Sidebar() {
+interface SidebarProps {
+    onClose?: () => void;
+}
+
+export function Sidebar({ onClose }: SidebarProps) {
     const { pathname } = useLocation();
     const navigate = useNavigate();
     const [showLogoutModal, setShowLogoutModal] = useState(false);
@@ -61,6 +65,7 @@ export function Sidebar() {
                                 <Link
                                     key={item.name}
                                     to={item.href}
+                                    onClick={onClose}
                                     className={cn(
                                         "group flex items-center rounded-md px-2 py-2 text-sm font-medium transition-colors",
                                         isActive
