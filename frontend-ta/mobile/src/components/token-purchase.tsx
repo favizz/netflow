@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { CheckCircle, Zap, Droplets, QrCode, Building2, Copy, Check, ArrowLeft, Info, Clock, Wallet } from "lucide-react"
+import { CheckCircle, QrCode, Building2, Copy, Check, ArrowLeft, Info, Clock, Wallet } from "lucide-react"
 import { toast } from "sonner"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -130,12 +130,12 @@ interface TokenPurchaseProps {
 
 export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
   const [step, setStep] = useState<Step>("amount")
-  const [utilityType, setUtilityType] = useState<"electricity" | "water">("electricity")
   const [selectedPackage, setSelectedPackage] = useState<number | null>(null)
   const [customAmount, setCustomAmount] = useState("")
   const [selectedOption, setSelectedOption] = useState<PaymentOption | null>(null)
   const [energyTariff, setEnergyTariff] = useState<number>(DEFAULT_TARIFF.kwh)
-  const [currentBalance, setCurrentBalance] = useState("0 KWh")
+  const [balanceRp, setBalanceRp] = useState<number | null>(null)
+  const [balanceKwh, setBalanceKwh] = useState<number | null>(null)
   const [loading, setLoading] = useState(false)
   const [initResult, setInitResult] = useState<{ transactionId: string; gatewayReference: string; vaNumber?: string; qrUrl?: string } | null>(null)
   const [transactionId, setTransactionId] = useState("")
@@ -158,11 +158,11 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
       try {
         const data = await api.getDashboard(unitId)
         if (!active) return
-        setCurrentBalance(`${data.summary.remainingEstimate.kwh.toFixed(2)} KWh`)
+        setBalanceRp(data.summary.balance)
+        setBalanceKwh(data.summary.remainingEstimate.kwh)
         setEnergyTariff(data.summary.energyTariff)
       } catch {
-        if (!active) return
-        setCurrentBalance("N/A")
+        /* balance stays null — UI shows dash */
       }
     }
     void loadSummary()
@@ -263,7 +263,7 @@ const vaNumber = initResult?.vaNumber || "Mendapatkan nomor..."
         )}
         <div>
           <h1 className="text-base font-bold text-foreground leading-tight">
-            {step === "amount" ? "Beli Token" : step === "method" ? "Pilih Metode Pembayaran" : "Instruksi Pembayaran"}
+            {step === "amount" ? "Isi Saldo" : step === "method" ? "Pilih Metode Pembayaran" : "Instruksi Pembayaran"}
           </h1>
           <StepIndicator current={step} />
         </div>
@@ -273,28 +273,18 @@ const vaNumber = initResult?.vaNumber || "Mendapatkan nomor..."
         {/* ── STEP 1: Amount ──────────────────────────────────────────────── */}
         {step === "amount" && (
           <>
-            {/* Utility toggle */}
-            <div className={interactive.segRoot}>
-              {(["electricity", "water"] as const).map((type) => (
-                <button
-                  key={type}
-                  onClick={() => setUtilityType(type)}
-                  className={`${interactive.segItem} ${utilityType === type ? interactive.segActive : interactive.segInactive}`}
-                >
-                  {type === "electricity"
-                    ? <Zap size={16} className={utilityType === type ? "fill-primary text-primary" : ""} />
-                    : <Droplets size={16} className={utilityType === type ? "fill-primary text-primary" : ""} />
-                  }
-                  {type === "electricity" ? "Listrik" : "Air"}
-                </button>
-              ))}
-            </div>
-
             {/* Balance card */}
             <div className="bg-primary/5 rounded-3xl p-5 text-center">
               <p className="text-xs text-muted-foreground font-medium mb-1">Sisa Saldo</p>
-              <p className="text-4xl font-bold text-primary font-mono tracking-tight">{currentBalance}</p>
-              <p className="text-xs text-muted-foreground mt-1">Unit {unitId}</p>
+              <p className="text-4xl font-bold text-primary font-mono tracking-tight">
+                {balanceRp !== null ? `Rp ${balanceRp.toLocaleString("id-ID")}` : "—"}
+              </p>
+              {balanceKwh !== null && (
+                <p className="text-xs text-muted-foreground mt-1.5">
+                  ⚡ {balanceKwh.toFixed(2)} KWh · 💧 {(balanceKwh / 2.5).toFixed(3)} m³
+                </p>
+              )}
+              <p className="text-xs text-muted-foreground mt-0.5">Unit {unitId}</p>
             </div>
 
             {/* Package grid */}
@@ -318,7 +308,10 @@ const vaNumber = initResult?.vaNumber || "Mendapatkan nomor..."
                       )}
                       <p className="font-bold text-base text-foreground">Rp {nominal.toLocaleString("id-ID")}</p>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        ≈ {(nominal / energyTariff).toFixed(1)} {utilityType === "electricity" ? "KWh" : "m³"}
+                        ⚡ {(nominal / energyTariff).toFixed(1)} KWh
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        💧 {(nominal / (energyTariff * 2.5)).toFixed(2)} m³
                       </p>
                     </button>
                   )
@@ -539,7 +532,7 @@ const vaNumber = initResult?.vaNumber || "Mendapatkan nomor..."
       <div className="fixed bottom-16 left-0 right-0 p-4 bg-background/95 backdrop-blur-sm border-t border-border space-y-2">
         {step === "amount" && (
           <Button onClick={goToMethod} disabled={selectedAmount < 1000} className={cta.primary}>
-            Pilih Metode Pembayaran
+            Pilih Metode Pembayaran Listrik &amp; Air
           </Button>
         )}
         {step === "method" && (

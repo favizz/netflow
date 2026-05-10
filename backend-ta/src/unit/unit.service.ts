@@ -49,7 +49,10 @@ export class UnitService {
 
   findAll(buildingId?: number) {
     if (buildingId) {
-      return this.unitRepo.find({ where: { building_id: buildingId }, order: { unit_no: 'ASC' } });
+      return this.unitRepo.find({
+        where: { building_id: buildingId },
+        order: { unit_no: 'ASC' },
+      });
     }
     return this.unitRepo.find({ order: { unit_no: 'ASC' } });
   }

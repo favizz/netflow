@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { X, Check, Loader2, ChevronRight, ChevronLeft } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { X, Check, Loader2, ChevronRight, ChevronLeft, Search } from "lucide-react";
 import { fetchApi } from "@/lib/api";
 import { useToast } from "@/components/layout/ToastProvider";
 
@@ -25,6 +25,10 @@ export function AddDeviceModal({ isOpen, onClose, onSuccess }: AddDeviceModalPro
     const [selectedResident, setSelectedResident] = useState<string>("");
     const [loadingResidents, setLoadingResidents] = useState(false);
 
+    const [residentSearch, setResidentSearch] = useState("");
+    const [residentDropdownOpen, setResidentDropdownOpen] = useState(false);
+    const residentSearchRef = useRef<HTMLInputElement>(null);
+
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const toast = useToast();
@@ -35,6 +39,8 @@ export function AddDeviceModal({ isOpen, onClose, onSuccess }: AddDeviceModalPro
             setFormData({ unit_no: "", device_id: "", balance: "0" });
             setSelectedBuildingId(null);
             setSelectedResident("");
+            setResidentSearch("");
+            setResidentDropdownOpen(false);
             setError(null);
             
             // Fetch buildings
@@ -227,16 +233,56 @@ export function AddDeviceModal({ isOpen, onClose, onSuccess }: AddDeviceModalPro
                             {loadingResidents ? (
                                 <div className="flex items-center text-sm text-gray-500"><Loader2 className="w-4 h-4 mr-2 animate-spin"/> Loading users...</div>
                             ) : (
-                                <select 
-                                    value={selectedResident} 
-                                    onChange={(e) => setSelectedResident(e.target.value)}
-                                    className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                                >
-                                    <option value="">-- No assignment yet --</option>
-                                    {residents.map(r => (
-                                        <option key={r.email} value={r.email}>{r.name || r.email} ({r.email})</option>
-                                    ))}
-                                </select>
+                                <div className="relative">
+                                    <div className="relative">
+                                        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400 pointer-events-none" />
+                                        <input
+                                            ref={residentSearchRef}
+                                            type="text"
+                                            value={residentSearch}
+                                            onFocus={() => setResidentDropdownOpen(true)}
+                                            onChange={(e) => { setResidentSearch(e.target.value); setResidentDropdownOpen(true); }}
+                                            placeholder={selectedResident ? residents.find(r => r.email === selectedResident)?.name || selectedResident : "Search resident..."}
+                                            className="block w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 pl-9 pr-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                                        />
+                                    </div>
+                                    {residentDropdownOpen && (
+                                        <div className="absolute z-10 mt-1 w-full max-h-48 overflow-auto rounded-md bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 shadow-lg">
+                                            <button
+                                                type="button"
+                                                onMouseDown={(e) => { e.preventDefault(); setSelectedResident(""); setResidentSearch(""); setResidentDropdownOpen(false); }}
+                                                className="w-full text-left px-3 py-2 text-sm text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 italic"
+                                            >
+                                                — No assignment yet —
+                                            </button>
+                                            {residents
+                                                .filter(r => {
+                                                    const q = residentSearch.toLowerCase();
+                                                    return !q || r.email.toLowerCase().includes(q) || (r.name || '').toLowerCase().includes(q);
+                                                })
+                                                .map(r => (
+                                                    <button
+                                                        key={r.email}
+                                                        type="button"
+                                                        onMouseDown={(e) => { e.preventDefault(); setSelectedResident(r.email); setResidentSearch(""); setResidentDropdownOpen(false); }}
+                                                        className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 ${selectedResident === r.email ? 'bg-primary/10 text-primary font-medium' : 'text-gray-900 dark:text-gray-100'}`}
+                                                    >
+                                                        <span className="font-medium">{r.name || r.email}</span>
+                                                        {r.name && <span className="ml-1 text-gray-400 text-xs">{r.email}</span>}
+                                                    </button>
+                                                ))
+                                            }
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                            {selectedResident && (
+                                <div className="flex items-center justify-between rounded-md bg-primary/5 dark:bg-primary/10 border border-primary/20 px-3 py-2">
+                                    <span className="text-sm text-primary font-medium">{residents.find(r => r.email === selectedResident)?.name || selectedResident}</span>
+                                    <button type="button" onClick={() => { setSelectedResident(""); setResidentSearch(""); }} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+                                        <X className="w-4 h-4" />
+                                    </button>
+                                </div>
                             )}
                             <p className="text-xs text-gray-500">You can also assign this later from the Users page.</p>
                         </div>

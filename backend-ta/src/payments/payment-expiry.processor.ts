@@ -46,7 +46,12 @@ export class PaymentExpiryProcessor
       'TOKEN_PURCHASE',
       'transaction',
       transactionId,
-      { amount: Number(tx.amount_rp), method: tx.method, status: 'failed', reason: 'expired' },
+      {
+        amount: Number(tx.amount_rp),
+        method: tx.method,
+        status: 'failed',
+        reason: 'expired',
+      },
       'failure',
     );
   }
