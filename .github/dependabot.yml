@@ -37,6 +37,13 @@ updates:
     groups:
       mobile-deps:
         patterns: ["*"]
+    ignore:
+      - dependency-name: "recharts"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-day-picker"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-resizable-panels"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: pip
     directory: /ml-service
