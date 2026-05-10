@@ -8,6 +8,7 @@ import type { AnomalyItem, AnomalyType } from './anomaly.types';
 import { Anomaly } from './entities/anomaly.entity';
 import { encodeCommand } from '../common/binary-codec';
 import { NotificationService } from '../notification/notification.service';
+import { ResidentsService } from '../residents/residents.service';
 
 // ── Detection thresholds ────────────────────────────────────────────────────
 const MCB_WATT_LIMIT = 1300;
@@ -41,6 +42,7 @@ export class AnomalyService implements OnModuleInit {
     private readonly anomalyRepo: Repository<Anomaly>,
     @Inject('MQTT_CLIENT') private readonly mqttClient: ClientProxy,
     private readonly notificationService: NotificationService,
+    private readonly residentsService: ResidentsService,
   ) {}
 
   onModuleInit() {
@@ -185,6 +187,22 @@ export class AnomalyService implements OnModuleInit {
                 comp.message,
               )
               .catch(() => {});
+          }
+
+          // Admin Telegram Notification
+          if (comp.severity === 'critical' || comp.severity === 'warning') {
+            void this.residentsService.findAdmins().then((admins) => {
+              for (const admin of admins) {
+                if (admin.telegram_chat_id) {
+                  void this.notificationService
+                    .sendTelegram(
+                      admin.telegram_chat_id,
+                      `🚨 *[Admin Alert]* ${comp.anomalyType.toUpperCase()} — Unit ${unitNo}\n\n${comp.message}`,
+                    )
+                    .catch(() => {});
+                }
+              }
+            }).catch(() => {});
           }
         }
       }

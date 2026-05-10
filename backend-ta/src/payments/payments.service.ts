@@ -14,6 +14,7 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { UnitService } from '../unit/unit.service';
 import { AuditLogService } from '../audit-log/audit-log.service';
+import { NotificationService } from '../notification/notification.service';
 import { Transaction } from './entities/transaction.entity';
 import { InitiateTopupDto } from './dto/initiate-topup.dto';
 import { PAYMENT_EXPIRY_QUEUE } from './payment-expiry.processor';
@@ -36,6 +37,7 @@ export class PaymentsService {
     @InjectQueue(PAYMENT_EXPIRY_QUEUE)
     private readonly expiryQueue: Queue,
     @Inject('MQTT_CLIENT') private readonly mqttClient: ClientProxy,
+    private readonly notificationService: NotificationService,
   ) {}
 
   async initiateTopup(dto: InitiateTopupDto) {
@@ -197,6 +199,15 @@ export class PaymentsService {
             payload,
           );
         }
+        if (updatedUnit.resident_email) {
+          void this.notificationService
+            .sendResidentNotification(
+              updatedUnit.resident_email,
+              `[NetFlow] Top-up Berhasil — Unit ${tx.unit_no}`,
+              `✅ Pembayaran Rp ${Number(tx.amount_rp).toLocaleString('id-ID')} berhasil dikonfirmasi.\n\nUnit: ${tx.unit_no}\nMetode: ${tx.method}\nID Transaksi: ${tx.id}\n\nSaldo akan segera diperbarui.`,
+            )
+            .catch(() => {});
+        }
       }
 
       await this.txRepo.save(tx);
@@ -242,6 +253,15 @@ export class PaymentsService {
         `Pushing top-up of Rp ${tx.amount_rp} to device [${updatedUnit.device_id}]`,
       );
       this.mqttClient.emit(`device/${updatedUnit.device_id}/topup`, payload);
+    }
+    if (updatedUnit.resident_email) {
+      void this.notificationService
+        .sendResidentNotification(
+          updatedUnit.resident_email,
+          `[NetFlow] Top-up Berhasil — Unit ${tx.unit_no}`,
+          `✅ Pembayaran Rp ${Number(tx.amount_rp).toLocaleString('id-ID')} berhasil dikonfirmasi.\n\nUnit: ${tx.unit_no}\nMetode: ${tx.method}\nID Transaksi: ${tx.id}\n\nSaldo akan segera diperbarui.`,
+        )
+        .catch(() => {});
     }
     await this.txRepo.save(tx);
 

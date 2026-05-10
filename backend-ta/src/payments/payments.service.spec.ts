@@ -9,6 +9,7 @@ import { PaymentsService } from './payments.service';
 import { Transaction } from './entities/transaction.entity';
 import { UnitService } from '../unit/unit.service';
 import { AuditLogService } from '../audit-log/audit-log.service';
+import { NotificationService } from '../notification/notification.service';
 import { PAYMENT_EXPIRY_QUEUE } from './payment-expiry.processor';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -85,6 +86,7 @@ describe('PaymentsService', () => {
           },
         },
         { provide: 'MQTT_CLIENT', useValue: { emit: jest.fn() } },
+        { provide: NotificationService, useValue: { sendResidentNotification: jest.fn().mockResolvedValue(undefined) } },
       ],
     }).compile();
 
