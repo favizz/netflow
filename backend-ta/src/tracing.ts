@@ -1,7 +1,7 @@
 /**
  * OpenTelemetry distributed tracing bootstrap.
  *
- * Loaded via "node -r ./dist/tracing dist/main" in production.
+ * Loaded via "node -r ./dist/src/tracing dist/src/main" in production.
  * Silently skips if OTel packages are not installed (npm install required).
  *
  * Configure via env:
