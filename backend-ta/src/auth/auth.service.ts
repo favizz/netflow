@@ -65,8 +65,8 @@ export class AuthService {
 
     let googleSub: string;
     let googleEmail: string;
-    let googleName: string | null = null;
-    let googlePicture: string | null = null;
+    let googleName: string | null;
+    let googlePicture: string | null;
 
     try {
       const ticket = await this.googleClient.verifyIdToken({
@@ -195,8 +195,8 @@ export class AuthService {
 
     let googleSub: string;
     let googleEmail: string;
-    let googleName: string | null = null;
-    let googlePicture: string | null = null;
+    let googleName: string | null;
+    let googlePicture: string | null;
 
     try {
       const ticket = await this.googleClient.verifyIdToken({

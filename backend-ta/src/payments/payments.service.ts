@@ -135,7 +135,7 @@ export class PaymentsService {
       };
     } catch (e: any) {
       this.logger.error('Midtrans Error:', e);
-      throw new Error('Gagal initiate pembayaran dengan Midtrans');
+      throw new Error('Gagal initiate pembayaran dengan Midtrans', { cause: e });
     }
   }
 
