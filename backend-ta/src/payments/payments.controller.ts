@@ -4,8 +4,11 @@ import {
   Get,
   Param,
   Post,
+  Req,
   Res,
   UnauthorizedException,
+  UsePipes,
+  ValidationPipe,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { ConfigService } from '@nestjs/config';
@@ -26,7 +29,9 @@ export class PaymentsController {
   }
 
   @Post('webhook/callback')
-  callback(@Body() dto: PaymentWebhookDto) {
+  @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: false }))
+  callback(@Req() req: Request, @Body() dto: PaymentWebhookDto) {
+    this.assertWebhookSource(req);
     return this.paymentsService.handleWebhook(dto);
   }
 

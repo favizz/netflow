@@ -8,6 +8,17 @@ updates:
     groups:
       backend-deps:
         patterns: ["*"]
+    ignore:
+      # eslint, @eslint/js, and typescript-eslint must be upgraded together
+      # across major versions — block individual major bumps to prevent peer dep conflicts
+      - dependency-name: "eslint"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@eslint/js"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "typescript-eslint"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@typescript-eslint/*"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: npm
     directory: /frontend-ta/dashboard

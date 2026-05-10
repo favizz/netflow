@@ -10,6 +10,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { AdminJwtGuard } from '../common/guards/admin-jwt.guard';
+import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CreateUnitDto } from './dto/create-unit.dto';
 import { UpdateUnitDto } from './dto/update-unit.dto';
 import { UnitService } from './unit.service';
@@ -32,11 +33,13 @@ export class UnitController {
     return this.unitService.findAll();
   }
 
+  @UseGuards(JwtAuthGuard)
   @Get('dashboard/:unitNo')
   dashboard(@Param('unitNo') unitNo: string) {
     return this.unitService.getOwnerDashboard(unitNo);
   }
 
+  @UseGuards(JwtAuthGuard)
   @Get('connectivity')
   connectivity(@Query('tower') tower?: string) {
     return this.unitService.getTowerConnectivity(tower);
@@ -88,6 +91,7 @@ export class UnitController {
     );
   }
 
+  @UseGuards(JwtAuthGuard)
   @Get(':unitNo/notifications')
   notifications(@Param('unitNo') unitNo: string) {
     return this.unitService.getUnitNotifications(unitNo);
