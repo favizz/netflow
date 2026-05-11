@@ -3,7 +3,8 @@
     "allow": [
       "WebSearch",
       "Bash(Select-String -Path \"C:\\\\Users\\\\Lenovo\\\\Documents\\\\GitHub\\\\TA-Flowmeter\\\\dev\\\\Laporan-TA\\\\Bab III - Analisis.tex\" -Pattern \"\\\\\\\\\\\\\\\\section\\\\{Proses Implementasi|\\\\\\\\\\\\\\\\section\\\\{Hasil Implementasi|\\\\\\\\\\\\\\\\subsection\\\\{Proses Implementasi|\\\\\\\\\\\\\\\\subsection\\\\{Hasil Implementasi\")",
-      "Bash(Select-Object LineNumber, Line)"
+      "Bash(Select-Object LineNumber, Line)",
+      "Bash(grep -n \"\\\\\\\\\\\\\\\\ref{fig:\" \"C:\\\\Users\\\\Lenovo\\\\Documents\\\\GitHub\\\\TA-Flowmeter\\\\dev\\\\Laporan-TA\\\\Bab III - Analisis.tex\")"
     ]
   }
 }

@@ -182,27 +182,30 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 
     steps:
-      - name: Switch server remote to HTTPS and inject deploy token
-        uses: appleboy/ssh-action@v1.0.3
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          port: ${{ secrets.DEPLOY_PORT }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_KEY }}
-          envs: GH_TOKEN
-          script: |
-            ORIGIN=$(git -C ~/TA-Flowmeter remote get-url origin 2>/dev/null || echo "")
-            if echo "$ORIGIN" | grep -q "git@github.com:"; then
-              REPO_PATH=$(echo "$ORIGIN" | sed 's|git@github.com:||' | sed 's|\.git$||')
-              git -C ~/TA-Flowmeter remote set-url origin "https://github.com/${REPO_PATH}.git"
-              echo "Switched remote to HTTPS"
-            fi
-            git -C ~/TA-Flowmeter config --local credential.helper \
-              "!f() { echo username=x-access-token; echo password=${GH_TOKEN}; }; f"
+      - uses: actions/checkout@v4
 
-      - name: SSH deploy
+      - name: Setup deploy SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf 'Host *\n  StrictHostKeyChecking no\n  UserKnownHostsFile /dev/null\n' > ~/.ssh/config
+
+      - name: Rsync source to server
+        run: |
+          rsync -az --delete \
+            --exclude='.git' \
+            --exclude='node_modules' \
+            --exclude='frontend-ta/dashboard/dist' \
+            --exclude='frontend-ta/mobile/dist' \
+            --exclude='backend-ta/dist' \
+            --exclude='__pycache__' \
+            --exclude='*.pyc' \
+            -e "ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }}" \
+            . \
+            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:~/TA-Flowmeter/
+
+      - name: Run deploy script on server
         uses: appleboy/ssh-action@v1.0.3
         env:
           VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
@@ -213,4 +216,4 @@ jobs:
           key: ${{ secrets.DEPLOY_KEY }}
           envs: VITE_GOOGLE_CLIENT_ID
           script_stop: true
-          script: bash ~/TA-Flowmeter/infra/scripts/deploy.sh
+          script: SKIP_PULL=1 bash ~/TA-Flowmeter/infra/scripts/deploy.sh

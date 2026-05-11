@@ -17,13 +17,6 @@ PREV_COMMIT_FILE="/tmp/netflow_prev_commit"
 
 log() { echo "[deploy] $(date '+%H:%M:%S') $*"; }
 
-# ── Ensure remote uses HTTPS (SSH port 22/443 may be blocked on this host) ──
-ORIGIN=$(git -C "$REPO_DIR" remote get-url origin 2>/dev/null || echo "")
-if echo "$ORIGIN" | grep -q "git@github.com:"; then
-  REPO_PATH=$(echo "$ORIGIN" | sed 's|git@github.com:||' | sed 's|\.git$||')
-  git -C "$REPO_DIR" remote set-url origin "https://github.com/${REPO_PATH}.git"
-  log "Switched remote to HTTPS: https://github.com/${REPO_PATH}.git"
-fi
 
 # ── Pull latest code then re-exec so we always run the newest deploy.sh ──────
 # On the first invocation (NETFLOW_REEXEC unset) we pull and immediately
@@ -33,9 +26,13 @@ if [[ "${NETFLOW_REEXEC:-0}" == "0" ]]; then
   PREV_COMMIT=$(git -C "$REPO_DIR" rev-parse HEAD)
   echo "$PREV_COMMIT" > "$PREV_COMMIT_FILE"
   log "Rollback point saved: ${PREV_COMMIT:0:8}"
-  log "Pulling origin/main..."
-  git -C "$REPO_DIR" reset --hard HEAD
-  git -C "$REPO_DIR" pull origin main
+  if [[ "${SKIP_PULL:-0}" == "0" ]]; then
+    log "Pulling origin/main..."
+    git -C "$REPO_DIR" reset --hard HEAD
+    git -C "$REPO_DIR" pull origin main
+  else
+    log "Code synced by CI — skipping git pull"
+  fi
   NETFLOW_REEXEC=1 exec bash "$REPO_DIR/infra/scripts/deploy.sh" "$@"
 fi
 
