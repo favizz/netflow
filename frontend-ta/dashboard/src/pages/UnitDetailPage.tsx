@@ -264,6 +264,9 @@ export default function UnitDetailPage() {
             if (confirmAction.type === 'water') {
                 const newState = confirmAction.next;
                 setWaterState(newState);
+                if (id) {
+                    await fetchApi(`/unit/${id}/valve`, { method: 'PATCH', body: JSON.stringify({ valveStatus: newState }) });
+                }
                 if (unitInfo?.meterSerial && mqttClient && isConnected) {
                     const cmdTopic = `device/${unitInfo.meterSerial}/command`;
                     const payload = encodeCommand('valve', newState ? 1 : 0);
