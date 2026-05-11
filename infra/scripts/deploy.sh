@@ -45,7 +45,8 @@ log "Rollback point: ${PREV_COMMIT:0:8}"
 start_backend() {
   cd "$REPO_DIR/backend-ta"
   pm2 delete netflow-backend 2>/dev/null || true
-  pm2 start "node -r ./dist/src/tracing dist/src/main" --name netflow-backend
+  pm2 start "node -r ./dist/src/tracing dist/src/main" --name netflow-backend \
+    --env production
   cd "$REPO_DIR"
 }
 
