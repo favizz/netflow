@@ -170,6 +170,8 @@ export default function App() {
     if (!r.unitNo) throw new Error("Unit selection failed")
     setUserUnit(r.unitNo); setAvailableUnits(r.units); setCurrentPage("home")
   }
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
+
   const handleLogout = async () => {
     await api.logout()
     setIsLoggedIn(false); setCurrentPage("home")
@@ -200,7 +202,7 @@ export default function App() {
             {theme === "dark" ? <Sun size={20} /> : <Moon size={20} />}
           </button>
           <button
-            onClick={() => void handleLogout()}
+            onClick={() => setShowLogoutConfirm(true)}
             className={`${interactive.ghost} text-muted-foreground hover:text-destructive`}
             aria-label="Keluar"
           >
@@ -281,6 +283,36 @@ export default function App() {
         </button>
       </nav>
 
+      {/* Logout confirmation modal */}
+      {showLogoutConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4">
+          <div className="w-full max-w-xs rounded-2xl bg-card shadow-xl ring-1 ring-border">
+            <div className="p-6 flex flex-col items-center text-center gap-4">
+              <div className="rounded-full bg-destructive/10 p-3">
+                <LogOut size={22} className="text-destructive" />
+              </div>
+              <div>
+                <h3 className="text-base font-semibold text-foreground">Keluar?</h3>
+                <p className="mt-1 text-sm text-muted-foreground">Sesi aktif akan diakhiri.</p>
+              </div>
+              <div className="flex gap-3 w-full">
+                <button
+                  onClick={() => setShowLogoutConfirm(false)}
+                  className="flex-1 h-11 rounded-xl border border-border text-sm font-semibold text-foreground active:bg-muted transition-colors"
+                >
+                  Batal
+                </button>
+                <button
+                  onClick={() => { setShowLogoutConfirm(false); void handleLogout() }}
+                  className="flex-1 h-11 rounded-xl bg-destructive text-destructive-foreground text-sm font-semibold active:bg-destructive/80 transition-colors"
+                >
+                  Keluar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
