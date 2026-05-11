@@ -70,9 +70,13 @@ rollback() {
 
 # ── Pull latest code ────────────────────────────────────────────────────────
 cd "$REPO_DIR"
-log "Pulling origin/main..."
-git reset --hard HEAD
-git pull origin main
+if [[ "${SKIP_PULL:-0}" == "0" ]]; then
+  log "Pulling origin/main..."
+  git reset --hard HEAD
+  git pull origin main
+else
+  log "Code synced by CI — skipping git pull"
+fi
 
 # ── Backend ─────────────────────────────────────────────────────────────────
 log "Building backend..."
