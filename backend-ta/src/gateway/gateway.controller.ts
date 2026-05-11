@@ -100,6 +100,16 @@ export class GatewayController {
     return this.paymentsService.initiateTopup({ ...dto, unitNo });
   }
 
+  @Get('mobile/:unitNo/topup/status/:transactionId')
+  topupStatus(
+    @Param('unitNo') unitNo: string,
+    @Param('transactionId') transactionId: string,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    assertUnitAccess(user, unitNo);
+    return this.paymentsService.getTopupStatus(unitNo, transactionId);
+  }
+
   @Post('mobile/:unitNo/topup/auto-confirm/:transactionId')
   autoConfirm(
     @Param('unitNo') unitNo: string,

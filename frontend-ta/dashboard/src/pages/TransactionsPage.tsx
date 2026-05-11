@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, Search, ChevronDown } from "lucide-react";
 import { fetchApi } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -37,18 +38,42 @@ function FilterDropdown<T extends string>({ label, options, value, onChange, dis
     displayMap?: Record<string, string>;
 }) {
     const [open, setOpen] = useState(false);
+    const [dropPos, setDropPos] = useState({ top: 0, right: 0 });
+    const btnRef = useRef<HTMLButtonElement>(null);
     const display = value === "All" ? "All" : (displayMap?.[value] ?? value);
+
+    useEffect(() => {
+        if (!open) return;
+        const close = (e: MouseEvent) => {
+            if (!btnRef.current?.contains(e.target as Node)) setOpen(false);
+        };
+        document.addEventListener('mousedown', close);
+        return () => document.removeEventListener('mousedown', close);
+    }, [open]);
+
+    const handleToggle = () => {
+        if (!open && btnRef.current) {
+            const rect = btnRef.current.getBoundingClientRect();
+            setDropPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
+        }
+        setOpen(o => !o);
+    };
+
     return (
         <div className="relative">
             <button
-                onClick={() => setOpen(o => !o)}
+                ref={btnRef}
+                onClick={handleToggle}
                 className="flex items-center gap-2 h-9 rounded-md border border-gray-200 dark:border-gray-600 px-3 text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 bg-white dark:bg-gray-800"
             >
                 {label}: <span className="text-gray-900 dark:text-gray-200 capitalize">{display}</span>
                 <ChevronDown className="h-3.5 w-3.5" />
             </button>
-            {open && (
-                <div className="absolute right-0 mt-1 min-w-[160px] rounded-md bg-white dark:bg-gray-800 py-1 shadow-lg ring-1 ring-black/5 dark:ring-gray-700 z-10">
+            {open && createPortal(
+                <div
+                    style={{ position: 'fixed', top: dropPos.top, right: dropPos.right, zIndex: 9999 }}
+                    className="min-w-[160px] rounded-md bg-white dark:bg-gray-800 py-1 shadow-lg ring-1 ring-black/5 dark:ring-gray-700"
+                >
                     {options.map(o => (
                         <button
                             key={o}
@@ -61,7 +86,8 @@ function FilterDropdown<T extends string>({ label, options, value, onChange, dis
                             {o === "All" ? "All" : (displayMap?.[o] ?? o)}
                         </button>
                     ))}
-                </div>
+                </div>,
+                document.body
             )}
         </div>
     );

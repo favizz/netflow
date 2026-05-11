@@ -171,11 +171,17 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
     if (!initResult) return
     setLoading(true)
     try {
-      const confirmed = await api.autoConfirmTopup(unitId, initResult.transactionId)
-      setTransactionId(confirmed.id)
-      setStep("success")
+      const result = await api.getTopupStatus(unitId, initResult.transactionId)
+      if (result.status === 'success') {
+        setTransactionId(initResult.transactionId)
+        setStep("success")
+      } else if (result.status === 'expired') {
+        toast.error("Transaksi sudah kadaluarsa. Silakan buat transaksi baru.")
+      } else {
+        toast.error("Pembayaran belum terkonfirmasi. Selesaikan pembayaran lalu coba lagi.")
+      }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Konfirmasi gagal. Coba lagi.")
+      toast.error(err instanceof Error ? err.message : "Gagal memeriksa status. Coba lagi.")
     } finally {
       setLoading(false)
     }
@@ -545,6 +551,14 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
           </>
         )}
       </div>
+
+      {/* Payment check loading overlay */}
+      {step === "instruction" && loading && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm gap-3">
+          <div className="h-10 w-10 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+          <p className="text-white text-sm font-medium">Memeriksa pembayaran...</p>
+        </div>
+      )}
 
       {/* Bottom CTA */}
       <div className="fixed bottom-16 left-0 right-0 p-4 bg-background/95 backdrop-blur-sm border-t border-border space-y-2">
