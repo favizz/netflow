@@ -195,6 +195,8 @@ jobs:
         run: |
           rsync -az --delete \
             --exclude='.git' \
+            --exclude='.env' \
+            --exclude='**/.env' \
             --exclude='node_modules' \
             --exclude='frontend-ta/dashboard/dist' \
             --exclude='frontend-ta/mobile/dist' \
