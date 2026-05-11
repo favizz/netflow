@@ -182,6 +182,21 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 
     steps:
+      - name: Configure GitHub SSH on server (port 443 fallback)
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          port: ${{ secrets.DEPLOY_PORT }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_KEY }}
+          script: |
+            mkdir -p ~/.ssh
+            if ! grep -q "ssh.github.com" ~/.ssh/config 2>/dev/null; then
+              printf '\nHost github.com\n  Hostname ssh.github.com\n  Port 443\n  StrictHostKeyChecking no\n' >> ~/.ssh/config
+              chmod 600 ~/.ssh/config
+              echo "Configured GitHub SSH to use port 443"
+            fi
+
       - name: SSH deploy
         uses: appleboy/ssh-action@v1.0.3
         env:
