@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { useTheme } from "next-themes"
 import {
   Home, ShoppingCart, LogOut, Zap, Sun, Moon,
@@ -32,6 +32,8 @@ const ANOMALY_META: Record<
   topup_success:      { label: "Pembelian Token Berhasil", Icon: CheckCircle,   action: "Token otomatis terisi. Cek saldo di Beranda." },
 }
 
+const MOBILE_NOTIF_KEY = 'mobile_notif_last_read'
+
 // ── App ───────────────────────────────────────────────────────────────────────
 export default function App() {
   const { theme, setTheme } = useTheme()
@@ -40,6 +42,20 @@ export default function App() {
   const [userUnit, setUserUnit]               = useState("")
   const [availableUnits, setAvailableUnits]   = useState<UnitSummary[]>([])
   const [anomalies, setAnomalies]             = useState<AnomalyItem[]>([])
+  const [notifLastRead, setNotifLastRead]     = useState<Date | null>(() => {
+    try { const v = localStorage.getItem(MOBILE_NOTIF_KEY); return v ? new Date(v) : null } catch { return null }
+  })
+  const prevPage = useRef<Page>("home")
+
+  // ── Mark notifications as read when leaving the page ─────────────────────
+  useEffect(() => {
+    if (prevPage.current === "notifications" && currentPage !== "notifications") {
+      const now = new Date()
+      setNotifLastRead(now)
+      try { localStorage.setItem(MOBILE_NOTIF_KEY, now.toISOString()) } catch { /* ignore */ }
+    }
+    prevPage.current = currentPage
+  }, [currentPage])
 
   // ── Force-logout when tokens are cleared mid-session ─────────────────────
   useEffect(() => {
@@ -89,8 +105,9 @@ export default function App() {
     return () => { active = false; clearInterval(id) }
   }, [isLoggedIn, userUnit])
 
-  const criticalCount = anomalies.filter((a) => a.severity === "critical").length
-  const alertCount    = anomalies.length
+  const unreadAnomalies = anomalies.filter(a => !notifLastRead || new Date(a.detectedAt) > notifLastRead)
+  const criticalCount   = unreadAnomalies.filter(a => a.severity === "critical").length
+  const alertCount      = unreadAnomalies.length
 
   // ── Auth helpers ──────────────────────────────────────────────────────────
   const applyLoginResult = async (result: { unitNo: string | null; units: UnitSummary[] }) => {
@@ -125,12 +142,31 @@ export default function App() {
     <div className="flex flex-col h-screen overflow-hidden bg-background">
 
       {/* ── Header ─────────────────────────────────────────────────────── */}
-      <header className="flex-none z-30 bg-card border-b border-border flex items-center justify-between px-5 h-14">
-        <div className="flex items-center">
-          <img src="/netflow-logo-white.png" alt="NetFlow" className="h-8 w-auto" />
-        </div>
+      <header className="flex-none z-30 bg-card border-b border-border flex items-center justify-between px-4 h-14 gap-3">
+        <img src="/netflow-logo-white.png" alt="NetFlow" className="h-8 w-auto shrink-0" />
 
-        <div className="flex items-center gap-1">
+        {userUnit && (
+          availableUnits.length > 1 ? (
+            <select
+              value={userUnit}
+              onChange={e => {
+                const unit = availableUnits.find(u => u.unitNo === e.target.value)
+                if (unit) void handleSelectUnit(unit.id)
+              }}
+              className="flex-1 min-w-0 h-8 rounded-lg border border-border bg-muted text-sm font-semibold text-foreground px-2 outline-none focus:border-primary"
+            >
+              {availableUnits.map(u => (
+                <option key={u.id} value={u.unitNo}>Unit {u.unitNo}</option>
+              ))}
+            </select>
+          ) : (
+            <span className="flex-1 min-w-0 h-8 flex items-center rounded-lg border border-border bg-muted text-sm font-semibold text-foreground px-2 truncate">
+              Unit {userUnit}
+            </span>
+          )
+        )}
+
+        <div className="flex items-center gap-1 shrink-0">
           <button
             onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
             className={`${interactive.ghost} text-muted-foreground`}
@@ -157,7 +193,7 @@ export default function App() {
           <TokenPurchase unitId={userUnit} onBack={() => setCurrentPage("home")} />
         )}
         {currentPage === "notifications" && (
-          <NotificationsPage anomalies={anomalies} />
+          <NotificationsPage anomalies={anomalies} lastReadAt={notifLastRead} />
         )}
       </main>
 
@@ -225,9 +261,10 @@ export default function App() {
 }
 
 // ── Full-screen notifications page ────────────────────────────────────────────
-function NotificationsPage({ anomalies }: { anomalies: AnomalyItem[] }) {
-  const criticalCount = anomalies.filter((a) => a.severity === "critical").length
-  const warningCount  = anomalies.filter((a) => a.severity === "warning").length
+function NotificationsPage({ anomalies, lastReadAt }: { anomalies: AnomalyItem[], lastReadAt: Date | null }) {
+  const shown        = anomalies.slice(0, 10)
+  const criticalCount = shown.filter((a) => a.severity === "critical").length
+  const warningCount  = shown.filter((a) => a.severity === "warning").length
 
   return (
     <div className="p-5 space-y-4">
@@ -249,7 +286,7 @@ function NotificationsPage({ anomalies }: { anomalies: AnomalyItem[] }) {
       </div>
 
       {/* Empty state */}
-      {anomalies.length === 0 && (
+      {shown.length === 0 && (
         <div className="flex flex-col items-center justify-center py-20 gap-3 text-muted-foreground">
           <CheckCircle size={40} className="text-primary opacity-40" />
           <p className="text-sm font-medium">Semua normal</p>
@@ -260,9 +297,9 @@ function NotificationsPage({ anomalies }: { anomalies: AnomalyItem[] }) {
       )}
 
       {/* Anomaly cards */}
-      {anomalies.length > 0 && (
+      {shown.length > 0 && (
         <div className="space-y-3">
-          {anomalies.map((a, idx) => {
+          {shown.map((a, idx) => {
             const meta = ANOMALY_META[a.anomalyType] ?? {
               label: a.anomalyType,
               Icon: AlertTriangle,
@@ -270,6 +307,7 @@ function NotificationsPage({ anomalies }: { anomalies: AnomalyItem[] }) {
             }
             const isCritical = a.severity === "critical"
             const isInfo     = a.severity === "info"
+            const isRead     = !!lastReadAt && new Date(a.detectedAt) <= lastReadAt
             const colorWrap  = isCritical
               ? "bg-status-critical/8 border-status-critical/25"
               : isInfo
@@ -288,7 +326,7 @@ function NotificationsPage({ anomalies }: { anomalies: AnomalyItem[] }) {
             const badgeLabel = isCritical ? "Kritis" : isInfo ? "Info" : "Peringatan"
 
             return (
-              <div key={idx} className={`rounded-2xl border px-4 py-3 ${colorWrap}`}>
+              <div key={idx} className={`rounded-2xl border px-4 py-3 transition-opacity ${colorWrap} ${isRead ? "opacity-50" : ""}`}>
                 {/* Line 1: icon + label + badge + time */}
                 <div className="flex items-center gap-2 min-w-0">
                   <meta.Icon size={14} className={`flex-shrink-0 ${colorIcon}`} />
@@ -306,10 +344,11 @@ function NotificationsPage({ anomalies }: { anomalies: AnomalyItem[] }) {
         </div>
       )}
 
-      {/* Footer note */}
-      {/* <p className="text-xs text-muted-foreground/50 text-center pb-4">
-        Data diperbarui setiap 30 detik
-      </p> */}
+      {shown.length > 0 && (
+        <p className="text-xs text-muted-foreground/50 text-center pb-4">
+          Menutup halaman ini menandai semua sebagai telah dibaca
+        </p>
+      )}
     </div>
   )
 }

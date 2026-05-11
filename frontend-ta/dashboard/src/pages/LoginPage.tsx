@@ -124,14 +124,12 @@ export default function LoginPage({ onSuccess }: LoginPageProps) {
               </div>
             )}
 
-            {loading ? (
-              <div className="flex items-center justify-center py-3 gap-2">
-                <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-                <span className="text-sm text-muted-text">Verifying...</span>
+            {loading && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+                <div className="h-10 w-10 animate-spin rounded-full border-4 border-white border-t-transparent" />
               </div>
-            ) : (
-              <div ref={buttonRef} className="flex justify-center w-full" />
             )}
+            <div ref={buttonRef} className="flex justify-center w-full" />
           </div>
 
           {/* Footer */}

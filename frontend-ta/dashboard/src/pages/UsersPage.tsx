@@ -1,8 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
-import { Users, UserPlus, Trash2, Link, ChevronLeft, ChevronRight, Search, Loader2, Check, X, Shield } from "lucide-react";
+import { Users, UserPlus, Trash2, Link, ChevronLeft, ChevronRight, Search, ChevronDown, Loader2, Check, X, Shield } from "lucide-react";
 import { fetchApi } from "@/lib/api";
 import { cn } from "@/lib/utils";
-import { getAdminEmail } from "@/lib/auth";
 import { useToast } from "@/components/layout/ToastProvider";
 
 const PAGE_SIZE = 10;
@@ -19,6 +18,34 @@ interface Unit {
     id: number;
     unit_no: string;
     resident_email: string | null;
+}
+
+function FilterDropdown({ label, options, value, onChange }: {
+    label: string; options: string[]; value: string; onChange: (v: string) => void;
+}) {
+    const [open, setOpen] = useState(false);
+    return (
+        <div className="relative">
+            <button
+                onClick={() => setOpen(o => !o)}
+                className="flex items-center gap-2 h-9 rounded-md border border-gray-200 dark:border-gray-600 px-3 text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 bg-white dark:bg-gray-800"
+            >
+                {label}: <span className="text-gray-900 dark:text-gray-200 capitalize">{value}</span>
+                <ChevronDown className="h-3.5 w-3.5" />
+            </button>
+            {open && (
+                <div className="absolute right-0 mt-1 min-w-[140px] rounded-md bg-white dark:bg-gray-800 py-1 shadow-lg ring-1 ring-black/5 dark:ring-gray-700 z-10">
+                    {options.map(o => (
+                        <button key={o} onClick={() => { onChange(o); setOpen(false); }}
+                            className={cn("block w-full px-4 py-2 text-left text-sm capitalize hover:bg-gray-50 dark:hover:bg-gray-700",
+                                value === o ? "text-primary font-medium" : "text-gray-700 dark:text-gray-300")}>
+                            {o}
+                        </button>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
 }
 
 function ConfirmModal({ title, message, confirmLabel, danger, onConfirm, onCancel, loading }: {
@@ -56,9 +83,8 @@ export default function UsersPage() {
     const [units, setUnits] = useState<Unit[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
-    const [roleFilter, setRoleFilter] = useState<'all' | 'admin' | 'resident'>('all');
+    const [roleFilter, setRoleFilter] = useState('All');
     const [page, setPage] = useState(1);
-    const adminEmail = getAdminEmail();
     const toast = useToast();
 
     const [showAddForm, setShowAddForm] = useState(false);
@@ -77,9 +103,6 @@ export default function UsersPage() {
 
     const [unassignTarget, setUnassignTarget] = useState<{ email: string, unitId: number, unitNo: string } | null>(null);
     const [unassignLoading, setUnassignLoading] = useState(false);
-
-    const [toggleTarget, setToggleTarget] = useState<Resident | null>(null);
-    const [toggleLoading, setToggleLoading] = useState(false);
 
     const [inlineError, setInlineError] = useState<string | null>(null);
 
@@ -107,7 +130,7 @@ export default function UsersPage() {
             (r.name ?? '').toLowerCase().includes(q) ||
             r.role.toLowerCase().includes(q) ||
             assignedUnits.some(u => u.includes(q));
-        const matchRole = roleFilter === 'all' || r.role === roleFilter;
+        const matchRole = roleFilter === 'All' || r.role.toLowerCase() === roleFilter.toLowerCase();
         return matchSearch && matchRole;
     });
 
@@ -184,25 +207,6 @@ export default function UsersPage() {
         }
     };
 
-    const handleToggleRole = async () => {
-        if (!toggleTarget) return;
-        setToggleLoading(true);
-        try {
-            await fetchApi(`/admin/accounts/${encodeURIComponent(toggleTarget.email)}/access`, {
-                method: 'PATCH',
-                body: JSON.stringify({ enabled: toggleTarget.role !== 'admin' }),
-            });
-            toast.success(`Role updated successfully for ${toggleTarget.email}`);
-            setToggleTarget(null);
-            loadAll();
-        } catch (err) {
-            setInlineError(err instanceof Error ? err.message.replace(/^API error \(\d+\): /, '') : 'Could not update role.');
-            setToggleTarget(null);
-        } finally {
-            setToggleLoading(false);
-        }
-    };
-
     return (
         <div className="space-y-6">
             <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Users</h1>
@@ -232,15 +236,12 @@ export default function UsersPage() {
                                     className="h-9 w-full sm:w-56 rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 pl-9 pr-4 text-sm text-gray-900 dark:text-gray-100 outline-none focus:border-primary focus:ring-1 focus:ring-primary placeholder:text-gray-400 dark:placeholder:text-gray-500"
                                 />
                             </div>
-                            <select
+                            <FilterDropdown
+                                label="Role"
+                                options={["All", "Admin", "Resident"]}
                                 value={roleFilter}
-                                onChange={e => { setRoleFilter(e.target.value as 'all' | 'admin' | 'resident'); setPage(1); }}
-                                className="h-9 rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 text-sm text-gray-700 dark:text-gray-300 outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-                            >
-                                <option value="all">All roles</option>
-                                <option value="admin">Admin</option>
-                                <option value="resident">Resident</option>
-                            </select>
+                                onChange={v => { setRoleFilter(v); setPage(1); }}
+                            />
                             <button
                                 onClick={() => { setShowAddForm(true); setAddError(null); setAddForm({ email: '', name: '' }); }}
                                 className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary/90 transition-colors"
@@ -326,14 +327,6 @@ export default function UsersPage() {
                                                     <Link className="h-3.5 w-3.5" />
                                                 </button>
                                                 <button
-                                                    onClick={() => setToggleTarget(res)}
-                                                    disabled={res.email === adminEmail}
-                                                    className="rounded-md border border-gray-200 dark:border-gray-600 p-1.5 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                                                    title={res.email === adminEmail ? 'Cannot change own role' : res.role === 'admin' ? 'Revoke admin' : 'Grant admin'}
-                                                >
-                                                    <Shield className="h-3.5 w-3.5" />
-                                                </button>
-                                                <button
                                                     onClick={() => setDeleteTarget(res.email)}
                                                     className="rounded-md border border-gray-200 dark:border-gray-600 p-1.5 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-red-600 dark:hover:text-red-400 transition-colors"
                                                     title="Delete user"
@@ -409,7 +402,7 @@ export default function UsersPage() {
                                     className="block w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                                 />
                             </div>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">The user will be added as a resident. You can grant admin access afterwards.</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">The user will be added as a resident. Assign a unit using the link icon after adding.</p>
                         </form>
                         <div className="border-t border-gray-100 dark:border-gray-700 p-4 bg-gray-50 dark:bg-gray-900/50 flex justify-end gap-3 shrink-0">
                             <button
@@ -480,23 +473,6 @@ export default function UsersPage() {
                     onConfirm={handleUnassignConfirm}
                     onCancel={() => setUnassignTarget(null)}
                     loading={unassignLoading}
-                />
-            )}
-
-            {/* Toggle Role Confirm */}
-            {toggleTarget && (
-                <ConfirmModal
-                    title={toggleTarget.role === 'admin' ? 'Revoke admin access' : 'Grant admin access'}
-                    message={
-                        toggleTarget.role === 'admin'
-                            ? <>Remove admin access from <strong>{toggleTarget.email}</strong>? They will no longer be able to access this dashboard.</>
-                            : <>Grant admin access to <strong>{toggleTarget.email}</strong>? They will be able to sign in to this dashboard.</>
-                    }
-                    confirmLabel={toggleTarget.role === 'admin' ? 'Revoke' : 'Grant'}
-                    danger={toggleTarget.role === 'admin'}
-                    onConfirm={handleToggleRole}
-                    onCancel={() => setToggleTarget(null)}
-                    loading={toggleLoading}
                 />
             )}
 

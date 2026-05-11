@@ -130,7 +130,9 @@ export type DashboardSummary = {
   unitNo: string;
   balance: number;
   energyTariff: number;
+  waterTariff: number;
   relayStatus: boolean;
+  valveStatus: boolean;
   remainingEstimate: {
     kwh: number;
     hours: number;

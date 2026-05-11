@@ -1,23 +1,51 @@
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, Power, Droplets, ChevronDown, ChevronLeft, ChevronRight, Filter, Pencil } from "lucide-react";
+import { Search, Power, Droplets, ChevronDown, ChevronLeft, ChevronRight, Pencil, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { InventoryItem } from "@/lib/mockData";
 import { PAGE_SIZE } from "@/lib/constants";
+
+function FilterDropdown({ label, options, value, onChange }: {
+    label: string; options: string[]; value: string; onChange: (v: string) => void;
+}) {
+    const [open, setOpen] = useState(false);
+    return (
+        <div className="relative">
+            <button
+                onClick={() => setOpen(o => !o)}
+                className="flex items-center gap-2 h-9 rounded-md border border-gray-200 dark:border-gray-600 px-3 text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 bg-white dark:bg-gray-700"
+            >
+                {label}: <span className="text-gray-900 dark:text-gray-200">{value}</span>
+                <ChevronDown className="h-3.5 w-3.5" />
+            </button>
+            {open && (
+                <div className="absolute right-0 mt-1 min-w-[140px] rounded-md bg-white dark:bg-gray-800 py-1 shadow-lg ring-1 ring-black/5 dark:ring-gray-700 z-10">
+                    {options.map(o => (
+                        <button key={o} onClick={() => { onChange(o); setOpen(false); }}
+                            className={cn("block w-full px-4 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-700",
+                                value === o ? "text-primary font-medium" : "text-gray-700 dark:text-gray-300")}>
+                            {o}
+                        </button>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
 
 interface InventoryTableProps {
     data: InventoryItem[];
     initialFilter?: string;
     buildings?: { id: number; code: string; name: string }[];
-    selectedBuilding?: string;
     onEdit?: (item: InventoryItem) => void;
+    onAdd?: () => void;
 }
 
-export function InventoryTable({ data, initialFilter = "", buildings = [], selectedBuilding = "all", onEdit }: InventoryTableProps) {
+export function InventoryTable({ data, initialFilter = "", buildings = [], onEdit, onAdd }: InventoryTableProps) {
     const navigate = useNavigate();
     const [searchQuery, setSearchQuery] = useState(initialFilter);
     const [statusFilter, setStatusFilter] = useState<"All" | "Online" | "Offline">("All");
-    const [isFilterOpen, setIsFilterOpen] = useState(false);
+    const [selectedBuilding, setSelectedBuilding] = useState("all");
     const [page, setPage] = useState(1);
 
     const filteredData = useMemo(() => {
@@ -41,46 +69,50 @@ export function InventoryTable({ data, initialFilter = "", buildings = [], selec
 
     return (
         <div className="rounded-lg bg-white dark:bg-gray-800 shadow-sm ring-1 ring-gray-900/5 dark:ring-gray-700">
-            <div className="border-b border-gray-200 dark:border-gray-700 px-6 py-4">
-                <div className="flex flex-col space-y-4 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
-                    <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">Device Inventory &amp; Control</h2>
-                    <div className="flex space-x-3">
-                        <div className="relative">
+            <div className="border-b border-gray-200 dark:border-gray-700 px-3 sm:px-6 py-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-center gap-2">
+                        <Power className="h-4 w-4 text-gray-400 dark:text-gray-500" />
+                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{data.length} units total</span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                        <div className="relative flex-1 sm:flex-none">
                             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400 dark:text-gray-500" />
                             <input
                                 type="text"
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                placeholder="Search unit, tenant, or serial..."
-                                className="h-9 w-full sm:w-64 rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 pl-9 pr-4 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary placeholder:text-gray-400 dark:placeholder:text-gray-500"
+                                placeholder="Search unit, tenant, serial..."
+                                className="h-9 w-full sm:w-52 rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 pl-9 pr-4 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary placeholder:text-gray-400 dark:placeholder:text-gray-500"
                             />
                         </div>
-                        <div className="relative">
-                            <button
-                                onClick={() => setIsFilterOpen(!isFilterOpen)}
-                                className="flex items-center space-x-2 rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600"
+                        {buildings.length > 0 && (
+                            <select
+                                value={selectedBuilding}
+                                onChange={(e) => setSelectedBuilding(e.target.value)}
+                                className="h-9 rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 text-sm text-gray-700 dark:text-gray-300 outline-none focus:border-primary focus:ring-1 focus:ring-primary"
                             >
-                                <Filter className="h-4 w-4" />
-                                <span>{statusFilter === "All" ? "Filter" : statusFilter}</span>
-                                <ChevronDown className="h-4 w-4 ml-1" />
+                                <option value="all">All Buildings</option>
+                                {buildings.map(b => (
+                                    <option key={b.id} value={b.id}>{b.name}</option>
+                                ))}
+                            </select>
+                        )}
+                        <FilterDropdown
+                            label="Status"
+                            options={["All", "Online", "Offline"]}
+                            value={statusFilter}
+                            onChange={(v) => setStatusFilter(v as "All" | "Online" | "Offline")}
+                        />
+                        {onAdd && (
+                            <button
+                                onClick={onAdd}
+                                className="flex items-center gap-1.5 h-9 rounded-md bg-primary px-3 text-sm font-medium text-white hover:bg-primary/90 transition-colors"
+                            >
+                                <Plus className="h-4 w-4" />
+                                <span className="hidden sm:inline">Add Unit</span>
                             </button>
-                            {isFilterOpen && (
-                                <div className="absolute right-0 mt-2 w-40 rounded-md bg-white dark:bg-gray-800 py-1 shadow-lg ring-1 ring-black ring-opacity-5 dark:ring-gray-600 z-10">
-                                    {(["All", "Online", "Offline"] as const).map((status) => (
-                                        <button
-                                            key={status}
-                                            onClick={() => { setStatusFilter(status); setIsFilterOpen(false); }}
-                                            className={cn(
-                                                "block w-full px-4 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-700",
-                                                statusFilter === status ? "text-primary font-medium" : "text-gray-700 dark:text-gray-300"
-                                            )}
-                                        >
-                                            {status}
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
+                        )}
                     </div>
                 </div>
             </div>
