@@ -99,8 +99,7 @@ jobs:
         working-directory: ml-service
         run: |
           uvicorn main:app --host 0.0.0.0 --port 8000 &
-          sleep 5
-          curl --fail http://localhost:8000/health || (echo "Health check failed" && exit 1)
+          curl --retry 20 --retry-delay 2 --retry-connrefused --fail http://localhost:8000/health || (echo "Health check failed" && exit 1)
 
   # ── Dashboard: lint + build ─────────────────────────────────────────────────
   dashboard:
@@ -195,6 +194,8 @@ jobs:
         run: |
           rsync -az --delete \
             --exclude='.git' \
+            --exclude='.env' \
+            --exclude='**/.env' \
             --exclude='node_modules' \
             --exclude='frontend-ta/dashboard/dist' \
             --exclude='frontend-ta/mobile/dist' \
