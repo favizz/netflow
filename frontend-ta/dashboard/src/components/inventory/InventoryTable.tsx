@@ -104,8 +104,7 @@ export function InventoryTable({ data, initialFilter = "", buildings = [], onEdi
             <div className="border-b border-gray-200 dark:border-gray-700 px-3 sm:px-6 py-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex items-center gap-2">
-                        <Power className="h-4 w-4 text-gray-400 dark:text-gray-500" />
-                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{data.length} units total</span>
+                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{data.length} devices</span>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
                         <div className="relative flex-1 sm:flex-none">

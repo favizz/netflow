@@ -278,17 +278,6 @@ export class AnomalyService implements OnModuleInit {
       }
     }
 
-    if (latest.water_flow !== null && latest.water_flow < -0.1) {
-      anomalies.push({
-        anomalyType: 'backflow',
-        severity: 'warning',
-        target: 'both',
-        message: `Aliran air balik: ${latest.water_flow.toFixed(2)} L/menit.`,
-        metadata: { flow_lpm: latest.water_flow },
-        detectedAt: now,
-      });
-    }
-
     const pw = latest.power ?? 0;
     const wf = latest.water_flow ?? 0;
 
@@ -392,30 +381,6 @@ export class AnomalyService implements OnModuleInit {
               current_w: currentPower,
               baseline_avg_w: parseFloat(avgBaseline.toFixed(2)),
               multiplier: parseFloat((currentPower / avgBaseline).toFixed(2)),
-            },
-            detectedAt: now,
-          });
-        }
-      }
-    }
-
-    if (unit.relay_status && unit.balance > 0) {
-      const flowReadings = readings
-        .slice(0, 20)
-        .filter((r) => r.water_flow !== null);
-      if (flowReadings.length >= 15) {
-        const zeroCount = flowReadings.filter(
-          (r) => (r.water_flow ?? 0) <= 0.05,
-        ).length;
-        if (zeroCount === flowReadings.length) {
-          anomalies.push({
-            anomalyType: 'zero_flow',
-            severity: 'warning',
-            target: 'both',
-            message: `Tidak ada aliran air selama ${flowReadings.length} pembacaan meski layanan aktif.`,
-            metadata: {
-              zero_readings: zeroCount,
-              readings_checked: flowReadings.length,
             },
             detectedAt: now,
           });

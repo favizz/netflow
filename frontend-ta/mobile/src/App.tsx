@@ -5,13 +5,14 @@ import { useTheme } from "next-themes"
 import {
   Home, ShoppingCart, LogOut, Zap, Sun, Moon,
   Bell, ShieldAlert, Droplets, WifiOff, BatteryWarning, AlertTriangle,
-  CheckCircle, Activity, TrendingUp, Gauge, RotateCcw, Cpu,
+  CheckCircle, TrendingUp, Gauge, Cpu, ChevronDown,
 } from "lucide-react"
 import Dashboard from "@/components/dashboard"
 import TokenPurchase from "@/components/token-purchase"
 import LoginForm from "@/components/login-form"
 import { api, authStore, type AnomalyItem, type AnomalyType, type UnitSummary } from "@/lib/api"
-import { interactive, type Page } from "@/lib/styles"
+import { interactive, dropdown, MOBILE_NOTIF_KEY, type Page } from "@/lib/styles"
+import { cn } from "@/lib/utils"
 
 // ── Anomaly metadata ──────────────────────────────────────────────────────────
 const ANOMALY_META: Record<
@@ -24,15 +25,56 @@ const ANOMALY_META: Record<
   voltage_anomaly:    { label: "Tegangan Tidak Normal",   Icon: AlertTriangle,  action: "Hentikan pemakaian perangkat sensitif dan laporkan ke pengelola." },
   sensor_malfunction: { label: "Sensor Tidak Berfungsi",  Icon: Cpu,            action: "Hubungi teknisi untuk pemeriksaan sensor dan kabel." },
   low_power_factor:   { label: "Faktor Daya Rendah",      Icon: Gauge,          action: "Kurangi beban induktif atau hubungi teknisi listrik." },
-  zero_flow:          { label: "Tidak Ada Aliran Air",    Icon: RotateCcw,      action: "Periksa kondisi pipa, katup, dan suplai air dari pengelola." },
   usage_spike:        { label: "Lonjakan Konsumsi",       Icon: TrendingUp,     action: "Periksa perangkat yang baru dinyalakan. Matikan yang tidak diperlukan." },
-  backflow:           { label: "Aliran Air Balik",        Icon: Activity,       action: "Laporkan ke pengelola - kemungkinan masalah instalasi pipa." },
   jailbreak:          { label: "Bypass Sistem",           Icon: ShieldAlert,    action: "Hubungi pengelola gedung segera." },
   device_offline:     { label: "Perangkat Offline",       Icon: WifiOff,        action: "Hubungi pengelola untuk pemeriksaan perangkat." },
   topup_success:      { label: "Pembelian Token Berhasil", Icon: CheckCircle,   action: "Token otomatis terisi. Cek saldo di Beranda." },
 }
 
-const MOBILE_NOTIF_KEY = 'mobile_notif_last_read'
+// ── Unit selector (custom dropdown, no system UI) ─────────────────────────────
+function UnitSelector({ units, current, onSelect }: {
+  units: UnitSummary[]
+  current: string
+  onSelect: (id: number) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  if (units.length <= 1) {
+    return <span className={cn(dropdown.chip, "flex-1 min-w-0")}>Unit {current}</span>
+  }
+
+  return (
+    <div ref={ref} className="relative flex-1 min-w-0">
+      <button onClick={() => setOpen(o => !o)} className={dropdown.trigger}>
+        <span className="truncate">Unit {current}</span>
+        <ChevronDown size={14} className={cn("shrink-0 text-muted-foreground transition-transform duration-150", open && "rotate-180")} />
+      </button>
+      {open && (
+        <div className={dropdown.panel}>
+          {units.map(u => (
+            <button
+              key={u.id}
+              onClick={() => { onSelect(u.id); setOpen(false) }}
+              className={cn(dropdown.item, u.unitNo === current ? dropdown.itemActive : dropdown.itemDefault)}
+            >
+              Unit {u.unitNo}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
 // ── App ───────────────────────────────────────────────────────────────────────
 export default function App() {
@@ -146,24 +188,7 @@ export default function App() {
         <img src="/netflow-logo-white.png" alt="NetFlow" className="h-8 w-auto shrink-0" />
 
         {userUnit && (
-          availableUnits.length > 1 ? (
-            <select
-              value={userUnit}
-              onChange={e => {
-                const unit = availableUnits.find(u => u.unitNo === e.target.value)
-                if (unit) void handleSelectUnit(unit.id)
-              }}
-              className="flex-1 min-w-0 h-8 rounded-lg border border-border bg-muted text-sm font-semibold text-foreground px-2 outline-none focus:border-primary"
-            >
-              {availableUnits.map(u => (
-                <option key={u.id} value={u.unitNo}>Unit {u.unitNo}</option>
-              ))}
-            </select>
-          ) : (
-            <span className="flex-1 min-w-0 h-8 flex items-center rounded-lg border border-border bg-muted text-sm font-semibold text-foreground px-2 truncate">
-              Unit {userUnit}
-            </span>
-          )
+          <UnitSelector units={availableUnits} current={userUnit} onSelect={handleSelectUnit} />
         )}
 
         <div className="flex items-center gap-1 shrink-0">

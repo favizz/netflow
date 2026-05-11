@@ -158,10 +158,8 @@ export type AnomalyType =
   | 'voltage_anomaly'
   | 'sensor_malfunction'
   | 'low_power_factor'
-  | 'zero_flow'
   | 'usage_spike'
-  | 'topup_success'
-  | 'backflow';
+  | 'topup_success';
 
 export type AnomalySeverity = 'critical' | 'warning' | 'info';
 

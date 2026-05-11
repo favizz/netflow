@@ -76,6 +76,19 @@ export const cta = {
   secondary: "w-full border border-primary text-primary active:bg-primary/10 font-semibold h-12 rounded-xl text-base transition-all duration-150",
 }
 
+// ── Dropdown / custom select ──────────────────────────────────────────────────
+export const dropdown = {
+  trigger:     "flex items-center justify-between gap-1.5 rounded-lg border border-border bg-muted text-sm font-semibold text-foreground px-3 h-8 w-full active:bg-muted/70 transition-colors duration-150",
+  chip:        "flex items-center rounded-lg border border-border bg-muted text-sm font-semibold text-foreground px-3 h-8 truncate",
+  panel:       "absolute top-full left-0 right-0 mt-1 rounded-xl border border-border bg-card shadow-lg z-50 overflow-hidden",
+  item:        "w-full text-left px-3 py-2.5 text-sm font-medium transition-colors duration-150 active:bg-muted/70",
+  itemActive:  "text-primary bg-primary/5",
+  itemDefault: "text-foreground",
+}
+
+// ── App-level constants ───────────────────────────────────────────────────────
+export const MOBILE_NOTIF_KEY = 'mobile_notif_last_read'
+
 // ── Page shell helpers ────────────────────────────────────────────────────────
 export const layout = {
   pageHeader: "flex items-center gap-4 px-4 py-3 sticky top-0 bg-background/95 backdrop-blur-sm z-10 border-b border-border",
