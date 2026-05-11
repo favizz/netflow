@@ -17,15 +17,12 @@ PREV_COMMIT_FILE="/tmp/netflow_prev_commit"
 
 log() { echo "[deploy] $(date '+%H:%M:%S') $*"; }
 
-# ── Use port 443 for GitHub SSH if port 22 is blocked ───────────────────────
-# GitHub supports SSH over port 443 via ssh.github.com.
-# This block is idempotent — only writes to ~/.ssh/config once.
-if ! grep -q "ssh.github.com" "${HOME}/.ssh/config" 2>/dev/null; then
-  mkdir -p "${HOME}/.ssh"
-  printf '\nHost github.com\n  Hostname ssh.github.com\n  Port 443\n  StrictHostKeyChecking no\n' \
-    >> "${HOME}/.ssh/config"
-  chmod 600 "${HOME}/.ssh/config"
-  log "Configured GitHub SSH to use port 443"
+# ── Ensure remote uses HTTPS (SSH port 22/443 may be blocked on this host) ──
+ORIGIN=$(git -C "$REPO_DIR" remote get-url origin 2>/dev/null || echo "")
+if echo "$ORIGIN" | grep -q "git@github.com:"; then
+  REPO_PATH=$(echo "$ORIGIN" | sed 's|git@github.com:||' | sed 's|\.git$||')
+  git -C "$REPO_DIR" remote set-url origin "https://github.com/${REPO_PATH}.git"
+  log "Switched remote to HTTPS: https://github.com/${REPO_PATH}.git"
 fi
 
 # ── Pull latest code then re-exec so we always run the newest deploy.sh ──────
