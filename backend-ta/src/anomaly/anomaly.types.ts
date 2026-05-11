@@ -7,9 +7,7 @@ export type AnomalyType =
   | 'voltage_anomaly' // voltage outside 198–242 V (both)
   | 'sensor_malfunction' // all sensor values null (both)
   | 'low_power_factor' // PF = P/(V×I) < 0.6 (both)
-  | 'zero_flow' // water_flow=0 for 20+ readings while relay ON (both)
-  | 'usage_spike' // power > 3× historical average (both)
-  | 'backflow'; // water_flow < 0 (both)
+  | 'usage_spike'; // power > 3× historical average (both)
 
 export type AnomalySeverity = 'critical' | 'warning';
 

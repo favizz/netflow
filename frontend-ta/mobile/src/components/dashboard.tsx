@@ -7,7 +7,6 @@ import { decode as msgpackDecode } from "@msgpack/msgpack"
 import { toast } from "sonner"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -59,9 +58,9 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
   // ── Summary ──────────────────────────────────────────────────────────────
   const [kwh, setKwh]             = useState(0)
   const [water, setWater]         = useState(0)
-  const [relayOn, setRelayOn]     = useState(true)
-  const [valveOpen, setValveOpen] = useState(true)
-  const [loading, setLoading]     = useState(true)
+  const [relayOn, setRelayOn]         = useState(true)
+  const [valveOpen, setValveOpen]     = useState(true)
+  const [loading, setLoading]         = useState(true)
 
   // ── Control dialog ───────────────────────────────────────────────────────
   const [confirmTarget, setConfirmTarget]   = useState<ControlTarget | null>(null)
@@ -90,6 +89,7 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
         setKwh(d.summary.remainingEstimate.kwh)
         setWater(Math.max(0, d.summary.remainingEstimate.kwh / 2.5))
         setRelayOn(d.summary.relayStatus)
+        setValveOpen(d.summary.valveStatus)
       } catch { /* errors surface in notification bell */ }
       finally { if (active) setLoading(false) }
     }
@@ -234,6 +234,16 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
   const kwhStatus:   BalanceStatus = kwh   <= 0 ? "terputus" : kwh   <= 5  ? "kritis" : kwh   <= 20 ? "kurang" : "aman"
   const waterStatus: BalanceStatus = water <= 0 ? "terputus" : water <= 0.5 ? "kritis" : water <= 3  ? "kurang" : "aman"
 
+  const avgDailyKwh = useMemo(() => {
+    if (trendData.length === 0) return null
+    return trendData.reduce((s, d) => s + d.kwh, 0) / trendData.length
+  }, [trendData])
+
+  const avgDailyWater = useMemo(() => {
+    if (trendData.length === 0) return null
+    return trendData.reduce((s, d) => s + d.water, 0) / trendData.length
+  }, [trendData])
+
   const isLive      = period === "live"
   const displayData = isLive ? liveData : trendData
 
@@ -292,26 +302,6 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
   return (
     <div className="p-5 space-y-5 w-full">
 
-      {/* Unit selector */}
-      {availableUnits && availableUnits.length > 1 && (
-        <Select
-          value={unitId}
-          onValueChange={(val) => {
-            const unit = availableUnits.find((u) => u.unitNo === val)
-            if (unit && onSelectUnit) void onSelectUnit(unit.id)
-          }}
-        >
-          <SelectTrigger className="w-40 h-9 rounded-xl border-border bg-card text-sm font-semibold shadow-sm">
-            <SelectValue placeholder="Pilih Unit" />
-          </SelectTrigger>
-          <SelectContent>
-            {availableUnits.map((u) => (
-              <SelectItem key={u.id} value={u.unitNo}>Unit {u.unitNo}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      )}
-
       {/* 2-col stat cards */}
       <div className="grid grid-cols-2 gap-3">
         <StatCard
@@ -319,6 +309,7 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
           label="Listrik"
           value={kwh.toFixed(1)}
           unit="KWh"
+          rate={avgDailyKwh !== null ? `~${avgDailyKwh.toFixed(1)} kWh/hari` : undefined}
           percentage={kwhPercentage}
           status={kwhStatus}
           controlOn={relayOn}
@@ -330,6 +321,7 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
           label="Air Bersih"
           value={water.toFixed(1)}
           unit="m³"
+          rate={avgDailyWater !== null ? `~${avgDailyWater.toFixed(2)} m³/hari` : undefined}
           percentage={waterPercentage}
           status={waterStatus}
           controlOn={valveOpen}
@@ -496,11 +488,12 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
 }
 
 // ── Compact stat card ─────────────────────────────────────────────────────────
-function StatCard({ icon, label, value, unit, percentage, status, controlOn, controlPending, onControlToggle }: {
+function StatCard({ icon, label, value, unit, rate, percentage, status, controlOn, controlPending, onControlToggle }: {
   icon: React.ReactNode
   label: string
   value: string
   unit: string
+  rate?: string
   percentage: number
   status: BalanceStatus
   controlOn: boolean
@@ -524,9 +517,14 @@ function StatCard({ icon, label, value, unit, percentage, status, controlOn, con
         <p className="text-2xl font-bold text-foreground tracking-tight leading-none">{value}</p>
         <p className="text-xs text-muted-foreground mt-0.5">{unit} · {label}</p>
       </div>
-      <span className={`inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full border ${bgColor} ${textColor} ${borderColor}`}>
-        {statusLabel}
-      </span>
+      <div className="flex items-center justify-between">
+        <span className={`inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full border ${bgColor} ${textColor} ${borderColor}`}>
+          {statusLabel}
+        </span>
+        {rate && (
+          <span className="text-[10px] text-muted-foreground font-medium">{rate}</span>
+        )}
+      </div>
       <StatusBar percentage={percentage} status={status} />
     </div>
   )

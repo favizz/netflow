@@ -177,6 +177,7 @@ export default function ControlCenterPage() {
     // ── Broadcast commands state ──────────────────────────────────────────────
     const [cmdPending, setCmdPending] = useState<string | null>(null);
     const [log, setLog] = useState<LogEntry[]>([]);
+    const [broadcastConfirm, setBroadcastConfirm] = useState<{ type: 'relay' | 'valve'; value: 0 | 1 } | null>(null);
 
     // ── OTA state ─────────────────────────────────────────────────────────────
     const [otaBinaryLink, setOtaBinaryLink] = useState('');
@@ -379,6 +380,7 @@ export default function ControlCenterPage() {
     };
 
     return (
+        <>
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <div>
@@ -520,11 +522,11 @@ export default function ControlCenterPage() {
                             <Zap className="h-3.5 w-3.5 text-yellow-500" /> Relay (All Units)
                         </p>
                         <div className="flex gap-2">
-                            <button onClick={() => sendCommandAll('relay', 1)} disabled={!!cmdPending}
+                            <button onClick={() => setBroadcastConfirm({ type: 'relay', value: 1 })} disabled={!!cmdPending}
                                 className="flex-1 rounded-md bg-green-600 px-3 py-2 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50 transition-colors">
                                 {cmdPending === 'relay-1' ? <Loader2 className="h-3.5 w-3.5 animate-spin mx-auto" /> : 'ON'}
                             </button>
-                            <button onClick={() => sendCommandAll('relay', 0)} disabled={!!cmdPending}
+                            <button onClick={() => setBroadcastConfirm({ type: 'relay', value: 0 })} disabled={!!cmdPending}
                                 className="flex-1 rounded-md bg-red-600 px-3 py-2 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50 transition-colors">
                                 {cmdPending === 'relay-0' ? <Loader2 className="h-3.5 w-3.5 animate-spin mx-auto" /> : 'OFF'}
                             </button>
@@ -535,11 +537,11 @@ export default function ControlCenterPage() {
                             <Droplets className="h-3.5 w-3.5 text-cyan-500" /> Valve (All Units)
                         </p>
                         <div className="flex gap-2">
-                            <button onClick={() => sendCommandAll('valve', 1)} disabled={!!cmdPending}
+                            <button onClick={() => setBroadcastConfirm({ type: 'valve', value: 1 })} disabled={!!cmdPending}
                                 className="flex-1 rounded-md bg-green-600 px-3 py-2 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50 transition-colors">
                                 {cmdPending === 'valve-1' ? <Loader2 className="h-3.5 w-3.5 animate-spin mx-auto" /> : 'OPEN'}
                             </button>
-                            <button onClick={() => sendCommandAll('valve', 0)} disabled={!!cmdPending}
+                            <button onClick={() => setBroadcastConfirm({ type: 'valve', value: 0 })} disabled={!!cmdPending}
                                 className="flex-1 rounded-md bg-red-600 px-3 py-2 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50 transition-colors">
                                 {cmdPending === 'valve-0' ? <Loader2 className="h-3.5 w-3.5 animate-spin mx-auto" /> : 'CLOSE'}
                             </button>
@@ -614,5 +616,58 @@ export default function ControlCenterPage() {
             </div>
 
         </div>
+
+        {/* Broadcast confirmation modal */}
+        {broadcastConfirm && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+                <div className="mx-4 w-full max-w-md rounded-lg bg-white dark:bg-gray-800 shadow-xl ring-1 ring-gray-900/10 dark:ring-gray-700">
+                    <div className="p-6">
+                        <div className="flex items-start gap-4">
+                            <div className="rounded-full bg-red-100 dark:bg-red-900/30 p-2.5 shrink-0">
+                                <Radio className="h-5 w-5 text-red-600 dark:text-red-400" />
+                            </div>
+                            <div>
+                                <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">
+                                    Confirm Broadcast Command
+                                </h3>
+                                <p className="mt-1.5 text-sm text-gray-600 dark:text-gray-300">
+                                    This will send{' '}
+                                    <span className="font-semibold text-gray-900 dark:text-gray-100">
+                                        {broadcastConfirm.type === 'relay' ? 'Relay' : 'Valve'}{' '}
+                                        {broadcastConfirm.type === 'relay'
+                                            ? broadcastConfirm.value === 1 ? 'ON' : 'OFF'
+                                            : broadcastConfirm.value === 1 ? 'OPEN' : 'CLOSE'}
+                                    </span>{' '}
+                                    to <span className="font-semibold text-gray-900 dark:text-gray-100">all devices</span> simultaneously. This cannot be undone.
+                                </p>
+                            </div>
+                        </div>
+                        <div className="mt-6 flex justify-end gap-3">
+                            <button
+                                onClick={() => setBroadcastConfirm(null)}
+                                className="rounded-md border border-gray-200 dark:border-gray-600 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={() => {
+                                    const { type, value } = broadcastConfirm;
+                                    setBroadcastConfirm(null);
+                                    sendCommandAll(type, value);
+                                }}
+                                className={`rounded-md px-4 py-2 text-sm font-medium text-white transition-colors ${
+                                    broadcastConfirm.value === 1
+                                        ? 'bg-green-600 hover:bg-green-700'
+                                        : 'bg-red-600 hover:bg-red-700'
+                                }`}
+                            >
+                                Confirm
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        )}
+        </>
     );
 }

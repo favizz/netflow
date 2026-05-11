@@ -146,7 +146,10 @@ export class UnitService {
 
   async getOwnerDashboard(unitNo: string) {
     const unit = await this.findByUnitNo(unitNo);
-    const energyTariff = await this.tariffService.findCurrent('electricity');
+    const [energyTariff, waterTariff] = await Promise.all([
+      this.tariffService.findCurrent('electricity'),
+      this.tariffService.findCurrent('water'),
+    ]);
 
     const remainingKwh =
       energyTariff > 0 ? Number(unit.balance) / energyTariff : 0;
@@ -171,7 +174,9 @@ export class UnitService {
       unitNo: unit.unit_no,
       balance: Number(unit.balance),
       energyTariff,
+      waterTariff,
       relayStatus: unit.relay_status,
+      valveStatus: unit.valve_status,
       remainingEstimate: {
         kwh: Number(remainingKwh.toFixed(2)),
         hours: Number(estimateHours.toFixed(1)),

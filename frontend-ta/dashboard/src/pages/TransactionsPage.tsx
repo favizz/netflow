@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { ChevronLeft, ChevronRight, Search, Filter, ChevronDown } from "lucide-react";
+import { ChevronLeft, ChevronRight, Search, ChevronDown } from "lucide-react";
 import { fetchApi } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -29,26 +29,26 @@ const METHOD_OPTIONS = ["All", "qris", "transfer", "ewallet"] as const;
 
 const PAGE_SIZE = 10;
 
-function FilterDropdown<T extends string>({ label, options, value, onChange }: {
+function FilterDropdown<T extends string>({ label, options, value, onChange, displayMap }: {
     label: string;
     options: readonly T[];
     value: T;
     onChange: (v: T) => void;
+    displayMap?: Record<string, string>;
 }) {
     const [open, setOpen] = useState(false);
-    const display = value === "All" ? label : (METHOD_LABEL[value] ?? value);
+    const display = value === "All" ? "All" : (displayMap?.[value] ?? value);
     return (
         <div className="relative">
             <button
                 onClick={() => setOpen(o => !o)}
-                className="flex items-center space-x-2 rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600"
+                className="flex items-center gap-2 h-9 rounded-md border border-gray-200 dark:border-gray-600 px-3 text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 bg-white dark:bg-gray-800"
             >
-                <Filter className="h-4 w-4" />
-                <span className="capitalize">{display}</span>
-                <ChevronDown className="h-4 w-4 ml-1" />
+                {label}: <span className="text-gray-900 dark:text-gray-200 capitalize">{display}</span>
+                <ChevronDown className="h-3.5 w-3.5" />
             </button>
             {open && (
-                <div className="absolute right-0 mt-2 min-w-[160px] rounded-md bg-white dark:bg-gray-800 py-1 shadow-lg ring-1 ring-black ring-opacity-5 dark:ring-gray-600 z-10">
+                <div className="absolute right-0 mt-1 min-w-[160px] rounded-md bg-white dark:bg-gray-800 py-1 shadow-lg ring-1 ring-black/5 dark:ring-gray-700 z-10">
                     {options.map(o => (
                         <button
                             key={o}
@@ -58,7 +58,7 @@ function FilterDropdown<T extends string>({ label, options, value, onChange }: {
                                 value === o ? "text-primary font-medium" : "text-gray-700 dark:text-gray-300"
                             )}
                         >
-                            {o === "All" ? "All" : (METHOD_LABEL[o] ?? o)}
+                            {o === "All" ? "All" : (displayMap?.[o] ?? o)}
                         </button>
                     ))}
                 </div>
@@ -95,8 +95,8 @@ export default function TransactionsPage() {
         const q = search.toLowerCase();
         return transactions.filter(tx => {
             const matchSearch = !q || tx.id.toLowerCase().includes(q) || (tx.unitNo ?? '').toLowerCase().includes(q);
-            const matchStatus = statusFilter === "All" || tx.status === statusFilter;
-            const matchMethod = methodFilter === "All" || tx.method === methodFilter;
+            const matchStatus = statusFilter === "All" || tx.status.toLowerCase() === statusFilter.toLowerCase();
+            const matchMethod = methodFilter === "All" || tx.method.toLowerCase() === methodFilter.toLowerCase();
             return matchSearch && matchStatus && matchMethod;
         });
     }, [transactions, search, statusFilter, methodFilter]);
@@ -112,7 +112,7 @@ export default function TransactionsPage() {
         <div className="space-y-6">
             <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Transaction Logs</h1>
 
-            <div className="rounded-lg bg-white dark:bg-gray-800 shadow-sm ring-1 ring-gray-900/5 dark:ring-gray-700 overflow-hidden">
+            <div className="rounded-lg bg-white dark:bg-gray-900 shadow-sm ring-1 ring-gray-900/5 dark:ring-gray-700 overflow-hidden">
                 {/* Filter header - same pattern as InventoryTable */}
                 <div className="border-b border-gray-200 dark:border-gray-700 px-6 py-4">
                     <div className="flex flex-col space-y-4 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
@@ -129,13 +129,13 @@ export default function TransactionsPage() {
                                 />
                             </div>
                             <FilterDropdown label="Status" options={STATUS_OPTIONS} value={statusFilter} onChange={v => { setStatusFilter(v); resetPage(); }} />
-                            <FilterDropdown label="Method" options={METHOD_OPTIONS} value={methodFilter} onChange={v => { setMethodFilter(v); resetPage(); }} />
+                            <FilterDropdown label="Method" options={METHOD_OPTIONS} value={methodFilter} onChange={v => { setMethodFilter(v); resetPage(); }} displayMap={METHOD_LABEL} />
                         </div>
                     </div>
                 </div>
 
                 <table className="w-full text-left text-sm text-gray-500 dark:text-gray-400">
-                    <thead className="bg-gray-50 dark:bg-gray-800/60 text-xs uppercase text-gray-700 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700">
+                    <thead className="bg-gray-50 dark:bg-gray-800 text-xs uppercase text-gray-700 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
                         <tr>
                             <th className="px-6 py-3 font-medium">Transaction ID</th>
                             <th className="px-6 py-3 font-medium">Date &amp; Time</th>
@@ -161,7 +161,7 @@ export default function TransactionsPage() {
                             </tr>
                         )}
                         {pageData.map((tx) => (
-                            <tr key={tx.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/40">
+                            <tr key={tx.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
                                 <td className="px-6 py-4 font-mono text-xs text-gray-900 dark:text-gray-100">{tx.id}</td>
                                 <td className="px-6 py-4 text-xs">
                                     {tx.createdAt ? new Date(tx.createdAt).toLocaleString('id-ID') : '-'}
@@ -193,7 +193,7 @@ export default function TransactionsPage() {
                         <button
                             onClick={() => setPage(p => Math.max(1, p - 1))}
                             disabled={page === 1}
-                            className="flex items-center rounded-md border border-gray-200 dark:border-gray-600 px-3 py-1 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                            className="flex items-center rounded-md border border-gray-200 dark:border-gray-600 px-3 py-1 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                             <ChevronLeft className="h-4 w-4 mr-1" /> Prev
                         </button>
@@ -201,7 +201,7 @@ export default function TransactionsPage() {
                         <button
                             onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                             disabled={page === totalPages}
-                            className="flex items-center rounded-md border border-gray-200 dark:border-gray-600 px-3 py-1 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                            className="flex items-center rounded-md border border-gray-200 dark:border-gray-600 px-3 py-1 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                             Next <ChevronRight className="h-4 w-4 ml-1" />
                         </button>

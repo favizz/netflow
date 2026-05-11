@@ -91,15 +91,11 @@ export default function LoginForm({ onGoogleLogin }: LoginFormProps) {
 
           <div className="flex flex-col items-center gap-4 pt-2">
             {isLoading && (
-              <div className="flex items-center gap-2 py-3">
-                <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-                <span className="text-sm text-slate-500">Memproses...</span>
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+                <div className="h-10 w-10 animate-spin rounded-full border-4 border-white border-t-transparent" />
               </div>
             )}
-
-            {!isLoading && (
-              <div ref={buttonRef} className="flex justify-center w-full max-w-xs" />
-            )}
+            <div ref={buttonRef} className="flex justify-center w-full max-w-xs" />
 
             {error && (
               <p className="text-sm text-destructive text-center mt-2 font-medium">{error}</p>

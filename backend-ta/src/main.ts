@@ -36,7 +36,7 @@ async function bootstrap() {
   httpAdapter
     .getInstance()
     .use(
-      '/admin/queues',
+      '/api/admin/queues',
       bullAdapter.getRouter() as import('express').RequestHandler,
     );
   /* eslint-enable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
