@@ -225,7 +225,7 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
     <div className="bg-background pb-36">
       {/* Header */}
       <div className="flex items-center gap-2 px-3 py-3 sticky top-0 bg-background/95 backdrop-blur-sm z-10 border-b border-border">
-        {step !== "amount" ? (
+        {step !== "amount" && (
           <button
             onClick={() => setStep(step === "method" ? "amount" : "method")}
             className="p-2 rounded-xl hover:bg-muted active:bg-muted/70 transition-colors flex-shrink-0"
@@ -233,8 +233,6 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
           >
             <ArrowLeft size={20} className="text-foreground" />
           </button>
-        ) : (
-          <div className="w-10" />
         )}
         <div>
           <h1 className="text-base font-bold text-foreground leading-tight">
