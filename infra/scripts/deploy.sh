@@ -17,6 +17,17 @@ PREV_COMMIT_FILE="/tmp/netflow_prev_commit"
 
 log() { echo "[deploy] $(date '+%H:%M:%S') $*"; }
 
+# ── Use port 443 for GitHub SSH if port 22 is blocked ───────────────────────
+# GitHub supports SSH over port 443 via ssh.github.com.
+# This block is idempotent — only writes to ~/.ssh/config once.
+if ! grep -q "ssh.github.com" "${HOME}/.ssh/config" 2>/dev/null; then
+  mkdir -p "${HOME}/.ssh"
+  printf '\nHost github.com\n  Hostname ssh.github.com\n  Port 443\n  StrictHostKeyChecking no\n' \
+    >> "${HOME}/.ssh/config"
+  chmod 600 "${HOME}/.ssh/config"
+  log "Configured GitHub SSH to use port 443"
+fi
+
 # ── Pull latest code then re-exec so we always run the newest deploy.sh ──────
 # On the first invocation (NETFLOW_REEXEC unset) we pull and immediately
 # replace this process with the freshly-pulled version of the script.
