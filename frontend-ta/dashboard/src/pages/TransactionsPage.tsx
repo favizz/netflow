@@ -112,7 +112,7 @@ export default function TransactionsPage() {
         <div className="space-y-6">
             <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Transaction Logs</h1>
 
-            <div className="rounded-lg bg-white dark:bg-gray-800 shadow-sm ring-1 ring-gray-900/5 dark:ring-gray-700 overflow-hidden">
+            <div className="rounded-lg bg-white dark:bg-gray-900 shadow-sm ring-1 ring-gray-900/5 dark:ring-gray-700 overflow-hidden">
                 {/* Filter header - same pattern as InventoryTable */}
                 <div className="border-b border-gray-200 dark:border-gray-700 px-6 py-4">
                     <div className="flex flex-col space-y-4 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
@@ -135,7 +135,7 @@ export default function TransactionsPage() {
                 </div>
 
                 <table className="w-full text-left text-sm text-gray-500 dark:text-gray-400">
-                    <thead className="bg-gray-50 dark:bg-gray-800/60 text-xs uppercase text-gray-700 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700">
+                    <thead className="bg-gray-50 dark:bg-gray-800 text-xs uppercase text-gray-700 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
                         <tr>
                             <th className="px-6 py-3 font-medium">Transaction ID</th>
                             <th className="px-6 py-3 font-medium">Date &amp; Time</th>
@@ -161,7 +161,7 @@ export default function TransactionsPage() {
                             </tr>
                         )}
                         {pageData.map((tx) => (
-                            <tr key={tx.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/40">
+                            <tr key={tx.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
                                 <td className="px-6 py-4 font-mono text-xs text-gray-900 dark:text-gray-100">{tx.id}</td>
                                 <td className="px-6 py-4 text-xs">
                                     {tx.createdAt ? new Date(tx.createdAt).toLocaleString('id-ID') : '-'}
@@ -193,7 +193,7 @@ export default function TransactionsPage() {
                         <button
                             onClick={() => setPage(p => Math.max(1, p - 1))}
                             disabled={page === 1}
-                            className="flex items-center rounded-md border border-gray-200 dark:border-gray-600 px-3 py-1 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                            className="flex items-center rounded-md border border-gray-200 dark:border-gray-600 px-3 py-1 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                             <ChevronLeft className="h-4 w-4 mr-1" /> Prev
                         </button>
@@ -201,7 +201,7 @@ export default function TransactionsPage() {
                         <button
                             onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                             disabled={page === totalPages}
-                            className="flex items-center rounded-md border border-gray-200 dark:border-gray-600 px-3 py-1 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                            className="flex items-center rounded-md border border-gray-200 dark:border-gray-600 px-3 py-1 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                             Next <ChevronRight className="h-4 w-4 ml-1" />
                         </button>

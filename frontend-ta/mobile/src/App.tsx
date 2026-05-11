@@ -343,12 +343,6 @@ function NotificationsPage({ anomalies, lastReadAt }: { anomalies: AnomalyItem[]
           })}
         </div>
       )}
-
-      {shown.length > 0 && (
-        <p className="text-xs text-muted-foreground/50 text-center pb-4">
-          Menutup halaman ini menandai semua sebagai telah dibaca
-        </p>
-      )}
     </div>
   )
 }

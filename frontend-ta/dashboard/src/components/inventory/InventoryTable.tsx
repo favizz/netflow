@@ -13,7 +13,7 @@ function FilterDropdown({ label, options, value, onChange }: {
         <div className="relative">
             <button
                 onClick={() => setOpen(o => !o)}
-                className="flex items-center gap-2 h-9 rounded-md border border-gray-200 dark:border-gray-600 px-3 text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 bg-white dark:bg-gray-700"
+                className="flex items-center gap-2 h-9 rounded-md border border-gray-200 dark:border-gray-600 px-3 text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 bg-white dark:bg-gray-800"
             >
                 {label}: <span className="text-gray-900 dark:text-gray-200">{value}</span>
                 <ChevronDown className="h-3.5 w-3.5" />
@@ -25,6 +25,38 @@ function FilterDropdown({ label, options, value, onChange }: {
                             className={cn("block w-full px-4 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-700",
                                 value === o ? "text-primary font-medium" : "text-gray-700 dark:text-gray-300")}>
                             {o}
+                        </button>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
+
+function SelectDropdown({ label, items, value, onChange }: {
+    label: string;
+    items: { value: string; label: string }[];
+    value: string;
+    onChange: (v: string) => void;
+}) {
+    const [open, setOpen] = useState(false);
+    const current = items.find(i => i.value === value);
+    return (
+        <div className="relative">
+            <button
+                onClick={() => setOpen(o => !o)}
+                className="flex items-center gap-2 h-9 rounded-md border border-gray-200 dark:border-gray-600 px-3 text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 bg-white dark:bg-gray-800"
+            >
+                {label}: <span className="text-gray-900 dark:text-gray-200">{current?.label ?? label}</span>
+                <ChevronDown className="h-3.5 w-3.5" />
+            </button>
+            {open && (
+                <div className="absolute right-0 mt-1 min-w-[160px] max-h-48 overflow-y-auto rounded-md bg-white dark:bg-gray-800 py-1 shadow-lg ring-1 ring-black/5 dark:ring-gray-700 z-10">
+                    {items.map(item => (
+                        <button key={item.value} onClick={() => { onChange(item.value); setOpen(false); }}
+                            className={cn("block w-full px-4 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-700",
+                                value === item.value ? "text-primary font-medium" : "text-gray-700 dark:text-gray-300")}>
+                            {item.label}
                         </button>
                     ))}
                 </div>
@@ -68,7 +100,7 @@ export function InventoryTable({ data, initialFilter = "", buildings = [], onEdi
     const end = Math.min(page * PAGE_SIZE, filteredData.length);
 
     return (
-        <div className="rounded-lg bg-white dark:bg-gray-800 shadow-sm ring-1 ring-gray-900/5 dark:ring-gray-700">
+        <div className="rounded-lg bg-white dark:bg-gray-900 shadow-sm ring-1 ring-gray-900/5 dark:ring-gray-700">
             <div className="border-b border-gray-200 dark:border-gray-700 px-3 sm:px-6 py-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex items-center gap-2">
@@ -86,17 +118,16 @@ export function InventoryTable({ data, initialFilter = "", buildings = [], onEdi
                                 className="h-9 w-full sm:w-52 rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 pl-9 pr-4 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary placeholder:text-gray-400 dark:placeholder:text-gray-500"
                             />
                         </div>
-                        {buildings.length > 0 && (
-                            <select
+                                        {buildings.length > 0 && (
+                            <SelectDropdown
+                                label="Building"
+                                items={[
+                                    { value: "all", label: "All" },
+                                    ...buildings.map(b => ({ value: String(b.id), label: b.name }))
+                                ]}
                                 value={selectedBuilding}
-                                onChange={(e) => setSelectedBuilding(e.target.value)}
-                                className="h-9 rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 text-sm text-gray-700 dark:text-gray-300 outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-                            >
-                                <option value="all">All Buildings</option>
-                                {buildings.map(b => (
-                                    <option key={b.id} value={b.id}>{b.name}</option>
-                                ))}
-                            </select>
+                                onChange={setSelectedBuilding}
+                            />
                         )}
                         <FilterDropdown
                             label="Status"
@@ -119,7 +150,7 @@ export function InventoryTable({ data, initialFilter = "", buildings = [], onEdi
 
             <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm text-gray-500 dark:text-gray-400">
-                    <thead className="bg-gray-50 dark:bg-gray-800/60 text-xs uppercase text-gray-700 dark:text-gray-400">
+                    <thead className="bg-gray-50 dark:bg-gray-800 text-xs uppercase text-gray-700 dark:text-gray-300">
                         <tr>
                             <th className="hidden sm:table-cell px-3 sm:px-6 py-3 font-medium">Building</th>
                             <th className="px-3 sm:px-6 py-3 font-medium">Unit</th>
@@ -135,7 +166,7 @@ export function InventoryTable({ data, initialFilter = "", buildings = [], onEdi
                             pageData.map((item) => (
                                 <tr
                                     key={item.id}
-                                    className="hover:bg-gray-50 dark:hover:bg-gray-700/40 cursor-pointer"
+                                    className="hover:bg-gray-50 dark:hover:bg-gray-800/50 cursor-pointer"
                                     onClick={() => navigate(`/devices/${item.id}`)}
                                 >
                                     <td className="hidden sm:table-cell px-3 sm:px-6 py-3">
@@ -214,7 +245,7 @@ export function InventoryTable({ data, initialFilter = "", buildings = [], onEdi
                     <button
                         onClick={() => setPage(p => Math.max(1, p - 1))}
                         disabled={page === 1}
-                        className="flex items-center rounded-md border border-gray-200 dark:border-gray-600 px-3 py-1 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                        className="flex items-center rounded-md border border-gray-200 dark:border-gray-600 px-3 py-1 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                         <ChevronLeft className="h-4 w-4 mr-1" /> Prev
                     </button>
@@ -222,7 +253,7 @@ export function InventoryTable({ data, initialFilter = "", buildings = [], onEdi
                     <button
                         onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                         disabled={page === totalPages}
-                        className="flex items-center rounded-md border border-gray-200 dark:border-gray-600 px-3 py-1 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                        className="flex items-center rounded-md border border-gray-200 dark:border-gray-600 px-3 py-1 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                         Next <ChevronRight className="h-4 w-4 ml-1" />
                     </button>

@@ -218,7 +218,7 @@ export default function UsersPage() {
                 </div>
             )}
 
-            <div className="rounded-lg bg-white dark:bg-gray-800 shadow-sm ring-1 ring-gray-900/5 dark:ring-gray-700 overflow-hidden">
+            <div className="rounded-lg bg-white dark:bg-gray-900 shadow-sm ring-1 ring-gray-900/5 dark:ring-gray-700 overflow-hidden">
                 <div className="border-b border-gray-200 dark:border-gray-700 px-3 sm:px-6 py-4">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <div className="flex items-center gap-2">
@@ -255,7 +255,7 @@ export default function UsersPage() {
 
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm text-left">
-                        <thead className="bg-gray-50 dark:bg-gray-700/50 text-xs uppercase text-gray-600 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700">
+                        <thead className="bg-gray-50 dark:bg-gray-800 text-xs uppercase text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
                             <tr>
                                 <th className="px-3 sm:px-6 py-3 font-medium">User</th>
                                 <th className="px-3 sm:px-6 py-3 font-medium">Role</th>
@@ -274,7 +274,7 @@ export default function UsersPage() {
                             {pageData.map(res => {
                                 const assigned = residentUnits(res.email);
                                 return (
-                                    <tr key={res.email} className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
+                                    <tr key={res.email} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
                                         <td className="px-3 sm:px-6 py-3">
                                             <div className="flex items-center gap-3">
                                                 {res.picture ? (
@@ -348,12 +348,12 @@ export default function UsersPage() {
                     </span>
                     <div className="flex items-center gap-2">
                         <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
-                            className="flex items-center rounded-md border border-gray-200 dark:border-gray-600 px-2.5 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed">
+                            className="flex items-center rounded-md border border-gray-200 dark:border-gray-600 px-2.5 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed">
                             <ChevronLeft className="h-3.5 w-3.5 mr-0.5" /> Prev
                         </button>
                         <span className="text-xs text-gray-500 dark:text-gray-400">{page} / {totalPages}</span>
                         <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
-                            className="flex items-center rounded-md border border-gray-200 dark:border-gray-600 px-2.5 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed">
+                            className="flex items-center rounded-md border border-gray-200 dark:border-gray-600 px-2.5 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed">
                             Next <ChevronRight className="h-3.5 w-3.5 ml-0.5" />
                         </button>
                     </div>
