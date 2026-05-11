@@ -182,20 +182,25 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 
     steps:
-      - name: Configure GitHub SSH on server (port 443 fallback)
+      - name: Switch server remote to HTTPS and inject deploy token
         uses: appleboy/ssh-action@v1.0.3
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           port: ${{ secrets.DEPLOY_PORT }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_KEY }}
+          envs: GH_TOKEN
           script: |
-            mkdir -p ~/.ssh
-            if ! grep -q "ssh.github.com" ~/.ssh/config 2>/dev/null; then
-              printf '\nHost github.com\n  Hostname ssh.github.com\n  Port 443\n  StrictHostKeyChecking no\n' >> ~/.ssh/config
-              chmod 600 ~/.ssh/config
-              echo "Configured GitHub SSH to use port 443"
+            ORIGIN=$(git -C ~/TA-Flowmeter remote get-url origin 2>/dev/null || echo "")
+            if echo "$ORIGIN" | grep -q "git@github.com:"; then
+              REPO_PATH=$(echo "$ORIGIN" | sed 's|git@github.com:||' | sed 's|\.git$||')
+              git -C ~/TA-Flowmeter remote set-url origin "https://github.com/${REPO_PATH}.git"
+              echo "Switched remote to HTTPS"
             fi
+            git -C ~/TA-Flowmeter config --local credential.helper \
+              "!f() { echo username=x-access-token; echo password=${GH_TOKEN}; }; f"
 
       - name: SSH deploy
         uses: appleboy/ssh-action@v1.0.3
