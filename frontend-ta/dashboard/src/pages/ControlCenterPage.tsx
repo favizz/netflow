@@ -622,25 +622,20 @@ export default function ControlCenterPage() {
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
                 <div className="mx-4 w-full max-w-md rounded-lg bg-white dark:bg-gray-800 shadow-xl ring-1 ring-gray-900/10 dark:ring-gray-700">
                     <div className="p-6">
-                        <div className="flex items-start gap-4">
-                            <div className="rounded-full bg-red-100 dark:bg-red-900/30 p-2.5 shrink-0">
-                                <Radio className="h-5 w-5 text-red-600 dark:text-red-400" />
-                            </div>
-                            <div>
-                                <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">
-                                    Confirm Broadcast Command
-                                </h3>
-                                <p className="mt-1.5 text-sm text-gray-600 dark:text-gray-300">
-                                    This will send{' '}
-                                    <span className="font-semibold text-gray-900 dark:text-gray-100">
-                                        {broadcastConfirm.type === 'relay' ? 'Relay' : 'Valve'}{' '}
-                                        {broadcastConfirm.type === 'relay'
-                                            ? broadcastConfirm.value === 1 ? 'ON' : 'OFF'
-                                            : broadcastConfirm.value === 1 ? 'OPEN' : 'CLOSE'}
-                                    </span>{' '}
-                                    to <span className="font-semibold text-gray-900 dark:text-gray-100">all devices</span> simultaneously. This cannot be undone.
-                                </p>
-                            </div>
+                        <div>
+                            <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">
+                                Confirm Broadcast Command
+                            </h3>
+                            <p className="mt-1.5 text-sm text-gray-600 dark:text-gray-300">
+                                This will send{' '}
+                                <span className="font-semibold text-gray-900 dark:text-gray-100">
+                                    {broadcastConfirm.type === 'relay' ? 'Relay' : 'Valve'}{' '}
+                                    {broadcastConfirm.type === 'relay'
+                                        ? broadcastConfirm.value === 1 ? 'ON' : 'OFF'
+                                        : broadcastConfirm.value === 1 ? 'OPEN' : 'CLOSE'}
+                                </span>{' '}
+                                to <span className="font-semibold text-gray-900 dark:text-gray-100">all devices</span> simultaneously. This cannot be undone.
+                            </p>
                         </div>
                         <div className="mt-6 flex justify-end gap-3">
                             <button

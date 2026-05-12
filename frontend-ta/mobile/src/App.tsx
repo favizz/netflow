@@ -288,13 +288,9 @@ export default function App() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4">
           <div className="w-full max-w-xs rounded-2xl bg-card shadow-xl ring-1 ring-border">
             <div className="p-6 flex flex-col items-center text-center gap-4">
-              <div className="rounded-full bg-destructive/10 p-3">
-                <LogOut size={22} className="text-destructive" />
-              </div>
-              <div>
-                <h3 className="text-base font-semibold text-foreground">Keluar?</h3>
-                <p className="mt-1 text-sm text-muted-foreground">Sesi aktif akan diakhiri.</p>
-              </div>
+              <p className="text-sm font-semibold text-foreground">
+                Keluar sebagai <span className="font-normal text-muted-foreground">Unit {userUnit}</span>?
+              </p>
               <div className="flex gap-3 w-full">
                 <button
                   onClick={() => setShowLogoutConfirm(false)}

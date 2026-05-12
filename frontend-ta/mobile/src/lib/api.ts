@@ -326,6 +326,12 @@ export const api = {
   },
 
 
+  getTopupStatus(unitNo: string, transactionId: string) {
+    return request<{ status: string; confirmedAt: string | null }>(
+      `/gateway/mobile/${encodeURIComponent(unitNo)}/topup/status/${encodeURIComponent(transactionId)}`,
+    );
+  },
+
   autoConfirmTopup(unitNo: string, transactionId: string) {
     return request<PaymentTransaction>(
       `/gateway/mobile/${encodeURIComponent(unitNo)}/topup/auto-confirm/${encodeURIComponent(transactionId)}`,

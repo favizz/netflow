@@ -277,6 +277,11 @@ export class PaymentsService {
     return this.toResponse(tx);
   }
 
+  async getTopupStatus(unitNo: string, transactionId: string) {
+    const tx = await this.getTransactionForUnit(unitNo, transactionId);
+    return { status: tx.status, confirmedAt: tx.confirmed_at?.toISOString() ?? null };
+  }
+
   async listTransactionsForUnit(unitNo: string) {
     const txs = await this.txRepo.find({
       where: { unit_no: unitNo },

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { Search, ChevronDown, ChevronUp, Copy, Check } from "lucide-react";
 import { fetchApi } from "@/lib/api";
 import { API_BASE_URL } from "@/lib/constants";
@@ -108,24 +109,49 @@ function FilterDropdown({ label, options, value, onChange }: {
     onChange: (v: string) => void;
 }) {
     const [open, setOpen] = useState(false);
+    const [dropPos, setDropPos] = useState({ top: 0, left: 0 });
+    const btnRef = useRef<HTMLButtonElement>(null);
+
+    useEffect(() => {
+        if (!open) return;
+        const close = (e: MouseEvent) => {
+            if (!btnRef.current?.contains(e.target as Node)) setOpen(false);
+        };
+        document.addEventListener('mousedown', close);
+        return () => document.removeEventListener('mousedown', close);
+    }, [open]);
+
+    const handleToggle = () => {
+        if (!open && btnRef.current) {
+            const rect = btnRef.current.getBoundingClientRect();
+            setDropPos({ top: rect.bottom + 4, left: rect.left });
+        }
+        setOpen(o => !o);
+    };
+
     return (
         <div className="relative">
             <button
-                onClick={() => setOpen(o => !o)}
+                ref={btnRef}
+                onClick={handleToggle}
                 className="flex items-center gap-2 rounded-md border border-gray-200 dark:border-gray-600 px-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 bg-white dark:bg-gray-800"
             >
                 {label}: <span className="text-gray-900 dark:text-gray-200 capitalize">{value}</span>
                 <ChevronDown className="h-4 w-4" />
             </button>
-            {open && (
-                <div className="absolute left-0 mt-1 min-w-[160px] rounded-md bg-white dark:bg-gray-800 py-1 shadow-lg ring-1 ring-black/5 dark:ring-gray-700 z-10">
+            {open && createPortal(
+                <div
+                    style={{ position: 'fixed', top: dropPos.top, left: dropPos.left, zIndex: 9999 }}
+                    className="min-w-[160px] rounded-md bg-white dark:bg-gray-800 py-1 shadow-lg ring-1 ring-black/5 dark:ring-gray-700"
+                >
                     {options.map(o => (
                         <button key={o} onClick={() => { onChange(o); setOpen(false); }}
                             className="block w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 capitalize">
                             {o}
                         </button>
                     ))}
-                </div>
+                </div>,
+                document.body
             )}
         </div>
     );
