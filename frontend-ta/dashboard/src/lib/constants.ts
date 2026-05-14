@@ -5,6 +5,7 @@ export const MQTT_CONFIG = {
     options: {
         username: import.meta.env.VITE_MQTT_USERNAME || undefined,
         password: import.meta.env.VITE_MQTT_PASSWORD || undefined,
+        reconnectPeriod: 0,
     },
 };
 

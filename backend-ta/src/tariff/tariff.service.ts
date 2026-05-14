@@ -1,11 +1,20 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { IsDateString, IsIn, IsNumber, IsPositive } from 'class-validator';
+import { Type } from 'class-transformer';
 import { InjectRepository } from '@nestjs/typeorm';
 import { LessThanOrEqual, Repository } from 'typeorm';
 import { Tariff } from './entities/tariff.entity';
 
 export class CreateTariffDto {
+  @IsIn(['electricity', 'water'])
   utility_type!: 'electricity' | 'water';
+
+  @IsNumber()
+  @IsPositive()
+  @Type(() => Number)
   price_per_unit!: number;
+
+  @IsDateString()
   effective_date!: string;
 }
 

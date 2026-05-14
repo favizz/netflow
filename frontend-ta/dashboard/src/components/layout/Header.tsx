@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Bell, Sun, Moon, User, X, AlertTriangle, Copy, Check } from "lucide-react";
-import { getAdminEmail } from "@/lib/auth";
+import { getAdminName } from "@/lib/auth";
 import { fetchApi } from "@/lib/api";
 
 const NOTIF_LAST_READ_KEY = 'notif_last_read';
@@ -71,7 +71,7 @@ interface HeaderProps {
 export function Header({ theme, toggleTheme }: HeaderProps) {
     const [notifOpen, setNotifOpen] = useState(false);
     const [notifications, setNotifications] = useState<NotifItem[]>([]);
-    const adminEmail = getAdminEmail();
+    const adminName = getAdminName();
 
     const loadNotifications = useCallback(async () => {
         try {
@@ -187,8 +187,8 @@ export function Header({ theme, toggleTheme }: HeaderProps) {
                 <div className="h-6 w-px bg-gray-200 dark:bg-gray-600" />
                 <div className="flex items-center space-x-3">
                     <div className="flex flex-col items-end">
-                        <span className="text-sm font-medium text-gray-900 dark:text-gray-100">Admin</span>
-                        <span className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[140px]">{adminEmail || 'Property Manager'}</span>
+                        <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{adminName || 'Admin'}</span>
+                        <span className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[140px]">Property Manager</span>
                     </div>
                     <div className="h-8 w-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
                         <User className="h-5 w-5 text-gray-500 dark:text-gray-400" />

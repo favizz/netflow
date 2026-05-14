@@ -148,7 +148,7 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
       username: MQTT_CONFIG.username || undefined,
       password: MQTT_CONFIG.password || undefined,
       clientId: `dash_${Math.random().toString(16).slice(2, 10)}`,
-      reconnectPeriod: 5000,
+      reconnectPeriod: 0,
       connectTimeout: 10000,
     })
     mqttRef.current = client
