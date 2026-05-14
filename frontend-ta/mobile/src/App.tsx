@@ -187,7 +187,7 @@ export default function App() {
 
       {/* ── Header ─────────────────────────────────────────────────────── */}
       <header className="flex-none z-30 bg-card border-b border-border flex items-center justify-between px-4 h-14 gap-3">
-        <img src="/netflow-logo-white.png" alt="NetFlow" className="h-8 w-auto shrink-0" />
+        <img src={`${import.meta.env.BASE_URL}${theme === 'dark' ? 'netflow-logo-white.png' : 'netflow-logo-black.png'}`} alt="NetFlow" className="h-8 w-auto shrink-0" />
 
         {userUnit && (
           <UnitSelector units={availableUnits} current={userUnit} onSelect={handleSelectUnit} />

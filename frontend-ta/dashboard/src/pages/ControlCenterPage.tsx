@@ -135,6 +135,15 @@ function InputField({ label, value, min, max, step, unit, onChange }: {
     unit?: string;
     onChange: (v: number) => void;
 }) {
+    const [local, setLocal] = useState(String(value));
+    useEffect(() => { setLocal(String(value)); }, [value]);
+
+    const handleBlur = () => {
+        const v = step < 1 ? parseFloat(local) : parseInt(local);
+        if (!isNaN(v)) onChange(Math.min(max, Math.max(min, v)));
+        else setLocal(String(value));
+    };
+
     return (
         <div>
             <div className="flex items-center justify-between mb-1.5">
@@ -146,11 +155,9 @@ function InputField({ label, value, min, max, step, unit, onChange }: {
                 min={min}
                 max={max}
                 step={step}
-                value={value}
-                onChange={e => {
-                    const v = step < 1 ? parseFloat(e.target.value) : parseInt(e.target.value);
-                    if (!isNaN(v)) onChange(Math.min(max, Math.max(min, v)));
-                }}
+                value={local}
+                onChange={e => setLocal(e.target.value)}
+                onBlur={handleBlur}
                 className="block w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-1.5 text-sm font-mono text-gray-900 dark:text-gray-100 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
             />
         </div>

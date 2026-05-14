@@ -125,7 +125,13 @@ export class DeviceService {
           energy_total: incomingEnergyTotal || null,
           water_total: incomingWaterTotal || null,
         });
-        await queryRunner.manager.save(row);
+        try {
+          await queryRunner.manager.save(row);
+        } catch (dupErr: unknown) {
+          // Two telemetry packets within the same MySQL-second share a PK —
+          // skip the duplicate row but keep the balance update in this transaction.
+          if ((dupErr as { code?: string })?.code !== 'ER_DUP_ENTRY') throw dupErr;
+        }
       }
 
       await queryRunner.commitTransaction();
