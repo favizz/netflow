@@ -115,22 +115,23 @@ export class DeviceService {
         await queryRunner.manager.save(unit);
         savedUnit = unit;
 
-        await queryRunner.manager
-          .createQueryBuilder()
-          .insert()
-          .into(MeterReading)
-          .values({
-            time: new Date(),
-            device_id: deviceId,
-            voltage,
-            current,
-            power,
-            water_flow: waterFlow,
-            energy_total: incomingEnergyTotal || null,
-            water_total: incomingWaterTotal || null,
-          })
-          .orIgnore()
-          .execute();
+        const row = queryRunner.manager.create(MeterReading, {
+          time: new Date(),
+          device_id: deviceId,
+          voltage,
+          current,
+          power,
+          water_flow: waterFlow,
+          energy_total: incomingEnergyTotal || null,
+          water_total: incomingWaterTotal || null,
+        });
+        try {
+          await queryRunner.manager.save(row);
+        } catch (dupErr: unknown) {
+          // Two telemetry packets within the same MySQL-second share a PK —
+          // skip the duplicate row but keep the balance update in this transaction.
+          if ((dupErr as { code?: string })?.code !== 'ER_DUP_ENTRY') throw dupErr;
+        }
       }
 
       await queryRunner.commitTransaction();
