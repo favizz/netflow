@@ -192,19 +192,23 @@ jobs:
 
       - name: Rsync source to server
         run: |
-          rsync -az --delete \
-            --exclude='.git' \
-            --exclude='.env' \
-            --exclude='**/.env' \
-            --exclude='node_modules' \
-            --exclude='frontend-ta/dashboard/dist' \
-            --exclude='frontend-ta/mobile/dist' \
-            --exclude='backend-ta/dist' \
-            --exclude='__pycache__' \
-            --exclude='*.pyc' \
-            -e "ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }}" \
-            . \
-            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:~/TA-Flowmeter/
+          for attempt in 1 2 3; do
+            echo "Rsync attempt $attempt/3..."
+            rsync -az --delete \
+              --exclude='.git' \
+              --exclude='.env' \
+              --exclude='**/.env' \
+              --exclude='node_modules' \
+              --exclude='frontend-ta/dashboard/dist' \
+              --exclude='frontend-ta/mobile/dist' \
+              --exclude='backend-ta/dist' \
+              --exclude='__pycache__' \
+              --exclude='*.pyc' \
+              -e "ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }}" \
+              . \
+              ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:~/TA-Flowmeter/ && break
+            [ $attempt -lt 3 ] && echo "Attempt $attempt failed, retrying in 15s..." && sleep 15
+          done
 
       - name: Run deploy script on server
         uses: appleboy/ssh-action@v1.0.3
@@ -217,4 +221,5 @@ jobs:
           key: ${{ secrets.DEPLOY_KEY }}
           envs: VITE_GOOGLE_CLIENT_ID
           script_stop: true
+          command_timeout: 30m
           script: SKIP_PULL=1 bash ~/TA-Flowmeter/infra/scripts/deploy.sh
