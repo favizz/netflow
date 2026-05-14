@@ -4,6 +4,8 @@ import { InventoryTable } from "@/components/inventory/InventoryTable";
 import { AddDeviceModal } from "@/components/inventory/AddDeviceModal";
 import type { InventoryItem } from "@/lib/mockData";
 import { fetchApi } from "@/lib/api";
+import mqtt from "mqtt";
+import { MQTT_CONFIG } from "@/lib/constants";
 
 export default function DevicesPage() {
     const [searchParams] = useSearchParams();
@@ -51,6 +53,29 @@ export default function DevicesPage() {
         const interval = setInterval(loadData, 30_000);
         return () => clearInterval(interval);
     }, [loadData]);
+
+    // Live connectivity: flip any device row to Online as soon as telemetry arrives
+    useEffect(() => {
+        if (!MQTT_CONFIG.brokerUrl) return;
+        const client = mqtt.connect(MQTT_CONFIG.brokerUrl, {
+            ...MQTT_CONFIG.options,
+            clientId: `dashboard-devices-${Math.random().toString(16).slice(2, 8)}`,
+        });
+        client.on('connect', () => { client.subscribe('device/+/data'); });
+        client.on('message', (topic) => {
+            const m = topic.match(/^device\/([^/]+)\/data$/);
+            if (!m) return;
+            const deviceId = m[1];
+            setData(prev => {
+                const idx = prev.findIndex(item => item.meterSerial === deviceId);
+                if (idx === -1 || prev[idx].status === "Online") return prev;
+                const next = [...prev];
+                next[idx] = { ...next[idx], status: "Online", lastUpdate: "Live" };
+                return next;
+            });
+        });
+        return () => { client.end(); };
+    }, []);
 
     return (
         <div className="space-y-6">

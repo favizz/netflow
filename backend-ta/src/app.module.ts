@@ -93,6 +93,10 @@ import { AppService } from './app.service';
         name: 'payment-expiry',
         adapter: BullMQAdapter,
       },
+      {
+        name: 'broadcast',
+        adapter: BullMQAdapter,
+      },
     ),
 
     // ── Rate limiting (per-IP) ────────────────────────────────────────────────

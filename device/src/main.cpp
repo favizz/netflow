@@ -367,13 +367,19 @@ void handleCommand(uint8_t b) {
 
   if (type == 0x1) {
     typeStr = "relay";
-    rs = value;
-    value ? SSROpen() : SSRClose();
+    // Idempotent: only actuate if state actually changes (retained messages
+    // are replayed on every reconnect; avoid redundant servo/SSR toggling).
+    if (rs != (int)value) {
+      rs = value;
+      value ? SSROpen() : SSRClose();
+    }
     Serial.printf("[CMD] Relay → %s\n", rs ? "ON" : "OFF");
   } else if (type == 0x2) {
     typeStr = "valve";
-    vs = value;
-    value ? ServoValveOpen() : ServoValveClose();
+    if (vs != (int)value) {
+      vs = value;
+      value ? ServoValveOpen() : ServoValveClose();
+    }
     Serial.printf("[CMD] Valve → %s\n", vs ? "OPEN" : "CLOSE");
   } else {
     Serial.printf("[CMD] Unknown type 0x%X\n", type);

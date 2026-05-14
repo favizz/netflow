@@ -71,7 +71,7 @@ export class GatewayService {
     const isOnline = await this.unitService.checkDeviceOnline(unit.device_id);
     if (!isOnline) throw new BadRequestException('Device is offline');
     await this.unitService.setRelayStatus(unit.id, on, actorEmail);
-    this.mqttClient.emit(
+    this.publishRetained(
       `device/${unit.device_id}/command`,
       encodeCommand('relay', on ? 1 : 0),
     );
@@ -83,10 +83,19 @@ export class GatewayService {
     const isOnline = await this.unitService.checkDeviceOnline(unit.device_id);
     if (!isOnline) throw new BadRequestException('Device is offline');
     await this.unitService.setValveStatus(unit.id, open, actorEmail);
-    this.mqttClient.emit(
+    this.publishRetained(
       `device/${unit.device_id}/command`,
       encodeCommand('valve', open ? 1 : 0),
     );
     return { valveStatus: open };
+  }
+
+  private publishRetained(topic: string, payload: Buffer): void {
+    const raw = (this.mqttClient as unknown as { mqttClient?: { connected?: boolean; publish?: (...a: unknown[]) => void } }).mqttClient;
+    if (raw?.connected && raw.publish) {
+      raw.publish(topic, payload, { retain: true, qos: 1 });
+    } else {
+      this.mqttClient.emit(topic, payload);
+    }
   }
 }

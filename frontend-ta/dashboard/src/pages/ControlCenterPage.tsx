@@ -126,7 +126,7 @@ function TariffCard({ icon, label, unit, tariff, onSave }: {
     );
 }
 
-function InputField({ label, value, min, max, step, unit, serverValue, onChange }: {
+function InputField({ label, value, min, max, step, unit, serverValue, onChange, onValidityChange }: {
     label: string;
     value: number;
     min: number;
@@ -135,6 +135,7 @@ function InputField({ label, value, min, max, step, unit, serverValue, onChange 
     unit?: string;
     serverValue: number;
     onChange: (v: number) => void;
+    onValidityChange?: (valid: boolean) => void;
 }) {
     const [local, setLocal] = useState(String(value));
     useEffect(() => { setLocal(String(value)); }, [value]);
@@ -142,6 +143,8 @@ function InputField({ label, value, min, max, step, unit, serverValue, onChange 
     const parsed = step < 1 ? parseFloat(local) : parseInt(local);
     const isInvalid = isNaN(parsed) || parsed < min || parsed > max;
     const isChanged = !isInvalid && parsed !== serverValue;
+
+    useEffect(() => { onValidityChange?.(!isInvalid); }, [isInvalid, onValidityChange]);
 
     const handleBlur = () => {
         if (!isNaN(parsed)) onChange(parsed);
@@ -183,6 +186,11 @@ export default function ControlCenterPage() {
     const [loadingConfig, setLoadingConfig] = useState(true);
     const [saving, setSaving] = useState(false);
     const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
+    const [fieldValidity, setFieldValidity] = useState({ flowrate: true, power: true, sampling: true });
+    const hasInvalidInput = !fieldValidity.flowrate || !fieldValidity.power || !fieldValidity.sampling;
+    const onFlowrateValid = useCallback((v: boolean) => setFieldValidity(p => ({ ...p, flowrate: v })), []);
+    const onPowerValid    = useCallback((v: boolean) => setFieldValidity(p => ({ ...p, power: v })),    []);
+    const onSamplingValid = useCallback((v: boolean) => setFieldValidity(p => ({ ...p, sampling: v })), []);
 
     // ── Tariffs ───────────────────────────────────────────────────────────────
     const [elecTariff, setElecTariff] = useState<Tariff | null>(null);
@@ -454,6 +462,7 @@ export default function ControlCenterPage() {
                             max={5}
                             step={0.01}
                             onChange={v => setConfig(c => ({ ...c, CAL_FACTOR_FLOWRATE: v }))}
+                            onValidityChange={onFlowrateValid}
                         />
                         <InputField
                             label="Power Calibration Factor"
@@ -463,6 +472,7 @@ export default function ControlCenterPage() {
                             max={2}
                             step={0.01}
                             onChange={v => setConfig(c => ({ ...c, CAL_FACTOR_POWER: v }))}
+                            onValidityChange={onPowerValid}
                         />
                         <InputField
                             label="Sensor Sampling Time"
@@ -473,12 +483,13 @@ export default function ControlCenterPage() {
                             step={1}
                             unit="s"
                             onChange={v => setConfig(c => ({ ...c, SENSOR_SAMPLING_TIME: v }))}
+                            onValidityChange={onSamplingValid}
                         />
 
                         <div className="flex items-center gap-3 pt-2 border-t border-gray-100 dark:border-gray-700">
                             <button
                                 onClick={handleSave}
-                                disabled={saving || !isDirty}
+                                disabled={saving || !isDirty || hasInvalidInput}
                                 className="flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                             >
                                 <Save className="h-4 w-4" />
@@ -486,8 +497,8 @@ export default function ControlCenterPage() {
                             </button>
                             <button
                                 onClick={pushConfigAll}
-                                disabled={!!cmdPending || isDirty}
-                                title={isDirty ? 'Save changes first before pushing to devices' : 'Push saved calibration to all devices'}
+                                disabled={!!cmdPending}
+                                title="Push saved calibration from database to all devices"
                                 className="flex items-center gap-1.5 rounded-md border border-gray-200 dark:border-gray-600 px-3 py-2 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                             >
                                 {cmdPending === 'config' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <SlidersHorizontal className="h-3.5 w-3.5" />}
