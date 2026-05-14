@@ -60,6 +60,7 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
   const [water, setWater]         = useState(0)
   const [relayOn, setRelayOn]         = useState(true)
   const [valveOpen, setValveOpen]     = useState(true)
+  const [isDeviceOnline, setIsDeviceOnline] = useState(false)
   const [loading, setLoading]         = useState(true)
 
   // ── Control dialog ───────────────────────────────────────────────────────
@@ -90,6 +91,7 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
         setWater(Math.max(0, d.summary.remainingEstimate.kwh / 2.5))
         setRelayOn(d.summary.relayStatus)
         setValveOpen(d.summary.valveStatus)
+        setIsDeviceOnline(d.summary.connectivity?.online ?? false)
       } catch { /* errors surface in notification bell */ }
       finally { if (active) setLoading(false) }
     }
@@ -314,6 +316,7 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
           status={kwhStatus}
           controlOn={relayOn}
           controlPending={controlPending && confirmTarget === "relay"}
+          deviceOnline={isDeviceOnline}
           onControlToggle={(next) => requestToggle("relay", next)}
         />
         <StatCard
@@ -326,6 +329,7 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
           status={waterStatus}
           controlOn={valveOpen}
           controlPending={controlPending && confirmTarget === "valve"}
+          deviceOnline={isDeviceOnline}
           onControlToggle={(next) => requestToggle("valve", next)}
         />
       </div>
@@ -488,7 +492,7 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
 }
 
 // ── Compact stat card ─────────────────────────────────────────────────────────
-function StatCard({ icon, label, value, unit, rate, percentage, status, controlOn, controlPending, onControlToggle }: {
+function StatCard({ icon, label, value, unit, rate, percentage, status, controlOn, controlPending, deviceOnline, onControlToggle }: {
   icon: React.ReactNode
   label: string
   value: string
@@ -498,6 +502,7 @@ function StatCard({ icon, label, value, unit, rate, percentage, status, controlO
   status: BalanceStatus
   controlOn: boolean
   controlPending: boolean
+  deviceOnline: boolean
   onControlToggle: (next: boolean) => void
 }) {
   const { label: statusLabel, textColor, bgColor, borderColor } = STATUS_MAP[status]
@@ -508,7 +513,7 @@ function StatCard({ icon, label, value, unit, rate, percentage, status, controlO
         <div className={`p-2 rounded-xl bg-card/80 shadow-sm ${textColor}`}>{icon}</div>
         <Switch
           checked={controlOn}
-          disabled={controlPending}
+          disabled={controlPending || !deviceOnline}
           onCheckedChange={onControlToggle}
           className="data-[state=checked]:bg-primary scale-90"
         />

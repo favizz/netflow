@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { SlidersHorizontal, Save, RefreshCw, CheckCircle, AlertCircle, Zap, Droplets, Loader2, Clock, Pencil, Check, X, Terminal, Radio, UploadCloud } from "lucide-react";
+import { SlidersHorizontal, Save, CheckCircle, AlertCircle, Zap, Droplets, Loader2, Clock, Pencil, Check, X, Terminal, Radio, UploadCloud } from "lucide-react";
 import { fetchApi } from "@/lib/api";
 import mqtt from "mqtt";
 import { MQTT_CONFIG } from "@/lib/constants";
@@ -126,23 +126,33 @@ function TariffCard({ icon, label, unit, tariff, onSave }: {
     );
 }
 
-function InputField({ label, value, min, max, step, unit, onChange }: {
+function InputField({ label, value, min, max, step, unit, serverValue, onChange }: {
     label: string;
     value: number;
     min: number;
     max: number;
     step: number;
     unit?: string;
+    serverValue: number;
     onChange: (v: number) => void;
 }) {
     const [local, setLocal] = useState(String(value));
     useEffect(() => { setLocal(String(value)); }, [value]);
 
+    const parsed = step < 1 ? parseFloat(local) : parseInt(local);
+    const isInvalid = isNaN(parsed) || parsed < min || parsed > max;
+    const isChanged = !isInvalid && parsed !== serverValue;
+
     const handleBlur = () => {
-        const v = step < 1 ? parseFloat(local) : parseInt(local);
-        if (!isNaN(v)) onChange(Math.min(max, Math.max(min, v)));
+        if (!isNaN(parsed)) onChange(parsed);
         else setLocal(String(value));
     };
+
+    const borderClass = isInvalid
+        ? 'border-red-400 dark:border-red-500 focus:border-red-400 focus:ring-red-400'
+        : isChanged
+        ? 'border-amber-400 dark:border-amber-400 focus:border-amber-400 focus:ring-amber-400'
+        : 'border-gray-300 dark:border-gray-600 focus:border-primary focus:ring-primary';
 
     return (
         <div>
@@ -152,13 +162,11 @@ function InputField({ label, value, min, max, step, unit, onChange }: {
             </div>
             <input
                 type="number"
-                min={min}
-                max={max}
                 step={step}
                 value={local}
                 onChange={e => setLocal(e.target.value)}
                 onBlur={handleBlur}
-                className="block w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-1.5 text-sm font-mono text-gray-900 dark:text-gray-100 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                className={`block w-full rounded-md border px-3 py-1.5 text-sm font-mono bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 transition-colors ${borderClass}`}
             />
         </div>
     );
@@ -427,25 +435,11 @@ export default function ControlCenterPage() {
 
             {/* Calibration Settings */}
             <div className="rounded-lg bg-white dark:bg-gray-800 p-6 shadow-sm ring-1 ring-gray-900/5 dark:ring-gray-700">
-                <div className="mb-5 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                        <div className="rounded-lg bg-primary/10 dark:bg-primary/20 p-2">
-                            <SlidersHorizontal className="h-5 w-5 text-primary" />
-                        </div>
-                        <div>
-                            <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">Sensor Calibration</h2>
-                            {isDirty && (
-                                <p className="text-xs text-amber-500 dark:text-amber-400">Unsaved changes</p>
-                            )}
-                        </div>
+                <div className="mb-5 flex items-center gap-3">
+                    <div className="rounded-lg bg-primary/10 dark:bg-primary/20 p-2">
+                        <SlidersHorizontal className="h-5 w-5 text-primary" />
                     </div>
-                    <button
-                        onClick={() => setConfig({ ...serverConfig })}
-                        className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
-                    >
-                        <RefreshCw className="h-3.5 w-3.5" />
-                        Reset to server
-                    </button>
+                    <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">Sensor Calibration</h2>
                 </div>
 
                 {loadingConfig ? (
@@ -455,6 +449,7 @@ export default function ControlCenterPage() {
                         <InputField
                             label="Flow Rate Calibration Factor"
                             value={config.CAL_FACTOR_FLOWRATE}
+                            serverValue={serverConfig.CAL_FACTOR_FLOWRATE}
                             min={0}
                             max={5}
                             step={0.01}
@@ -463,6 +458,7 @@ export default function ControlCenterPage() {
                         <InputField
                             label="Power Calibration Factor"
                             value={config.CAL_FACTOR_POWER}
+                            serverValue={serverConfig.CAL_FACTOR_POWER}
                             min={0}
                             max={2}
                             step={0.01}
@@ -471,6 +467,7 @@ export default function ControlCenterPage() {
                         <InputField
                             label="Sensor Sampling Time"
                             value={config.SENSOR_SAMPLING_TIME}
+                            serverValue={serverConfig.SENSOR_SAMPLING_TIME}
                             min={1}
                             max={10}
                             step={1}

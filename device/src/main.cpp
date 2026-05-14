@@ -57,6 +57,21 @@ const int SD_CS_PIN   = 14;
 const int OTA_LED_PIN = 2;   // onboard LED, safe (≠ SSR pin 27)
 
 // =============================================================================
+// OTA TASK STATE
+// OTA runs in a dedicated FreeRTOS task so taskMQTT (Core 1) is never blocked.
+// taskMQTT monitors otaTaskHandle and force-aborts after OTA_TIMEOUT_MS.
+//
+// Power-loss safety: httpUpdate uses the ESP32's dual OTA partition scheme.
+// Update.end() writes the new partition pointer to NVS only AFTER verifying
+// the MD5 of the full binary. If power is lost mid-download, the slot has no
+// valid checksum → bootloader ignores it → old firmware boots. Safe.
+// =============================================================================
+struct OtaArgs { uint8_t major, minor, patch; char url[512]; };
+static TaskHandle_t  otaTaskHandle = NULL;
+static unsigned long otaStartMs    = 0;
+static const unsigned long OTA_TIMEOUT_MS = 120000UL;  // 2 min max
+
+// =============================================================================
 // CONFIGURATION
 // =============================================================================
 const char* WIFI_SSID    = "Nevatron";
@@ -433,30 +448,28 @@ void handleCalibration(uint8_t* buf) {
   mqttClient.publish(ackTopic, "{\"status\":\"ok\"}");
 }
 
-void handleOta(byte* payload, unsigned int length) {
-  if (length < 5) { Serial.println("[OTA] Frame too short"); return; }
-  if (!(payload[3] & 0x01)) { Serial.println("[OTA] update_now=0 — skipped"); return; }
+// OTA worker — runs as a separate FreeRTOS task on Core 1.
+// Spawned by handleOta(); taskMQTT monitors it and can force-abort on timeout.
+// WiFiClientSecure.setTimeout(30) gives a 30 s per-read stall deadline so a
+// dropped WiFi connection surfaces as an HTTP error rather than an infinite
+// block.  taskMQTT's OTA_TIMEOUT_MS is a belt-and-suspenders backstop.
+void otaTask(void* arg) {
+  OtaArgs* a = (OtaArgs*)arg;
+  uint8_t major = a->major, minor = a->minor, patch = a->patch;
+  char url[512];
+  strlcpy(url, a->url, sizeof(url));
+  free(a);
 
-  uint8_t major = payload[0], minor = payload[1], patch = payload[2];
-  char url[512] = {0};
-  size_t urlLen = length - 4;
-  if (urlLen == 0 || urlLen >= sizeof(url)) { Serial.println("[OTA] Bad URL"); return; }
-  memcpy(url, payload + 4, urlLen);
-  url[urlLen] = '\0';
+  WiFiClientSecure c;
+  c.setInsecure();
+  c.setTimeout(30);  // 30 s socket stall timeout — surfaces WiFi loss as error
 
-  Serial.printf("[OTA] v%u.%u.%u → %s\n", major, minor, patch, url);
-
-  // Disconnect MQTT before large TLS download to free heap
-  mqttClient.disconnect();
-  delay(200);
-
-  WiFiClientSecure otaClient;
-  otaClient.setInsecure();
-  otaClient.setTimeout(30);
-
-  httpUpdate.rebootOnUpdate(false);  // Manual reboot — send ACK first
+  // rebootOnUpdate(false): we reboot AFTER sending the ACK so the server
+  // knows the flash succeeded before the device disappears.
+  httpUpdate.rebootOnUpdate(false);
   httpUpdate.setLedPin(OTA_LED_PIN, LOW);
-  t_httpUpdate_return ret = httpUpdate.update(otaClient, url);
+
+  t_httpUpdate_return ret = httpUpdate.update(c, url);
 
   char ackMsg[80];
   bool doReboot = false;
@@ -465,11 +478,14 @@ void handleOta(byte* payload, unsigned int length) {
       snprintf(ackMsg, sizeof(ackMsg),
                "{\"status\":\"ok\",\"version\":\"%u.%u.%u\"}", major, minor, patch);
       doReboot = true;
-      Serial.println("[OTA] Flash OK");
+      // MD5 verified by Update.end() — partition pointer committed to NVS.
+      // Power loss before ESP.restart() is safe: device boots new firmware on
+      // next power-on because the partition table was already committed.
+      Serial.println("[OTA] Flash OK — MD5 verified, partition committed");
       break;
     case HTTP_UPDATE_NO_UPDATES:
       snprintf(ackMsg, sizeof(ackMsg), "{\"status\":\"noop\"}");
-      Serial.println("[OTA] No update");
+      Serial.println("[OTA] No update needed");
       break;
     default:
       snprintf(ackMsg, sizeof(ackMsg),
@@ -478,7 +494,7 @@ void handleOta(byte* payload, unsigned int length) {
       break;
   }
 
-  // Reconnect just to send ACK, then reboot
+  // Reconnect MQTT just long enough to deliver the ACK.
   char ackTopic[64];
   snprintf(ackTopic, sizeof(ackTopic), "device/%s/ota_ack", DEVICE_ID);
   if (mqttClient.connect(DEVICE_ID, DEVICE_ID, MQTT_SECRET)) {
@@ -489,7 +505,49 @@ void handleOta(byte* payload, unsigned int length) {
     Serial.printf("[OTA] ACK sent: %s\n", ackMsg);
   }
 
+  // Clear handle BEFORE self-delete so taskMQTT sees completion on next tick.
+  otaTaskHandle = NULL;
   if (doReboot) { delay(200); ESP.restart(); }
+  vTaskDelete(NULL);
+}
+
+// Receives the OTA MQTT frame, validates it, then SPAWNS otaTask instead of
+// blocking inline.  Returns immediately so mqttCallback() and taskMQTT are
+// never frozen by the download.
+void handleOta(byte* payload, unsigned int length) {
+  if (length < 5) { Serial.println("[OTA] Frame too short"); return; }
+  if (!(payload[3] & 0x01)) { Serial.println("[OTA] update_now=0 — skipped"); return; }
+
+  if (otaTaskHandle != NULL) {
+    Serial.println("[OTA] Update already in progress — ignoring duplicate frame");
+    return;
+  }
+
+  uint8_t major = payload[0], minor = payload[1], patch = payload[2];
+  char url[512] = {0};
+  size_t urlLen = length - 4;
+  if (urlLen == 0 || urlLen >= sizeof(url)) { Serial.println("[OTA] Bad URL"); return; }
+  memcpy(url, payload + 4, urlLen);
+  url[urlLen] = '\0';
+
+  Serial.printf("[OTA] v%u.%u.%u → %s\n", major, minor, patch, url);
+
+  OtaArgs* args = (OtaArgs*)malloc(sizeof(OtaArgs));
+  if (!args) { Serial.println("[OTA] malloc failed"); return; }
+  args->major = major;
+  args->minor = minor;
+  args->patch = patch;
+  strlcpy(args->url, url, sizeof(args->url));
+
+  // Free heap before TLS download; taskMQTT will skip ensureMQTT() while
+  // otaTaskHandle != NULL so there is no contention on mqttClient.
+  mqttClient.disconnect();
+  delay(200);
+
+  otaStartMs = millis();
+  // Priority 1 = same as taskMQTT. Higher priority would starve taskMQTT and
+  // prevent the 2-minute timeout from ever firing when WiFi drops mid-download.
+  xTaskCreatePinnedToCore(otaTask, "OTA", 8192, args, 1, &otaTaskHandle, 1);
 }
 
 void mqttCallback(char* topic, byte* payload, unsigned int length) {
@@ -638,6 +696,34 @@ void taskMQTT(void* param) {
 
   while (true) {
     unsigned long now = millis();
+
+    // ── OTA in progress — monitor for timeout, block MQTT ops ─────────────
+    // otaTask runs as a separate FreeRTOS task on Core 1.  While it is alive
+    // we must not call ensureMQTT() or mqttClient.loop() because otaTask owns
+    // the mqttClient connection for the duration of the download + ACK.
+    if (otaTaskHandle != NULL) {
+      if (now - otaStartMs >= OTA_TIMEOUT_MS) {
+        // WiFi drop or server stall held for too long: force-abort.
+        // Update.abort() cancels the in-progress flash write so the OTA
+        // partition is left invalid — bootloader boots old firmware on reset.
+        Serial.println("[OTA] Timeout — force aborting, resuming normal operation");
+        Update.abort();
+        vTaskDelete(otaTaskHandle);
+        otaTaskHandle = NULL;
+        // Fall through: ensureMQTT() below will reconnect on the next tick.
+      } else {
+        // Show OTA progress on LCD and yield; come back in 100 ms.
+        if (now - lastLcdCycle >= LCD_CYCLE_INTERVAL) {
+          unsigned long elapsed = (now - otaStartMs) / 1000;
+          lcd.clear();
+          lcd.setCursor(0, 0); lcd.print("Firmware Update");
+          lcd.setCursor(0, 1); lcd.print("Wait "); lcd.print(elapsed); lcd.print("s...");
+          lastLcdCycle = now;
+        }
+        vTaskDelay(pdMS_TO_TICKS(100));
+        continue;
+      }
+    }
 
     // ── MQTT keepalive ─────────────────────────────────────────────────────
     if (mqttClient.connected()) mqttClient.loop();

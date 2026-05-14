@@ -108,6 +108,16 @@ export class UnitService {
     return this.unitRepo.save(unit);
   }
 
+  async checkDeviceOnline(deviceId: string): Promise<boolean> {
+    if (!deviceId) return false;
+    const latest = await this.meterRepo.findOne({
+      where: { device_id: deviceId },
+      order: { time: 'DESC' },
+    });
+    if (!latest?.time) return false;
+    return Date.now() - new Date(latest.time).getTime() <= ONLINE_THRESHOLD_MS;
+  }
+
   async setRelayStatus(id: number, relayStatus: boolean, actorEmail?: string) {
     const unit = await this.findOne(id);
     unit.relay_status = relayStatus;

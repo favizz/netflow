@@ -90,7 +90,6 @@ interface EditUnitModalProps {
 
 export function EditUnitModal({ unit, onClose, onSuccess }: EditUnitModalProps) {
     const [deviceId, setDeviceId] = useState("");
-    const [balance, setBalance] = useState("0");
     const [selectedBuilding, setSelectedBuilding] = useState<Building | null>(null);
 
     const [buildings, setBuildings] = useState<Building[]>([]);
@@ -103,7 +102,6 @@ export function EditUnitModal({ unit, onClose, onSuccess }: EditUnitModalProps) 
     useEffect(() => {
         if (unit) {
             setDeviceId(unit.meterSerial);
-            setBalance(String(unit.balance || 0));
             setError(null);
 
             setLoadingBuildings(true);
@@ -129,7 +127,6 @@ export function EditUnitModal({ unit, onClose, onSuccess }: EditUnitModalProps) 
                 method: 'PATCH',
                 body: JSON.stringify({
                     device_id: deviceId.trim().toUpperCase(),
-                    balance: parseFloat(balance),
                     building_id: selectedBuilding ? selectedBuilding.id : undefined
                 }),
             });
@@ -180,18 +177,6 @@ export function EditUnitModal({ unit, onClose, onSuccess }: EditUnitModalProps) 
                             value={deviceId}
                             onChange={(e) => setDeviceId(e.target.value)}
                             maxLength={100}
-                            className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                        />
-                    </div>
-
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Balance (Rp)</label>
-                        <input
-                            type="text"
-                            inputMode="numeric"
-                            pattern="[0-9]*"
-                            value={balance}
-                            onChange={(e) => setBalance(e.target.value.replace(/[^0-9]/g, ""))}
                             className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                         />
                     </div>

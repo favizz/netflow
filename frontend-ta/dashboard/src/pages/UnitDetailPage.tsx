@@ -62,8 +62,8 @@ const MQTT_CONFIG = {
     brokerUrl: import.meta.env.VITE_MQTT_BROKER_URL as string,
     options: {
         clientId: 'ta-dashboard-' + Math.random().toString(16).substring(2, 10),
-        username: import.meta.env.VITE_MQTT_USERNAME || '',
-        password: import.meta.env.VITE_MQTT_PASSWORD || '',
+        username: import.meta.env.VITE_MQTT_USERNAME || undefined,
+        password: import.meta.env.VITE_MQTT_PASSWORD || undefined,
     }
 };
 
@@ -452,10 +452,11 @@ export default function UnitDetailPage() {
                                     </div>
                                     <span className="font-medium text-gray-900 dark:text-gray-100">Power Supply</span>
                                 </div>
-                                <label className="relative inline-flex items-center cursor-pointer">
+                                <label className={cn("relative inline-flex items-center", isOnline ? "cursor-pointer" : "cursor-not-allowed opacity-50")}>
                                     <input
                                         type="checkbox"
                                         checked={powerState}
+                                        disabled={!isOnline}
                                         onChange={(e) => setConfirmAction({ type: 'power', next: e.target.checked })}
                                         className="sr-only peer"
                                     />
@@ -475,10 +476,11 @@ export default function UnitDetailPage() {
                                     </div>
                                     <span className="font-medium text-gray-900 dark:text-gray-100">Water Supply</span>
                                 </div>
-                                <label className="relative inline-flex items-center cursor-pointer">
+                                <label className={cn("relative inline-flex items-center", isOnline ? "cursor-pointer" : "cursor-not-allowed opacity-50")}>
                                     <input
                                         type="checkbox"
                                         checked={waterState}
+                                        disabled={!isOnline}
                                         onChange={(e) => setConfirmAction({ type: 'water', next: e.target.checked })}
                                         className="sr-only peer"
                                     />

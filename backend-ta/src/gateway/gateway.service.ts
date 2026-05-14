@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { encodeCommand } from '../common/binary-codec';
 import { ClientProxy } from '@nestjs/microservices';
 import { PaymentsService } from '../payments/payments.service';
@@ -68,6 +68,8 @@ export class GatewayService {
 
   async setRelayByUnitNo(unitNo: string, on: boolean, actorEmail?: string) {
     const unit = await this.unitService.findByUnitNo(unitNo);
+    const isOnline = await this.unitService.checkDeviceOnline(unit.device_id);
+    if (!isOnline) throw new BadRequestException('Device is offline');
     await this.unitService.setRelayStatus(unit.id, on, actorEmail);
     this.mqttClient.emit(
       `device/${unit.device_id}/command`,
@@ -78,6 +80,8 @@ export class GatewayService {
 
   async setValveByUnitNo(unitNo: string, open: boolean, actorEmail?: string) {
     const unit = await this.unitService.findByUnitNo(unitNo);
+    const isOnline = await this.unitService.checkDeviceOnline(unit.device_id);
+    if (!isOnline) throw new BadRequestException('Device is offline');
     await this.unitService.setValveStatus(unit.id, open, actorEmail);
     this.mqttClient.emit(
       `device/${unit.device_id}/command`,
