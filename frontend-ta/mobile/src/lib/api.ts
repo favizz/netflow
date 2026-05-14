@@ -118,10 +118,12 @@ export type TokenPair = {
 };
 
 export type GoogleLoginResponse = TokenPair & {
+  name?: string | null;
   units: UnitSummary[];
 };
 
 export type SelectUnitResponse = TokenPair & {
+  name?: string | null;
   units: UnitSummary[];
 };
 
@@ -191,6 +193,7 @@ export type TrendPoint = {
 
 export type MeResponse = {
   email: string;
+  name: string | null;
   role: 'resident';
   unitId: number | null;
   unitNo: string | null;

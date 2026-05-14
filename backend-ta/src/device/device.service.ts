@@ -122,8 +122,9 @@ export class DeviceService {
           current,
           power,
           water_flow: waterFlow,
-          energy_total: incomingEnergyTotal || null,
-          water_total: incomingWaterTotal || null,
+          // Use explicit null-check so 0 is stored as 0, not NULL
+          energy_total: Number.isFinite(incomingEnergyTotal) ? incomingEnergyTotal : null,
+          water_total: Number.isFinite(incomingWaterTotal) ? incomingWaterTotal : null,
         });
         try {
           await queryRunner.manager.save(row);

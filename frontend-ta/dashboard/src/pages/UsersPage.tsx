@@ -76,6 +76,69 @@ function FilterDropdown({ label, options, value, onChange }: {
     );
 }
 
+function UnitDropdown({ units, value, onChange }: {
+    units: Unit[];
+    value: string;
+    onChange: (v: string) => void;
+}) {
+    const [open, setOpen] = useState(false);
+    const [dropPos, setDropPos] = useState({ top: 0, left: 0, width: 0 });
+    const btnRef = useRef<HTMLButtonElement>(null);
+    const panelRef = useRef<HTMLDivElement>(null);
+    const selected = units.find(u => String(u.id) === value);
+
+    useEffect(() => {
+        if (!open) return;
+        const close = (e: MouseEvent) => {
+            if (!btnRef.current?.contains(e.target as Node) && !panelRef.current?.contains(e.target as Node)) setOpen(false);
+        };
+        document.addEventListener('mousedown', close);
+        return () => document.removeEventListener('mousedown', close);
+    }, [open]);
+
+    const handleToggle = () => {
+        if (!open && btnRef.current) {
+            const rect = btnRef.current.getBoundingClientRect();
+            setDropPos({ top: rect.bottom + 4, left: rect.left, width: rect.width });
+        }
+        setOpen(o => !o);
+    };
+
+    return (
+        <div className="relative">
+            <button
+                type="button"
+                ref={btnRef}
+                onClick={handleToggle}
+                className="flex w-full items-center justify-between gap-2 h-9 rounded-md border border-gray-300 dark:border-gray-600 px-3 text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-1 focus:ring-primary"
+            >
+                <span className={selected ? '' : 'text-gray-400 dark:text-gray-500'}>{selected ? selected.unit_no : 'Select unit...'}</span>
+                <ChevronDown className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+            </button>
+            {open && createPortal(
+                <div
+                    ref={panelRef}
+                    style={{ position: 'fixed', top: dropPos.top, left: dropPos.left, width: dropPos.width, zIndex: 9999 }}
+                    className="rounded-md bg-white dark:bg-gray-800 py-1 shadow-lg ring-1 ring-black/5 dark:ring-gray-700 max-h-48 overflow-y-auto"
+                >
+                    {units.length === 0 ? (
+                        <p className="px-4 py-2 text-sm text-gray-400 dark:text-gray-500">No available units</p>
+                    ) : (
+                        units.map(u => (
+                            <button key={u.id} type="button" onClick={() => { onChange(String(u.id)); setOpen(false); }}
+                                className={cn("block w-full px-4 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-700",
+                                    String(u.id) === value ? "text-primary font-medium" : "text-gray-700 dark:text-gray-300")}>
+                                {u.unit_no}
+                            </button>
+                        ))
+                    )}
+                </div>,
+                document.body
+            )}
+        </div>
+    );
+}
+
 function ConfirmModal({ title, message, confirmLabel, danger, onConfirm, onCancel, loading }: {
     title: string;
     message: React.ReactNode;
@@ -467,11 +530,7 @@ export default function UsersPage() {
                                     {assignError}
                                 </div>
                             )}
-                            <select required value={assignUnitId} onChange={e => setAssignUnitId(e.target.value)}
-                                className="block w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary">
-                                <option value="">Select unit...</option>
-                                {unassignedUnits.map(u => <option key={u.id} value={u.id}>{u.unit_no}</option>)}
-                            </select>
+                            <UnitDropdown units={unassignedUnits} value={assignUnitId} onChange={setAssignUnitId} />
                             {unassignedUnits.length === 0 && (
                                 <p className="text-xs text-gray-400 dark:text-gray-500">All units are already assigned.</p>
                             )}
@@ -480,7 +539,7 @@ export default function UsersPage() {
                                     className="rounded-md border border-gray-200 dark:border-gray-600 px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">
                                     Cancel
                                 </button>
-                                <button type="submit" disabled={assignLoading || unassignedUnits.length === 0}
+                                <button type="submit" disabled={assignLoading || !assignUnitId || unassignedUnits.length === 0}
                                     className="flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90 disabled:opacity-60">
                                     {assignLoading && <Loader2 className="h-4 w-4 animate-spin" />}
                                     Assign

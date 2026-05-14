@@ -106,6 +106,7 @@ export class AuthService {
       role: 'resident',
       unitId: selectedUnit?.id ?? null,
       unitNo: selectedUnit?.unit_no ?? null,
+      name: googleName,
     };
 
     const tokenPair = await this.issueTokenPair(payload);
@@ -128,6 +129,7 @@ export class AuthService {
       role: 'resident',
       unitId: unit.id,
       unitNo: unit.unit_no,
+      name: user.name,
     };
 
     const tokenPair = await this.issueTokenPair(payload);
@@ -231,6 +233,7 @@ export class AuthService {
       role: 'admin',
       unitId: null,
       unitNo: null,
+      name: googleName,
     };
 
     return this.issueTokenPair(payload);
@@ -243,6 +246,7 @@ export class AuthService {
         : await this.unitService.findByResidentEmail(user.sub);
     return {
       email: user.sub,
+      name: user.name ?? null,
       role: user.role,
       unitId: user.unitId,
       unitNo: user.unitNo,

@@ -84,6 +84,7 @@ export default function App() {
   const [currentPage, setCurrentPage]         = useState<Page>("home")
   const [isLoggedIn, setIsLoggedIn]           = useState(false)
   const [userUnit, setUserUnit]               = useState("")
+  const [userName, setUserName]               = useState("")
   const [availableUnits, setAvailableUnits]   = useState<UnitSummary[]>([])
   const [anomalies, setAnomalies]             = useState<AnomalyItem[]>([])
   const [notifLastRead, setNotifLastRead]     = useState<Date | null>(() => {
@@ -106,6 +107,7 @@ export default function App() {
     const handler = () => {
       setIsLoggedIn(false)
       setUserUnit('')
+      setUserName('')
       setAnomalies([])
     }
     window.addEventListener('auth:cleared', handler)
@@ -121,6 +123,7 @@ export default function App() {
         const me = await api.me()
         if (!active) return
         setAvailableUnits(me.units)
+        if (me.name) setUserName(me.name)
         if (me.unitNo) {
           setUserUnit(me.unitNo); setIsLoggedIn(true)
         } else if (me.units.length > 0) {
@@ -154,8 +157,9 @@ export default function App() {
   const alertCount      = unreadAnomalies.length
 
   // ── Auth helpers ──────────────────────────────────────────────────────────
-  const applyLoginResult = async (result: { unitNo: string | null; units: UnitSummary[] }) => {
+  const applyLoginResult = async (result: { unitNo: string | null; units: UnitSummary[]; name?: string | null }) => {
     setAvailableUnits(result.units)
+    if (result.name) setUserName(result.name)
     if (result.unitNo) {
       setUserUnit(result.unitNo); setIsLoggedIn(true)
     } else if (result.units.length > 0) {
@@ -177,7 +181,7 @@ export default function App() {
   const handleLogout = async () => {
     await api.logout()
     setIsLoggedIn(false); setCurrentPage("home")
-    setUserUnit(""); setAvailableUnits([]); setAnomalies([])
+    setUserUnit(""); setUserName(""); setAvailableUnits([]); setAnomalies([])
   }
 
   if (!isLoggedIn) {
@@ -291,7 +295,7 @@ export default function App() {
           <div className="w-full max-w-xs rounded-2xl bg-card shadow-xl ring-1 ring-border">
             <div className="p-6 flex flex-col items-center text-center gap-4">
               <p className="text-sm font-semibold text-foreground">
-                Keluar sebagai <span className="font-normal text-muted-foreground">Unit {userUnit}</span>?
+                Keluar sebagai <span className="font-normal text-muted-foreground">{userName || `Unit ${userUnit}`}</span>?
               </p>
               <div className="flex gap-3 w-full">
                 <button
