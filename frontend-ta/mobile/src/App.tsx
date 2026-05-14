@@ -13,6 +13,8 @@ import LoginForm from "@/components/login-form"
 import { api, authStore, type AnomalyItem, type AnomalyType, type UnitSummary } from "@/lib/api"
 import { interactive, dropdown, MOBILE_NOTIF_KEY, type Page } from "@/lib/styles"
 import { cn } from "@/lib/utils"
+import logoWhite from "@/assets/netflow-logo-white.png"
+import logoBlack from "@/assets/netflow-logo-black.png"
 
 // ── Anomaly metadata ──────────────────────────────────────────────────────────
 const ANOMALY_META: Record<
@@ -187,7 +189,7 @@ export default function App() {
 
       {/* ── Header ─────────────────────────────────────────────────────── */}
       <header className="flex-none z-30 bg-card border-b border-border flex items-center justify-between px-4 h-14 gap-3">
-        <img src={`${import.meta.env.BASE_URL}${theme === 'dark' ? 'netflow-logo-white.png' : 'netflow-logo-black.png'}`} alt="NetFlow" className="h-8 w-auto shrink-0" />
+        <img src={theme === 'dark' ? logoWhite : logoBlack} alt="NetFlow" className="h-8 w-auto shrink-0" />
 
         {userUnit && (
           <UnitSelector units={availableUnits} current={userUnit} onSelect={handleSelectUnit} />

@@ -21,9 +21,10 @@ process.on('unhandledRejection', (reason: unknown) => {
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // ── Bull-board: mount directly on Express so sub-paths (/static/...) are handled ──
+  // ── Bull-board: mount directly on Express at the base path ───────────────────
   // NestJS middleware forRoutes only matches the exact path, not sub-paths.
-  // Mounting directly on the Express app handles /admin/queues and all sub-paths.
+  // Bull Board's router uses relative internal routes (/static/*, /api/*), so it
+  // must be mounted at the base path so Express strips the prefix before routing.
   const { httpAdapter } = app.get(HttpAdapterHost);
 
   const bullAdapter = app.get<{
@@ -33,12 +34,15 @@ async function bootstrap() {
   bullAdapter.setBasePath('/api/admin/queues');
 
   /* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
-  // Mount at root (no prefix stripping) so the router receives the full path.
-  // setBasePath('/api/admin/queues') registers static assets at that exact path
-  // internally; stripping the prefix would break asset requests.
+  // Mount at the exact base path so Express strips the prefix before the router
+  // processes it.  The Bull Board router uses relative routes (/static/*, /api/*)
+  // internally, so it must receive the path WITHOUT the base prefix.
   httpAdapter
     .getInstance()
-    .use(bullAdapter.getRouter() as import('express').RequestHandler);
+    .use(
+      '/api/admin/queues',
+      bullAdapter.getRouter() as import('express').RequestHandler,
+    );
   /* eslint-enable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
 
   app.setGlobalPrefix('api');

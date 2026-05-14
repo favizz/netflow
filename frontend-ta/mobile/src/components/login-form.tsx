@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react"
 import { Card } from "@/components/ui/card"
 import { useTheme } from "next-themes"
+import logoWhite from "@/assets/netflow-logo-white.png"
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string
 
@@ -80,7 +81,7 @@ export default function LoginForm({ onGoogleLogin }: LoginFormProps) {
           <div className="text-center space-y-3">
             <div className="flex justify-center mb-6">
               <img
-                src={`${import.meta.env.BASE_URL}netflow-logo-white.png`}
+                src={logoWhite}
                 alt="NETFLOW"
                 className="h-20 w-20 object-contain"
               />
