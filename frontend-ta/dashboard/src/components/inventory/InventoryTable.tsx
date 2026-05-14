@@ -12,11 +12,12 @@ function FilterDropdown({ label, options, value, onChange }: {
     const [open, setOpen] = useState(false);
     const [dropPos, setDropPos] = useState({ top: 0, right: 0 });
     const btnRef = useRef<HTMLButtonElement>(null);
+    const panelRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         if (!open) return;
         const close = (e: MouseEvent) => {
-            if (!btnRef.current?.contains(e.target as Node)) setOpen(false);
+            if (!btnRef.current?.contains(e.target as Node) && !panelRef.current?.contains(e.target as Node)) setOpen(false);
         };
         document.addEventListener('mousedown', close);
         return () => document.removeEventListener('mousedown', close);
@@ -42,6 +43,7 @@ function FilterDropdown({ label, options, value, onChange }: {
             </button>
             {open && createPortal(
                 <div
+                    ref={panelRef}
                     style={{ position: 'fixed', top: dropPos.top, right: dropPos.right, zIndex: 9999 }}
                     className="min-w-[140px] rounded-md bg-white dark:bg-gray-800 py-1 shadow-lg ring-1 ring-black/5 dark:ring-gray-700"
                 >
@@ -68,12 +70,13 @@ function SelectDropdown({ label, items, value, onChange }: {
     const [open, setOpen] = useState(false);
     const [dropPos, setDropPos] = useState({ top: 0, right: 0 });
     const btnRef = useRef<HTMLButtonElement>(null);
+    const panelRef = useRef<HTMLDivElement>(null);
     const current = items.find(i => i.value === value);
 
     useEffect(() => {
         if (!open) return;
         const close = (e: MouseEvent) => {
-            if (!btnRef.current?.contains(e.target as Node)) setOpen(false);
+            if (!btnRef.current?.contains(e.target as Node) && !panelRef.current?.contains(e.target as Node)) setOpen(false);
         };
         document.addEventListener('mousedown', close);
         return () => document.removeEventListener('mousedown', close);
@@ -99,6 +102,7 @@ function SelectDropdown({ label, items, value, onChange }: {
             </button>
             {open && createPortal(
                 <div
+                    ref={panelRef}
                     style={{ position: 'fixed', top: dropPos.top, right: dropPos.right, zIndex: 9999 }}
                     className="min-w-[160px] max-h-48 overflow-y-auto rounded-md bg-white dark:bg-gray-800 py-1 shadow-lg ring-1 ring-black/5 dark:ring-gray-700"
                 >

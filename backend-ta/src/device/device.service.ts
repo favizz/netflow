@@ -115,17 +115,22 @@ export class DeviceService {
         await queryRunner.manager.save(unit);
         savedUnit = unit;
 
-        const row = queryRunner.manager.create(MeterReading, {
-          time: new Date(),
-          device_id: deviceId,
-          voltage,
-          current,
-          power,
-          water_flow: waterFlow,
-          energy_total: incomingEnergyTotal || null,
-          water_total: incomingWaterTotal || null,
-        });
-        await queryRunner.manager.save(row);
+        await queryRunner.manager
+          .createQueryBuilder()
+          .insert()
+          .into(MeterReading)
+          .values({
+            time: new Date(),
+            device_id: deviceId,
+            voltage,
+            current,
+            power,
+            water_flow: waterFlow,
+            energy_total: incomingEnergyTotal || null,
+            water_total: incomingWaterTotal || null,
+          })
+          .orIgnore()
+          .execute();
       }
 
       await queryRunner.commitTransaction();

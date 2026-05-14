@@ -131,7 +131,7 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
   useEffect(() => {
     if (period !== "live") {
       if (mqttRef.current) {
-        mqttRef.current.end(true)
+        mqttRef.current.end(false)
         mqttRef.current = null
       }
       setMqttConnected(false)
@@ -222,7 +222,7 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
     })
 
     return () => {
-      client.end(true)
+      client.end(false)
       setMqttConnected(false)
       mqttRef.current = null
     }
