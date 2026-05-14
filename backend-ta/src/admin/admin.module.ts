@@ -2,11 +2,13 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ClientsModule, Transport } from '@nestjs/microservices';
+import { BullModule } from '@nestjs/bullmq';
 
 import { ResidentsModule } from '../residents/residents.module';
 import { UnitModule } from '../unit/unit.module';
 import { AdminController } from './admin.controller';
 import { AdminService } from './admin.service';
+import { BroadcastProcessor } from './broadcast.processor';
 import { PaymentsModule } from '../payments/payments.module';
 import { AnomalyModule } from '../anomaly/anomaly.module';
 import { TariffModule } from '../tariff/tariff.module';
@@ -20,6 +22,7 @@ import { HealthService } from './health.service';
   imports: [
     ConfigModule,
     TypeOrmModule.forFeature([CalibrationSetting, Building]),
+    BullModule.registerQueue({ name: 'broadcast' }),
     ResidentsModule,
     UnitModule,
     PaymentsModule,
@@ -51,7 +54,7 @@ import { HealthService } from './health.service';
     ]),
   ],
   controllers: [AdminController],
-  providers: [AdminService, AdminJwtGuard, HealthService],
+  providers: [AdminService, AdminJwtGuard, HealthService, BroadcastProcessor],
   exports: [HealthService],
 })
 export class AdminModule {}

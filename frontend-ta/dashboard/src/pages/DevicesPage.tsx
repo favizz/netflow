@@ -2,9 +2,10 @@ import { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import { InventoryTable } from "@/components/inventory/InventoryTable";
 import { AddDeviceModal } from "@/components/inventory/AddDeviceModal";
-import { EditUnitModal } from "@/components/inventory/EditUnitModal";
 import type { InventoryItem } from "@/lib/mockData";
 import { fetchApi } from "@/lib/api";
+import mqtt from "mqtt";
+import { MQTT_CONFIG } from "@/lib/constants";
 
 export default function DevicesPage() {
     const [searchParams] = useSearchParams();
@@ -12,7 +13,6 @@ export default function DevicesPage() {
 
     const [data, setData] = useState<InventoryItem[]>([]);
     const [isAddOpen, setIsAddOpen] = useState(false);
-    const [editTarget, setEditTarget] = useState<InventoryItem | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [buildings, setBuildings] = useState<{id: number, code: string, name: string}[]>([]);
 
@@ -54,6 +54,29 @@ export default function DevicesPage() {
         return () => clearInterval(interval);
     }, [loadData]);
 
+    // Live connectivity: flip any device row to Online as soon as telemetry arrives
+    useEffect(() => {
+        if (!MQTT_CONFIG.brokerUrl) return;
+        const client = mqtt.connect(MQTT_CONFIG.brokerUrl, {
+            ...MQTT_CONFIG.options,
+            clientId: `dashboard-devices-${Math.random().toString(16).slice(2, 8)}`,
+        });
+        client.on('connect', () => { client.subscribe('device/+/data'); });
+        client.on('message', (topic) => {
+            const m = topic.match(/^device\/([^/]+)\/data$/);
+            if (!m) return;
+            const deviceId = m[1];
+            setData(prev => {
+                const idx = prev.findIndex(item => item.meterSerial === deviceId);
+                if (idx === -1 || prev[idx].status === "Online") return prev;
+                const next = [...prev];
+                next[idx] = { ...next[idx], status: "Online", lastUpdate: "Live" };
+                return next;
+            });
+        });
+        return () => { client.end(); };
+    }, []);
+
     return (
         <div className="space-y-6">
             <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Devices</h1>
@@ -67,13 +90,11 @@ export default function DevicesPage() {
                     data={data}
                     initialFilter={initialFilter}
                     buildings={buildings}
-                    onEdit={(item) => setEditTarget(item)}
                     onAdd={() => setIsAddOpen(true)}
                 />
             )}
 
             <AddDeviceModal isOpen={isAddOpen} onClose={() => setIsAddOpen(false)} onSuccess={loadData} />
-            <EditUnitModal unit={editTarget} onClose={() => setEditTarget(null)} onSuccess={loadData} />
         </div>
     );
 }

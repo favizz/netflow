@@ -2,6 +2,8 @@ import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, IsNull } from 'typeorm';
 import { ClientProxy } from '@nestjs/microservices';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 import { UnitService } from '../unit/unit.service';
 import { PaymentsService } from '../payments/payments.service';
 import {
@@ -39,12 +41,34 @@ export class AdminService implements OnModuleInit {
     private readonly unitService: UnitService,
     private readonly paymentsService: PaymentsService,
     @Inject('MQTT_CLIENT') private readonly mqttClient: ClientProxy,
+    @InjectQueue('broadcast') private readonly broadcastQueue: Queue,
   ) {
     this.logger.log('AdminService initialized');
   }
 
   async onModuleInit() {
     await this.loadFromDb();
+    this.syncOnlineThreshold();
+  }
+
+  /** Publish a single MQTT message with retain=true so offline devices receive
+   *  it the moment they reconnect and resubscribe.  Falls back to a plain emit
+   *  if the underlying mqtt.js socket is not yet open. */
+  publishRetained(topic: string, payload: Buffer): void {
+    // Access the raw mqtt.js MqttClient held inside NestJS ClientMqtt wrapper.
+    const raw = (this.mqttClient as unknown as { mqttClient?: { connected?: boolean; publish?: (...a: unknown[]) => void } }).mqttClient;
+    if (raw?.connected && raw.publish) {
+      raw.publish(topic, payload, { retain: true, qos: 1 });
+    } else {
+      // Not yet connected — emit without retain as fallback (will be queued by ClientProxy)
+      this.mqttClient.emit(topic, payload);
+    }
+  }
+
+  private syncOnlineThreshold(): void {
+    // 6 missed publishes before a device is considered offline; floor at 30 s.
+    const ms = Math.max(30_000, this.cached.SENSOR_SAMPLING_TIME * 6 * 1000);
+    this.unitService.setOnlineThresholdMs(ms);
   }
 
   // ── Buildings ─────────────────────────────────────────────────────────────
@@ -122,6 +146,7 @@ export class AdminService implements OnModuleInit {
       );
     }
     await this.persistToDb(null);
+    this.syncOnlineThreshold();
     return { ...this.cached };
   }
 
@@ -156,16 +181,16 @@ export class AdminService implements OnModuleInit {
     this.logger.log(
       `Pushing configuration to device [${deviceId}] | Hex: ${payload.toString('hex')}`,
     );
-    this.mqttClient.emit(`device/${deviceId}/config`, payload);
+    this.publishRetained(`device/${deviceId}/config`, payload);
   }
 
   async pushConfigToAll(): Promise<{ pushed: string[] }> {
     const units = await this.unitService.findAll();
     const withDevice = units.filter((u) => u.device_id);
-    this.logger.log(`Pushing configuration to all [${withDevice.length}] units`);
-    for (const unit of withDevice) {
-      await this.pushConfigToDevice(unit.device_id);
-    }
+    this.logger.log(
+      `Queuing config broadcast for [${withDevice.length}] units (job)`,
+    );
+    await this.broadcastQueue.add('config', {});
     return { pushed: withDevice.map((u) => u.device_id) };
   }
 
@@ -191,7 +216,7 @@ export class AdminService implements OnModuleInit {
     this.logger.log(
       `Sending command [${type}=${value}] to device [${deviceId}] | Hex: ${payload.toString('hex')}`,
     );
-    this.mqttClient.emit(`device/${deviceId}/command`, payload);
+    this.publishRetained(`device/${deviceId}/command`, payload);
   }
 
   async sendCommandToAll(
@@ -200,9 +225,10 @@ export class AdminService implements OnModuleInit {
   ): Promise<{ pushed: string[] }> {
     const units = await this.unitService.findAll();
     const withDevice = units.filter((u) => u.device_id);
-    for (const unit of withDevice) {
-      this.sendCommand(unit.device_id, type, value);
-    }
+    this.logger.log(
+      `Queuing command broadcast [${type}=${value}] for [${withDevice.length}] units (job)`,
+    );
+    await this.broadcastQueue.add('command', { commandType: type, value });
     return { pushed: withDevice.map((u) => u.device_id) };
   }
 
@@ -212,10 +238,12 @@ export class AdminService implements OnModuleInit {
     updateNow = true,
   ): Promise<{ pushed: string[] }> {
     const units = await this.unitService.findAll();
-    for (const unit of units) {
-      this.pushOtaToDevice(unit.device_id, version, binaryLink, updateNow);
-    }
-    return { pushed: units.map((u) => u.device_id) };
+    const withDevice = units.filter((u) => u.device_id);
+    this.logger.log(
+      `Queuing OTA broadcast v${version} for [${withDevice.length}] units (job)`,
+    );
+    await this.broadcastQueue.add('ota', { version, binaryLink, updateNow });
+    return { pushed: withDevice.map((u) => u.device_id) };
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
