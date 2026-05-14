@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(Test-Path *)",
-      "Bash(npx jest *)"
+      "Bash(npx jest *)",
+      "Bash(npx tsc *)",
+      "Bash(pnpm build *)"
     ]
   }
 }

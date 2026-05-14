@@ -23,11 +23,12 @@ const DEFAULTS: CalibrationConfig = {
     SENSOR_SAMPLING_TIME: 5,
 };
 
-function TariffCard({ icon, label, unit, tariff, onSave }: {
+function TariffCard({ icon, label, unit, tariff, pendingTariff, onSave }: {
     icon: React.ReactNode;
     label: string;
     unit: string;
     tariff: Tariff | null;
+    pendingTariff?: Tariff | null;
     onSave: (price: number, date: string) => Promise<void>;
 }) {
     const [editing, setEditing] = useState(false);
@@ -38,7 +39,8 @@ function TariffCard({ icon, label, unit, tariff, onSave }: {
 
     const startEdit = () => {
         setPrice(tariff ? String(tariff.price_per_unit) : '');
-        setDate(tariff ? tariff.effective_date : new Date().toISOString().split('T')[0]);
+        // Always default to today — saving always creates a new entry, never patches.
+        setDate(new Date().toISOString().split('T')[0]);
         setError(null);
         setEditing(true);
     };
@@ -69,7 +71,7 @@ function TariffCard({ icon, label, unit, tariff, onSave }: {
                 </div>
                 {!editing && (
                     <button onClick={startEdit} className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 hover:text-primary transition-colors">
-                        <Pencil className="h-3.5 w-3.5" /> Edit
+                        <Pencil className="h-3.5 w-3.5" /> Change Rate
                     </button>
                 )}
             </div>
@@ -83,6 +85,12 @@ function TariffCard({ icon, label, unit, tariff, onSave }: {
                         <p className="mt-1 flex items-center gap-1 text-xs text-gray-400 dark:text-gray-500">
                             <Clock className="h-3 w-3" /> Effective from {tariff.effective_date}
                         </p>
+                        {pendingTariff && (
+                            <p className="mt-1.5 flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
+                                <Clock className="h-3 w-3" />
+                                Scheduled: Rp {Number(pendingTariff.price_per_unit).toLocaleString('id-ID')} from {pendingTariff.effective_date}
+                            </p>
+                        )}
                     </div>
                 ) : (
                     <p className="text-sm text-gray-400 dark:text-gray-500">No tariff configured yet.</p>
@@ -195,6 +203,8 @@ export default function ControlCenterPage() {
     // ── Tariffs ───────────────────────────────────────────────────────────────
     const [elecTariff, setElecTariff] = useState<Tariff | null>(null);
     const [waterTariff, setWaterTariff] = useState<Tariff | null>(null);
+    const [pendingElecTariff, setPendingElecTariff] = useState<Tariff | null>(null);
+    const [pendingWaterTariff, setPendingWaterTariff] = useState<Tariff | null>(null);
     const [lastUpdated, setLastUpdated] = useState<string | null>(null);
 
     // ── Broadcast commands state ──────────────────────────────────────────────
@@ -289,10 +299,21 @@ export default function ControlCenterPage() {
         fetchApi('/admin/tariff')
             .then((data: Tariff[]) => {
                 if (!Array.isArray(data)) return;
-                const sorted = (t: 'electricity' | 'water') =>
-                    data.filter(r => r.utility_type === t).sort((a, b) => b.effective_date.localeCompare(a.effective_date));
-                setElecTariff(sorted('electricity')[0] ?? null);
-                setWaterTariff(sorted('water')[0] ?? null);
+                const today = new Date().toISOString().split('T')[0];
+                // Active = most recent tariff with effective_date <= today (matches backend findCurrent logic)
+                const active = (t: 'electricity' | 'water') =>
+                    data
+                        .filter(r => r.utility_type === t && r.effective_date <= today)
+                        .sort((a, b) => b.effective_date.localeCompare(a.effective_date))[0] ?? null;
+                // Pending = soonest upcoming tariff with effective_date > today
+                const pending = (t: 'electricity' | 'water') =>
+                    data
+                        .filter(r => r.utility_type === t && r.effective_date > today)
+                        .sort((a, b) => a.effective_date.localeCompare(b.effective_date))[0] ?? null;
+                setElecTariff(active('electricity'));
+                setWaterTariff(active('water'));
+                setPendingElecTariff(pending('electricity'));
+                setPendingWaterTariff(pending('water'));
             })
             .catch((err: unknown) => addLog('err', `Failed to load tariffs: ${err instanceof Error ? err.message : 'Unknown error'}`));
     }, [addLog]);
@@ -387,18 +408,13 @@ export default function ControlCenterPage() {
     };
 
     const saveTariff = async (utilityType: 'electricity' | 'water', price: number, date: string) => {
-        const existing = utilityType === 'electricity' ? elecTariff : waterTariff;
-        if (existing) {
-            await fetchApi(`/admin/tariff/${existing.id}`, {
-                method: 'PATCH',
-                body: JSON.stringify({ price_per_unit: price, effective_date: date }),
-            });
-        } else {
-            await fetchApi('/admin/tariff', {
-                method: 'POST',
-                body: JSON.stringify({ utility_type: utilityType, price_per_unit: price, effective_date: date }),
-            });
-        }
+        // Always create a new entry — preserves history and allows future-dated scheduling.
+        // Patching the existing record would destroy the old rate and break findCurrent
+        // if the new effective_date is in the future (no active tariff until that date).
+        await fetchApi('/admin/tariff', {
+            method: 'POST',
+            body: JSON.stringify({ utility_type: utilityType, price_per_unit: price, effective_date: date }),
+        });
         loadTariffs();
     };
 
@@ -429,6 +445,7 @@ export default function ControlCenterPage() {
                         label="Electricity"
                         unit="Rp/kWh"
                         tariff={elecTariff}
+                        pendingTariff={pendingElecTariff}
                         onSave={(p, d) => saveTariff('electricity', p, d)}
                     />
                     <TariffCard
@@ -436,6 +453,7 @@ export default function ControlCenterPage() {
                         label="Water"
                         unit="Rp/m³"
                         tariff={waterTariff}
+                        pendingTariff={pendingWaterTariff}
                         onSave={(p, d) => saveTariff('water', p, d)}
                     />
                 </div>
