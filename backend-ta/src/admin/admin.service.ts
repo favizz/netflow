@@ -161,11 +161,12 @@ export class AdminService implements OnModuleInit {
 
   async pushConfigToAll(): Promise<{ pushed: string[] }> {
     const units = await this.unitService.findAll();
-    this.logger.log(`Pushing configuration to all [${units.length}] units`);
-    for (const unit of units) {
+    const withDevice = units.filter((u) => u.device_id);
+    this.logger.log(`Pushing configuration to all [${withDevice.length}] units`);
+    for (const unit of withDevice) {
       await this.pushConfigToDevice(unit.device_id);
     }
-    return { pushed: units.map((u) => u.device_id) };
+    return { pushed: withDevice.map((u) => u.device_id) };
   }
 
   // ── OTA firmware update ───────────────────────────────────────────────────
@@ -198,10 +199,11 @@ export class AdminService implements OnModuleInit {
     value: 0 | 1,
   ): Promise<{ pushed: string[] }> {
     const units = await this.unitService.findAll();
-    for (const unit of units) {
+    const withDevice = units.filter((u) => u.device_id);
+    for (const unit of withDevice) {
       this.sendCommand(unit.device_id, type, value);
     }
-    return { pushed: units.map((u) => u.device_id) };
+    return { pushed: withDevice.map((u) => u.device_id) };
   }
 
   async pushOtaToAll(
