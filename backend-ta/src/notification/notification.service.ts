@@ -51,11 +51,16 @@ export class NotificationService {
 
     await Promise.allSettled([
       this.sendEmail(email, subject, message),
-      chatId ? this.sendTelegram(chatId, `⚠️ *${subject}*\n\n${message}`) : Promise.resolve(),
+      chatId
+        ? this.sendTelegram(
+            chatId,
+            `⚠️ <b>${escapeHtml(subject)}</b>\n\n${escapeHtml(message)}`,
+          )
+        : Promise.resolve(),
     ]);
   }
 
-  async sendTelegram(chatId: string, text: string): Promise<void> {
+  async sendTelegram(chatId: string, html: string): Promise<void> {
     const token = this.configService.get<string>('TELEGRAM_BOT_TOKEN');
     if (!token || !chatId) return;
     try {
@@ -66,8 +71,8 @@ export class NotificationService {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             chat_id: chatId,
-            text,
-            parse_mode: 'Markdown',
+            text: html,
+            parse_mode: 'HTML',
           }),
         },
       );
@@ -99,4 +104,11 @@ export class NotificationService {
       this.logger.error(`Failed to send email to ${email}:`, error);
     }
   }
+}
+
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
 }
