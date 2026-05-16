@@ -12,7 +12,7 @@ import {
     LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { getAdminEmail } from "@/lib/auth";
+import { getAdminName } from "@/lib/auth";
 
 const navigation = [
     { name: "Overview", href: "/", icon: LayoutDashboard },
@@ -32,7 +32,7 @@ export function Sidebar({ onClose }: SidebarProps) {
     const { pathname } = useLocation();
     const navigate = useNavigate();
     const [showLogoutModal, setShowLogoutModal] = useState(false);
-    const adminEmail = getAdminEmail();
+    const adminName = getAdminName();
 
     const confirmLogout = () => {
         localStorage.removeItem('admin-token');
@@ -100,7 +100,7 @@ export function Sidebar({ onClose }: SidebarProps) {
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
                     <div className="w-full max-w-sm rounded-lg bg-white dark:bg-gray-800 shadow-xl ring-1 ring-gray-900/5 dark:ring-gray-700 p-6">
                         <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                            Sign out as <span className="font-normal text-gray-600 dark:text-gray-400">{adminEmail || 'Admin'}</span>?
+                            Sign out as <span className="font-normal text-gray-600 dark:text-gray-400">{adminName || 'Admin'}</span>?
                         </p>
                         <div className="mt-5 flex justify-end gap-3">
                             <button

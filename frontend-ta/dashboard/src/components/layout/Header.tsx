@@ -188,7 +188,7 @@ export function Header({ theme, toggleTheme }: HeaderProps) {
                 <div className="flex items-center space-x-3">
                     <div className="flex flex-col items-end">
                         <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{adminName || 'Admin'}</span>
-                        <span className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[140px]">Property Manager</span>
+                        <span className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[140px]">Admin</span>
                     </div>
                     <div className="h-8 w-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
                         <User className="h-5 w-5 text-gray-500 dark:text-gray-400" />
