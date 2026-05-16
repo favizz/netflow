@@ -4,7 +4,9 @@
       "Bash(Test-Path *)",
       "Bash(npx jest *)",
       "Bash(npx tsc *)",
-      "Bash(pnpm build *)"
+      "Bash(pnpm build *)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\Lenovo\\\\Documents\\\\GitHub\\\\TA-Flowmeter\" -Directory)",
+      "Bash(Select-Object Name)"
     ]
   }
 }
