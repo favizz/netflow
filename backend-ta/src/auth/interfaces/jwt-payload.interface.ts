@@ -3,4 +3,5 @@ export interface JwtPayload {
   role: 'resident' | 'admin';
   unitId: number | null;
   unitNo: string | null;
+  name?: string | null;
 }

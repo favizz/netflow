@@ -122,10 +122,17 @@ export class DeviceService {
           current,
           power,
           water_flow: waterFlow,
-          energy_total: incomingEnergyTotal || null,
-          water_total: incomingWaterTotal || null,
+          // Use explicit null-check so 0 is stored as 0, not NULL
+          energy_total: Number.isFinite(incomingEnergyTotal) ? incomingEnergyTotal : null,
+          water_total: Number.isFinite(incomingWaterTotal) ? incomingWaterTotal : null,
         });
-        await queryRunner.manager.save(row);
+        try {
+          await queryRunner.manager.save(row);
+        } catch (dupErr: unknown) {
+          // Two telemetry packets within the same MySQL-second share a PK —
+          // skip the duplicate row but keep the balance update in this transaction.
+          if ((dupErr as { code?: string })?.code !== 'ER_DUP_ENTRY') throw dupErr;
+        }
       }
 
       await queryRunner.commitTransaction();

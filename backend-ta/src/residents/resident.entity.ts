@@ -17,6 +17,9 @@ export class Resident {
   @Column({ type: 'enum', enum: ['resident', 'admin'], default: 'resident' })
   role!: 'resident' | 'admin';
 
+  @Column({ type: 'varchar', length: 64, nullable: true, default: null })
+  telegram_chat_id!: string | null;
+
   @CreateDateColumn({ type: 'datetime' })
   created_at!: Date;
 }

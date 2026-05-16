@@ -1,25 +1,138 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
-import { Search, Power, Droplets, ChevronDown, ChevronLeft, ChevronRight, Filter, Pencil, Trash2 } from "lucide-react";
+import { Search, Power, Droplets, ChevronDown, ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { InventoryItem } from "@/lib/mockData";
 import { PAGE_SIZE } from "@/lib/constants";
 
+function FilterDropdown({ label, options, value, onChange }: {
+    label: string; options: string[]; value: string; onChange: (v: string) => void;
+}) {
+    const [open, setOpen] = useState(false);
+    const [dropPos, setDropPos] = useState({ top: 0, right: 0 });
+    const btnRef = useRef<HTMLButtonElement>(null);
+    const panelRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (!open) return;
+        const close = (e: MouseEvent) => {
+            if (!btnRef.current?.contains(e.target as Node) && !panelRef.current?.contains(e.target as Node)) setOpen(false);
+        };
+        document.addEventListener('mousedown', close);
+        return () => document.removeEventListener('mousedown', close);
+    }, [open]);
+
+    const handleToggle = () => {
+        if (!open && btnRef.current) {
+            const rect = btnRef.current.getBoundingClientRect();
+            setDropPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
+        }
+        setOpen(o => !o);
+    };
+
+    return (
+        <div className="relative">
+            <button
+                ref={btnRef}
+                onClick={handleToggle}
+                className="flex items-center gap-2 h-9 rounded-md border border-gray-200 dark:border-gray-600 px-3 text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 bg-white dark:bg-gray-800"
+            >
+                {label}: <span className="text-gray-900 dark:text-gray-200">{value}</span>
+                <ChevronDown className="h-3.5 w-3.5" />
+            </button>
+            {open && createPortal(
+                <div
+                    ref={panelRef}
+                    style={{ position: 'fixed', top: dropPos.top, right: dropPos.right, zIndex: 9999 }}
+                    className="min-w-[140px] rounded-md bg-white dark:bg-gray-800 py-1 shadow-lg ring-1 ring-black/5 dark:ring-gray-700"
+                >
+                    {options.map(o => (
+                        <button key={o} onClick={() => { onChange(o); setOpen(false); }}
+                            className={cn("block w-full px-4 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-700",
+                                value === o ? "text-primary font-medium" : "text-gray-700 dark:text-gray-300")}>
+                            {o}
+                        </button>
+                    ))}
+                </div>,
+                document.body
+            )}
+        </div>
+    );
+}
+
+function SelectDropdown({ label, items, value, onChange }: {
+    label: string;
+    items: { value: string; label: string }[];
+    value: string;
+    onChange: (v: string) => void;
+}) {
+    const [open, setOpen] = useState(false);
+    const [dropPos, setDropPos] = useState({ top: 0, right: 0 });
+    const btnRef = useRef<HTMLButtonElement>(null);
+    const panelRef = useRef<HTMLDivElement>(null);
+    const current = items.find(i => i.value === value);
+
+    useEffect(() => {
+        if (!open) return;
+        const close = (e: MouseEvent) => {
+            if (!btnRef.current?.contains(e.target as Node) && !panelRef.current?.contains(e.target as Node)) setOpen(false);
+        };
+        document.addEventListener('mousedown', close);
+        return () => document.removeEventListener('mousedown', close);
+    }, [open]);
+
+    const handleToggle = () => {
+        if (!open && btnRef.current) {
+            const rect = btnRef.current.getBoundingClientRect();
+            setDropPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
+        }
+        setOpen(o => !o);
+    };
+
+    return (
+        <div className="relative">
+            <button
+                ref={btnRef}
+                onClick={handleToggle}
+                className="flex items-center gap-2 h-9 rounded-md border border-gray-200 dark:border-gray-600 px-3 text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 bg-white dark:bg-gray-800"
+            >
+                {label}: <span className="text-gray-900 dark:text-gray-200">{current?.label ?? label}</span>
+                <ChevronDown className="h-3.5 w-3.5" />
+            </button>
+            {open && createPortal(
+                <div
+                    ref={panelRef}
+                    style={{ position: 'fixed', top: dropPos.top, right: dropPos.right, zIndex: 9999 }}
+                    className="min-w-[160px] max-h-48 overflow-y-auto rounded-md bg-white dark:bg-gray-800 py-1 shadow-lg ring-1 ring-black/5 dark:ring-gray-700"
+                >
+                    {items.map(item => (
+                        <button key={item.value} onClick={() => { onChange(item.value); setOpen(false); }}
+                            className={cn("block w-full px-4 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-700",
+                                value === item.value ? "text-primary font-medium" : "text-gray-700 dark:text-gray-300")}>
+                            {item.label}
+                        </button>
+                    ))}
+                </div>,
+                document.body
+            )}
+        </div>
+    );
+}
+
 interface InventoryTableProps {
     data: InventoryItem[];
     initialFilter?: string;
-    onEdit?: (item: InventoryItem) => void;
-    onDelete?: (item: InventoryItem) => void;
-    onCommand?: (deviceId: string, type: 'relay' | 'valve', value: 0 | 1) => Promise<void>;
+    buildings?: { id: number; code: string; name: string }[];
+    onAdd?: () => void;
 }
 
-export function InventoryTable({ data, initialFilter = "", onEdit, onDelete, onCommand }: InventoryTableProps) {
+export function InventoryTable({ data, initialFilter = "", buildings = [], onAdd }: InventoryTableProps) {
     const navigate = useNavigate();
     const [searchQuery, setSearchQuery] = useState(initialFilter);
     const [statusFilter, setStatusFilter] = useState<"All" | "Online" | "Offline">("All");
-    const [isFilterOpen, setIsFilterOpen] = useState(false);
+    const [selectedBuilding, setSelectedBuilding] = useState("all");
     const [page, setPage] = useState(1);
-    const [cmdPending, setCmdPending] = useState<string | null>(null);
 
     const filteredData = useMemo(() => {
         setPage(1);
@@ -29,10 +142,11 @@ export function InventoryTable({ data, initialFilter = "", onEdit, onDelete, onC
                 item.unit.toLowerCase().includes(searchQuery.toLowerCase()) ||
                 item.meterSerial.toLowerCase().includes(searchQuery.toLowerCase());
             const matchesFilter = statusFilter === "All" || item.status === statusFilter;
-            return matchesSearch && matchesFilter;
+            const matchesBuilding = selectedBuilding === "all" || item.buildingId === Number(selectedBuilding);
+            return matchesSearch && matchesFilter && matchesBuilding;
         });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [data, searchQuery, statusFilter]);
+    }, [data, searchQuery, statusFilter, selectedBuilding]);
 
     const totalPages = Math.max(1, Math.ceil(filteredData.length / PAGE_SIZE));
     const pageData = filteredData.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -40,61 +154,63 @@ export function InventoryTable({ data, initialFilter = "", onEdit, onDelete, onC
     const end = Math.min(page * PAGE_SIZE, filteredData.length);
 
     return (
-        <div className="rounded-lg bg-white dark:bg-gray-800 shadow-sm ring-1 ring-gray-900/5 dark:ring-gray-700">
-            <div className="border-b border-gray-200 dark:border-gray-700 px-6 py-4">
-                <div className="flex flex-col space-y-4 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
-                    <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">Device Inventory &amp; Control</h2>
-                    <div className="flex space-x-3">
-                        <div className="relative">
+        <div className="rounded-lg bg-white dark:bg-gray-900 shadow-sm ring-1 ring-gray-900/5 dark:ring-gray-700">
+            <div className="border-b border-gray-200 dark:border-gray-700 px-3 sm:px-6 py-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{data.length} devices</span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                        <div className="relative flex-1 sm:flex-none">
                             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400 dark:text-gray-500" />
                             <input
                                 type="text"
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                placeholder="Search unit, tenant, or serial..."
-                                className="h-9 w-64 rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 pl-9 pr-4 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary placeholder:text-gray-400 dark:placeholder:text-gray-500"
+                                placeholder="Search unit, tenant, serial..."
+                                className="h-9 w-full sm:w-52 rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 pl-9 pr-4 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary placeholder:text-gray-400 dark:placeholder:text-gray-500"
                             />
                         </div>
-                        <div className="relative">
+                                        {buildings.length > 0 && (
+                            <SelectDropdown
+                                label="Building"
+                                items={[
+                                    { value: "all", label: "All" },
+                                    ...buildings.map(b => ({ value: String(b.id), label: b.name }))
+                                ]}
+                                value={selectedBuilding}
+                                onChange={setSelectedBuilding}
+                            />
+                        )}
+                        <FilterDropdown
+                            label="Status"
+                            options={["All", "Online", "Offline"]}
+                            value={statusFilter}
+                            onChange={(v) => setStatusFilter(v as "All" | "Online" | "Offline")}
+                        />
+                        {onAdd && (
                             <button
-                                onClick={() => setIsFilterOpen(!isFilterOpen)}
-                                className="flex items-center space-x-2 rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600"
+                                onClick={onAdd}
+                                className="flex items-center gap-1.5 h-9 rounded-md bg-primary px-3 text-sm font-medium text-white hover:bg-primary/90 transition-colors"
                             >
-                                <Filter className="h-4 w-4" />
-                                <span>{statusFilter === "All" ? "Filter" : statusFilter}</span>
-                                <ChevronDown className="h-4 w-4 ml-1" />
+                                <Plus className="h-4 w-4" />
+                                <span className="hidden sm:inline">Add Unit</span>
                             </button>
-                            {isFilterOpen && (
-                                <div className="absolute right-0 mt-2 w-40 rounded-md bg-white dark:bg-gray-800 py-1 shadow-lg ring-1 ring-black ring-opacity-5 dark:ring-gray-600 z-10">
-                                    {(["All", "Online", "Offline"] as const).map((status) => (
-                                        <button
-                                            key={status}
-                                            onClick={() => { setStatusFilter(status); setIsFilterOpen(false); }}
-                                            className={cn(
-                                                "block w-full px-4 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-700",
-                                                statusFilter === status ? "text-primary font-medium" : "text-gray-700 dark:text-gray-300"
-                                            )}
-                                        >
-                                            {status}
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
+                        )}
                     </div>
                 </div>
             </div>
 
             <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm text-gray-500 dark:text-gray-400">
-                    <thead className="bg-gray-50 dark:bg-gray-800/60 text-xs uppercase text-gray-700 dark:text-gray-400">
+                    <thead className="bg-gray-50 dark:bg-gray-800 text-xs uppercase text-gray-700 dark:text-gray-300">
                         <tr>
-                            <th className="px-6 py-3 font-medium">Building</th>
-                            <th className="px-6 py-3 font-medium">Unit / Tenant</th>
-                            <th className="px-6 py-3 font-medium">Device ID</th>
-                            <th className="px-6 py-3 font-medium">Status</th>
-                            <th className="px-6 py-3 font-medium">Utilities</th>
-                            <th className="px-6 py-3 font-medium text-right">Actions</th>
+                            <th className="hidden sm:table-cell px-3 sm:px-6 py-3 font-medium">Building</th>
+                            <th className="px-3 sm:px-6 py-3 font-medium">Unit</th>
+                            <th className="px-3 sm:px-6 py-3 font-medium">Tenant</th>
+                            <th className="hidden md:table-cell px-3 sm:px-6 py-3 font-medium">Device ID</th>
+                            <th className="px-3 sm:px-6 py-3 font-medium">Status</th>
+                            <th className="hidden sm:table-cell px-3 sm:px-6 py-3 font-medium">Utilities</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
@@ -102,18 +218,20 @@ export function InventoryTable({ data, initialFilter = "", onEdit, onDelete, onC
                             pageData.map((item) => (
                                 <tr
                                     key={item.id}
-                                    className="hover:bg-gray-50 dark:hover:bg-gray-700/40 cursor-pointer"
+                                    className="hover:bg-gray-50 dark:hover:bg-gray-800/50 cursor-pointer"
                                     onClick={() => navigate(`/devices/${item.id}`)}
                                 >
-                                    <td className="px-6 py-4">
-                                        <div className="font-medium text-gray-900 dark:text-gray-100">{item.buildingName || '-'}</div>
+                                    <td className="hidden sm:table-cell px-3 sm:px-6 py-3">
+                                        <div className="font-medium text-gray-900 dark:text-gray-100 truncate max-w-[120px]">{item.buildingName || '-'}</div>
                                     </td>
-                                    <td className="px-6 py-4">
+                                    <td className="px-3 sm:px-6 py-3">
                                         <div className="font-medium text-gray-900 dark:text-gray-100">{item.unit}</div>
-                                        <div className="text-xs text-gray-500 dark:text-gray-400">{item.tenant}</div>
                                     </td>
-                                    <td className="px-6 py-4 font-mono text-xs">{item.meterSerial}</td>
-                                    <td className="px-6 py-4">
+                                    <td className="px-3 sm:px-6 py-3">
+                                        <div className="text-sm text-gray-600 dark:text-gray-300 truncate max-w-[140px]">{item.tenant}</div>
+                                    </td>
+                                    <td className="hidden md:table-cell px-3 sm:px-6 py-3 font-mono text-xs">{item.meterSerial}</td>
+                                    <td className="px-3 sm:px-6 py-3">
                                         <span className={cn(
                                             "inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ring-1 ring-inset",
                                             item.status === "Online"
@@ -123,68 +241,28 @@ export function InventoryTable({ data, initialFilter = "", onEdit, onDelete, onC
                                             {item.status}
                                         </span>
                                     </td>
-                                    <td className="px-6 py-4">
+                                    <td className="hidden sm:table-cell px-3 sm:px-6 py-3">
                                         <div className="flex space-x-2">
-                                            <button
-                                                disabled={!onCommand || cmdPending === `relay-${item.id}`}
-                                                title={onCommand ? (item.power ? "Click to turn OFF relay" : "Click to turn ON relay") : (item.power ? "Power ON" : "Power OFF")}
-                                                onClick={async (e) => {
-                                                    e.stopPropagation();
-                                                    if (!onCommand) return;
-                                                    const newVal: 0 | 1 = item.power ? 0 : 1;
-                                                    setCmdPending(`relay-${item.id}`);
-                                                    await onCommand(item.meterSerial, 'relay', newVal).finally(() => setCmdPending(null));
-                                                }}
-                                                className={cn("flex h-8 w-8 items-center justify-center rounded-md border transition-colors disabled:cursor-not-allowed",
+                                            <span
+                                                title={item.power ? "Power ON" : "Power OFF"}
+                                                className={cn("flex h-8 w-8 items-center justify-center rounded-md border",
                                                     item.power
-                                                        ? "border-primary bg-primary/10 text-primary hover:bg-primary/20"
-                                                        : "border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-600",
-                                                    !onCommand && "cursor-default"
+                                                        ? "border-primary bg-primary/10 text-primary"
+                                                        : "border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-400"
                                                 )}
                                             >
                                                 <Power className="h-4 w-4" />
-                                            </button>
-                                            <button
-                                                disabled={!onCommand || cmdPending === `valve-${item.id}`}
-                                                title={onCommand ? (item.water ? "Click to CLOSE valve" : "Click to OPEN valve") : (item.water ? "Water ON" : "Water OFF")}
-                                                onClick={async (e) => {
-                                                    e.stopPropagation();
-                                                    if (!onCommand) return;
-                                                    const newVal: 0 | 1 = item.water ? 0 : 1;
-                                                    setCmdPending(`valve-${item.id}`);
-                                                    await onCommand(item.meterSerial, 'valve', newVal).finally(() => setCmdPending(null));
-                                                }}
-                                                className={cn("flex h-8 w-8 items-center justify-center rounded-md border transition-colors disabled:cursor-not-allowed",
+                                            </span>
+                                            <span
+                                                title={item.water ? "Water ON" : "Water OFF"}
+                                                className={cn("flex h-8 w-8 items-center justify-center rounded-md border",
                                                     item.water
-                                                        ? "border-cyan-500 bg-cyan-50 dark:bg-cyan-900/30 text-cyan-600 dark:text-cyan-400 hover:bg-cyan-100 dark:hover:bg-cyan-900/50"
-                                                        : "border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-600",
-                                                    !onCommand && "cursor-default"
+                                                        ? "border-cyan-500 bg-cyan-50 dark:bg-cyan-900/30 text-cyan-600 dark:text-cyan-400"
+                                                        : "border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-400"
                                                 )}
                                             >
                                                 <Droplets className="h-4 w-4" />
-                                            </button>
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-4 text-right">
-                                        <div className="flex items-center justify-end space-x-2">
-                                            {onEdit && (
-                                                <button
-                                                    className="rounded-md border border-blue-200 dark:border-blue-800 px-2 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
-                                                    onClick={(e) => { e.stopPropagation(); onEdit(item); }}
-                                                    title="Edit unit"
-                                                >
-                                                    <Pencil className="h-3.5 w-3.5" />
-                                                </button>
-                                            )}
-                                            {onDelete && (
-                                                <button
-                                                    className="rounded-md border border-red-200 dark:border-red-800 px-2 py-1 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                                                    onClick={(e) => { e.stopPropagation(); onDelete(item); }}
-                                                    title="Delete unit"
-                                                >
-                                                    <Trash2 className="h-3.5 w-3.5" />
-                                                </button>
-                                            )}
+                                            </span>
                                         </div>
                                     </td>
                                 </tr>
@@ -208,7 +286,7 @@ export function InventoryTable({ data, initialFilter = "", onEdit, onDelete, onC
                     <button
                         onClick={() => setPage(p => Math.max(1, p - 1))}
                         disabled={page === 1}
-                        className="flex items-center rounded-md border border-gray-200 dark:border-gray-600 px-3 py-1 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                        className="flex items-center rounded-md border border-gray-200 dark:border-gray-600 px-3 py-1 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                         <ChevronLeft className="h-4 w-4 mr-1" /> Prev
                     </button>
@@ -216,7 +294,7 @@ export function InventoryTable({ data, initialFilter = "", onEdit, onDelete, onC
                     <button
                         onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                         disabled={page === totalPages}
-                        className="flex items-center rounded-md border border-gray-200 dark:border-gray-600 px-3 py-1 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                        className="flex items-center rounded-md border border-gray-200 dark:border-gray-600 px-3 py-1 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                         Next <ChevronRight className="h-4 w-4 ml-1" />
                     </button>

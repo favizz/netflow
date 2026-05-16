@@ -4,7 +4,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, Not, IsNull, In } from 'typeorm';
 import { CreateUnitDto } from './dto/create-unit.dto';
 import { UpdateUnitDto } from './dto/update-unit.dto';
 import { Unit } from './entities/unit.entity';
@@ -12,11 +12,13 @@ import { MeterReading } from '../device/entities/device.entity';
 import { TariffService } from '../tariff/tariff.service';
 import { AuditLogService } from '../audit-log/audit-log.service';
 
-const ONLINE_THRESHOLD_MS = 5 * 60 * 1000;
 const LOW_BALANCE_THRESHOLD_RP = 20_000;
 
 @Injectable()
 export class UnitService {
+  /** Adjusted dynamically by AdminService whenever SENSOR_SAMPLING_TIME changes. */
+  private onlineThresholdMs = 5 * 60 * 1000;
+
   constructor(
     @InjectRepository(Unit)
     private readonly unitRepo: Repository<Unit>,
@@ -25,6 +27,11 @@ export class UnitService {
     private readonly tariffService: TariffService,
     private readonly auditLogService: AuditLogService,
   ) {}
+
+  /** Called by AdminService on startup and whenever calibration settings change. */
+  setOnlineThresholdMs(ms: number): void {
+    this.onlineThresholdMs = Math.max(30_000, ms);
+  }
 
   async create(createUnitDto: CreateUnitDto) {
     const existing = await this.unitRepo.findOne({
@@ -49,7 +56,10 @@ export class UnitService {
 
   findAll(buildingId?: number) {
     if (buildingId) {
-      return this.unitRepo.find({ where: { building_id: buildingId }, order: { unit_no: 'ASC' } });
+      return this.unitRepo.find({
+        where: { building_id: buildingId },
+        order: { unit_no: 'ASC' },
+      });
     }
     return this.unitRepo.find({ order: { unit_no: 'ASC' } });
   }
@@ -105,6 +115,48 @@ export class UnitService {
     return this.unitRepo.save(unit);
   }
 
+  /** Streams units that have a device_id in stable ID order, chunk by chunk.
+   *  Never loads the whole table into memory — safe at any scale. */
+  async *streamAllWithDevice(chunkSize = 500): AsyncGenerator<Unit[]> {
+    let offset = 0;
+    while (true) {
+      const batch = await this.unitRepo.find({
+        where: { device_id: Not(IsNull()) },
+        order: { id: 'ASC' },
+        take: chunkSize,
+        skip: offset,
+      });
+      if (batch.length === 0) break;
+      yield batch;
+      if (batch.length < chunkSize) break;
+      offset += batch.length;
+    }
+  }
+
+  /** Bulk-update relay or valve state for a set of unit IDs in one SQL UPDATE. */
+  async bulkSetActuation(
+    ids: number[],
+    type: 'relay' | 'valve',
+    value: boolean,
+  ): Promise<void> {
+    if (ids.length === 0) return;
+    const update =
+      type === 'relay'
+        ? { relay_status: value }
+        : { valve_status: value };
+    await this.unitRepo.update({ id: In(ids) }, update);
+  }
+
+  async checkDeviceOnline(deviceId: string): Promise<boolean> {
+    if (!deviceId) return false;
+    const latest = await this.meterRepo.findOne({
+      where: { device_id: deviceId },
+      order: { time: 'DESC' },
+    });
+    if (!latest?.time) return false;
+    return Date.now() - new Date(latest.time).getTime() <= this.onlineThresholdMs;
+  }
+
   async setRelayStatus(id: number, relayStatus: boolean, actorEmail?: string) {
     const unit = await this.findOne(id);
     unit.relay_status = relayStatus;
@@ -143,7 +195,10 @@ export class UnitService {
 
   async getOwnerDashboard(unitNo: string) {
     const unit = await this.findByUnitNo(unitNo);
-    const energyTariff = await this.tariffService.findCurrent('electricity');
+    const [energyTariff, waterTariff] = await Promise.all([
+      this.tariffService.findCurrent('electricity'),
+      this.tariffService.findCurrent('water'),
+    ]);
 
     const remainingKwh =
       energyTariff > 0 ? Number(unit.balance) / energyTariff : 0;
@@ -160,7 +215,7 @@ export class UnitService {
       ? new Date(latest.time).toISOString()
       : null;
     const online = lastTelemetryAt
-      ? Date.now() - new Date(lastTelemetryAt).getTime() <= ONLINE_THRESHOLD_MS
+      ? Date.now() - new Date(lastTelemetryAt).getTime() <= this.onlineThresholdMs
       : false;
 
     return {
@@ -168,7 +223,9 @@ export class UnitService {
       unitNo: unit.unit_no,
       balance: Number(unit.balance),
       energyTariff,
+      waterTariff,
       relayStatus: unit.relay_status,
+      valveStatus: unit.valve_status,
       remainingEstimate: {
         kwh: Number(remainingKwh.toFixed(2)),
         hours: Number(estimateHours.toFixed(1)),
@@ -211,7 +268,7 @@ export class UnitService {
       const lastTime = latestMap.get(u.device_id);
       const lastTelemetryAt = lastTime ? lastTime.toISOString() : null;
       const online = lastTime
-        ? now - lastTime.getTime() <= ONLINE_THRESHOLD_MS
+        ? now - lastTime.getTime() <= this.onlineThresholdMs
         : false;
 
       return {
@@ -266,7 +323,7 @@ export class UnitService {
     });
 
     const online = latest?.time
-      ? Date.now() - new Date(latest.time).getTime() <= ONLINE_THRESHOLD_MS
+      ? Date.now() - new Date(latest.time).getTime() <= this.onlineThresholdMs
       : false;
 
     if (!online) {

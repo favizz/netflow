@@ -17,6 +17,7 @@ PREV_COMMIT_FILE="/tmp/netflow_prev_commit"
 
 log() { echo "[deploy] $(date '+%H:%M:%S') $*"; }
 
+
 # ── Pull latest code then re-exec so we always run the newest deploy.sh ──────
 # On the first invocation (NETFLOW_REEXEC unset) we pull and immediately
 # replace this process with the freshly-pulled version of the script.
@@ -25,9 +26,13 @@ if [[ "${NETFLOW_REEXEC:-0}" == "0" ]]; then
   PREV_COMMIT=$(git -C "$REPO_DIR" rev-parse HEAD)
   echo "$PREV_COMMIT" > "$PREV_COMMIT_FILE"
   log "Rollback point saved: ${PREV_COMMIT:0:8}"
-  log "Pulling origin/main..."
-  git -C "$REPO_DIR" reset --hard HEAD
-  git -C "$REPO_DIR" pull origin main
+  if [[ "${SKIP_PULL:-0}" == "0" ]]; then
+    log "Pulling origin/main..."
+    git -C "$REPO_DIR" reset --hard HEAD
+    git -C "$REPO_DIR" pull origin main
+  else
+    log "Code synced by CI — skipping git pull"
+  fi
   NETFLOW_REEXEC=1 exec bash "$REPO_DIR/infra/scripts/deploy.sh" "$@"
 fi
 
@@ -40,7 +45,8 @@ log "Rollback point: ${PREV_COMMIT:0:8}"
 start_backend() {
   cd "$REPO_DIR/backend-ta"
   pm2 delete netflow-backend 2>/dev/null || true
-  pm2 start "node -r ./dist/tracing dist/main" --name netflow-backend
+  pm2 start "node -r ./dist/src/tracing dist/src/main" --name netflow-backend \
+    --env production
   cd "$REPO_DIR"
 }
 
@@ -55,7 +61,7 @@ rollback() {
   log "FAILED - rolling back to ${PREV_COMMIT:0:8}..."
   git -C "$REPO_DIR" checkout "$PREV_COMMIT" -- .
   cd "$REPO_DIR/backend-ta"
-  pnpm install --no-frozen-lockfile
+  npm install
   npm run build
   start_backend
   pm2 save
@@ -65,9 +71,13 @@ rollback() {
 
 # ── Pull latest code ────────────────────────────────────────────────────────
 cd "$REPO_DIR"
-log "Pulling origin/main..."
-git reset --hard HEAD
-git pull origin main
+if [[ "${SKIP_PULL:-0}" == "0" ]]; then
+  log "Pulling origin/main..."
+  git reset --hard HEAD
+  git pull origin main
+else
+  log "Code synced by CI — skipping git pull"
+fi
 
 # ── Backend ─────────────────────────────────────────────────────────────────
 log "Building backend..."

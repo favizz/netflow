@@ -17,11 +17,19 @@ const FAQ_DATA: FAQSection[] = [
         items: [
             {
                 question: "What does the Overview page show?",
-                answer: "The Overview page displays real-time statistics: total units registered, how many are currently online/offline (refreshed every 30 seconds), units with low balance, active anomaly alerts, and recent audit log entries. It gives a bird's-eye view of the entire building system.",
+                answer: "The Overview page displays three real-time stat cards: total units registered, how many are currently online, and units with low balance. It also shows a compact system health bar, recent audit log entries, and the consumption trend chart. Stats are refreshed every 30 seconds.",
             },
             {
                 question: "How is 'online' status determined?",
                 answer: "A unit is considered Online if its device has sent telemetry data within the last 5 minutes. The backend checks the latest entry in meter_readings for each device. If no reading exists or the last reading is older than 5 minutes, the unit is Offline.",
+            },
+            {
+                question: "What is the System Health bar?",
+                answer: "The System Health bar shows the status of each backend service (API, MQTT broker, database, payment gateway, etc.) as compact inline pills with a colored dot and a latency progress bar. It is refreshed once when you open the Overview page. No continuous polling is used.",
+            },
+            {
+                question: "What do the consumption trend periods mean?",
+                answer: "The chart supports three periods: Daily (last 7 days with no navigation), Monthly (navigate month by month), and Yearly (navigate year by year). Use the electricity/water toggle icons to switch utilities. Navigation arrows are only shown for Monthly and Yearly views.",
             },
         ],
     },
@@ -30,11 +38,11 @@ const FAQ_DATA: FAQSection[] = [
         items: [
             {
                 question: "How do I add a new unit?",
-                answer: "On the Devices page, click 'Add Unit'. Provide the unit number (e.g. A-101) and the device ID of the physical smart meter. The unit starts with zero balance and relay ON.",
+                answer: "On the Devices page, click 'Add Unit'. A single-page form opens where you search and select a building, enter the unit number and device ID, optionally set an initial balance, and assign the unit to a user (admin or resident). Assignment is required — you cannot add a unit without linking it to someone.",
             },
             {
                 question: "How do I assign a resident to a unit?",
-                answer: "Click the edit icon on any unit row in the Devices table. Enter the resident's email address in the 'Resident Email' field. This links the resident's mobile app to that unit.",
+                answer: "Assignment is handled during unit creation via the 'Add Unit' form. Search by name or email in the 'Assign To' field and select the user. To reassign later, go to the Users page and use the assign icon on the user row.",
             },
             {
                 question: "What do the relay and valve toggles do?",
@@ -72,7 +80,7 @@ const FAQ_DATA: FAQSection[] = [
         items: [
             {
                 question: "How does the prepaid top-up work?",
-                answer: "Residents purchase tokens via the mobile app through the payment gateway. On successful payment, a webhook credits the unit's balance. Balances are stored directly on the units table for fast reads.",
+                answer: "Residents purchase tokens via the mobile app. They enter separate amounts for electricity (Rp) and water (Rp), then pay through the payment gateway. On successful payment, the backend sends a single MQTT topup message to the device with the total credited amount. Balances are stored on the units table for fast reads.",
             },
             {
                 question: "What happens when balance runs out?",
@@ -92,6 +100,10 @@ const FAQ_DATA: FAQSection[] = [
                 answer: "Admins access the dashboard (this app) and have full control over all units, tariffs, and settings. Residents access the mobile web app and can only see their own unit's data and purchase tokens.",
             },
             {
+                question: "How do I add a new user?",
+                answer: "On the Users page, click 'Add User'. A popup modal opens where you enter the user's email (required) and display name (optional). The user is added as a resident. You can grant admin access afterwards using the shield icon on their row.",
+            },
+            {
                 question: "How does admin authentication work?",
                 answer: "Admins log in via Google OAuth. The backend validates the Google ID token and returns a signed JWT stored as 'admin-token' in localStorage. The token must belong to an email in the allowed admin list.",
             },
@@ -106,7 +118,7 @@ const FAQ_DATA: FAQSection[] = [
             },
             {
                 question: "What is the Queue Monitor?",
-                answer: "The Queue Monitor (accessible via the button on the Logs page) opens Bull Board - a visual interface for the BullMQ job queues. It shows the telemetry processing queue and the payment-expiry queue: pending jobs, completed jobs, failed jobs, and retry counts.",
+                answer: "The Queue Monitor is embedded at the bottom of the Logs page as a collapsible section. Click 'Queue Monitor (Bull Board)' to expand it — the iframe loads on demand. It shows the BullMQ job queues: telemetry processing, payment expiry, pending/completed/failed jobs, and retry counts.",
             },
             {
                 question: "Can I filter logs?",
@@ -123,7 +135,23 @@ const FAQ_DATA: FAQSection[] = [
             },
             {
                 question: "Who gets notified about anomalies?",
-                answer: "When a Critical or Warning anomaly is detected - including low balance alerts - the system automatically sends an email to the resident assigned to that unit via nodemailer (SMTP). Admins see anomalies in the dashboard Overview.",
+                answer: "When a Critical or Warning anomaly is detected — including low balance alerts — the system sends an email to the resident via SMTP (nodemailer) and, if the resident has linked a Telegram account, also sends a Telegram message via the Telegram Bot API using HTML parse mode. Admins see anomalies in the dashboard Overview and notification bell.",
+            },
+            {
+                question: "How fast does an alert appear after an event?",
+                answer: "The system is designed to deliver alerts within 90 seconds of the triggering event (B200 Spec #8). Offline alerts are driven by MQTT LWT (Last Will and Testament), which fires automatically when the broker detects the device has not sent a Keep-Alive packet for 300 seconds (5 minutes). Jumper and tamper alerts are triggered immediately when the anomalous telemetry payload arrives.",
+            },
+            {
+                question: "What is a 'jumper' anomaly?",
+                answer: "A jumper anomaly is detected when the energy sensor reports non-zero current (A > 0) while the relay status is recorded as open (false / disconnected). This indicates electricity is flowing despite the circuit being cut — a sign the meter has been bypassed. The system flags this and notifies both the admin dashboard and the resident.",
+            },
+            {
+                question: "What is a tamper event?",
+                answer: "Tampering is detected when the device's physical case-open switch (tamper switch) is triggered, signalled via a flag bit in the MQTT telemetry payload. This indicates someone has physically opened the meter enclosure. An anomaly record is created and a notification is dispatched immediately.",
+            },
+            {
+                question: "How do dashboard notifications work?",
+                answer: "The bell icon in the header shows unread alerts sourced from the audit log — specifically anomaly events and failed device/firmware commands. Clicking the bell opens the panel. Closing the panel marks all shown notifications as read; they will no longer appear on next visit. Read state is stored in localStorage.",
             },
         ],
     },
@@ -132,7 +160,40 @@ const FAQ_DATA: FAQSection[] = [
         items: [
             {
                 question: "What can I do in Control Center?",
-                answer: "Control Center lets you send batch relay and valve commands across multiple units simultaneously - for example, cutting power to an entire tower during maintenance or restoring service after a billing event.",
+                answer: "Control Center has four areas: (1) Tariff rates — set the Rp/kWh electricity price and Rp/m³ water price with a future effective date so the new rate activates automatically on that date. (2) Sensor calibration — adjust the flow-rate and power calibration factors (CAL_FACTOR_FLOWRATE and CAL_FACTOR_POWER) and the sensor sampling time. (3) Broadcast commands — cut or restore electricity relay and water valve for all connected devices simultaneously, for example during planned maintenance. (4) OTA firmware update — broadcast a firmware binary link to all devices via MQTT so they can self-update.",
+            },
+            {
+                question: "How do tariff rates work?",
+                answer: "Each tariff entry has a utility type (electricity or water), a price per unit, and an effective date. The system always uses the most recent entry whose effective date is on or before today as the active rate. You can schedule a future rate by setting an effective date ahead of today — it will appear as 'Scheduled' until that date arrives. Creating a new entry never deletes old ones, so the full rate history is preserved.",
+            },
+            {
+                question: "Can I set a tariff with a past effective date?",
+                answer: "Yes. The system does not restrict the effective date to the future. A past-dated tariff becomes the active rate immediately (since its effective date ≤ today). Use this carefully: it does not retroactively recalculate past bills, but it will affect the next billing cycle.",
+            },
+            {
+                question: "What do the calibration factors do?",
+                answer: "CAL_FACTOR_FLOWRATE scales raw flow-sensor pulse counts to actual m³/h. CAL_FACTOR_POWER scales the power reading from the energy chip. Changing these values sends a config_ack MQTT message to all connected devices. The Control Center log shows the acknowledgement from each device. Only change these if you have performed a physical calibration test against a reference meter.",
+            },
+            {
+                question: "How does OTA firmware update work?",
+                answer: "Enter the firmware version string and a publicly accessible binary URL, then click Push OTA. The backend publishes an MQTT message to all connected devices with the binary link. Each device downloads and flashes the firmware independently and sends back an OTA ACK (ok, noop if already up-to-date, or a failure code). The Control Center log panel shows each ACK as it arrives. The last binary link you pushed is remembered in localStorage for convenience.",
+            },
+        ],
+    },
+    {
+        title: "Tariffs & Billing",
+        items: [
+            {
+                question: "How is a resident's bill calculated?",
+                answer: "Consumption is calculated as the difference between the maximum and minimum meter readings within the billing period (MAX − MIN, so counter resets do not overcharge). This is then multiplied by the active tariff rate for that period. Water volume is stored in m³ at 64-bit double precision to prevent cumulative rounding errors.",
+            },
+            {
+                question: "What happens when the meter reading counter resets?",
+                answer: "The reporting query uses GREATEST(0, MAX − MIN) per period, so a counter reset back to zero produces a large negative delta that is clamped to zero. No phantom consumption is billed.",
+            },
+            {
+                question: "What currency and precision does the system use?",
+                answer: "All prices are in Indonesian Rupiah (Rp). Electricity is priced per kWh, water per m³. Energy readings are stored as floating-point to carry sub-kWh precision; the dashboard rounds to 2 decimal places for display.",
             },
         ],
     },
@@ -141,7 +202,11 @@ const FAQ_DATA: FAQSection[] = [
         items: [
             {
                 question: "How long is telemetry data kept?",
-                answer: "A nightly cron job (3 AM) automatically purges meter_readings older than 24 months and transactions older than 60 months. This keeps the database lean without manual intervention.",
+                answer: "A nightly cron job (3 AM) automatically purges meter_readings older than 24 months and transactions older than 60 months. These thresholds match the data retention policy defined in the product specification (B200 §2.1.7). This keeps the database lean without manual intervention.",
+            },
+            {
+                question: "What happens to data when a device is offline?",
+                answer: "While offline, the device stores readings locally in its controller memory. When the connection is restored, it sends all buffered readings (batching log) to the server in one burst. The server stores them with their original timestamps. Data loss only occurs if the device runs out of local RAM before reconnecting.",
             },
         ],
     },
@@ -150,7 +215,15 @@ const FAQ_DATA: FAQSection[] = [
         items: [
             {
                 question: "Which MQTT topics does the system use?",
-                answer: "device/{id}/telemetry - device publishes sensor readings. device/{id}/relay/set - backend sends relay on/off. device/{id}/valve/set - backend sends valve open/close. device/{id}/status - device heartbeat.",
+                answer: "device/{id}/telemetry — device publishes sensor readings (QoS 1). device/{id}/relay/set — backend sends relay on/off command (QoS 1, JSON ≤128 bytes). device/{id}/valve/set — backend sends valve open/close command (QoS 1, JSON ≤128 bytes). device/{id}/topup — backend sends top-up credit. device/{id}/status — device heartbeat for Keep-Alive and LWT (offline detection after 300 s silence).",
+            },
+            {
+                question: "What QoS level does the system use and why?",
+                answer: "Telemetry and command topics use QoS 1 (at-least-once delivery). This guarantees each message reaches its destination at least once while keeping overhead lower than QoS 2. For sensor readings, occasional duplicates are acceptable; the time-series query uses MAX−MIN aggregation so duplicates have no impact on billing. For commands, the device ignores duplicate command_ids it has already executed.",
+            },
+            {
+                question: "How long can the system scale to?",
+                answer: "The server is designed and tested to handle 2,444 concurrent units (matching the target building capacity) with Data Loss Rate ≤ 1% per month and CPU/RAM both below 80%. End-to-end latency from meter reading to dashboard display must not exceed 60 seconds under this load.",
             },
             {
                 question: "Why does the mobile app use WebSocket instead of TCP for MQTT?",

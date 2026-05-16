@@ -1,13 +1,12 @@
 {
   "permissions": {
     "allow": [
-      "Bash(New-Item -ItemType Directory -Path \"C:\\\\Users\\\\Lenovo\\\\Documents\\\\GitHub\\\\TA-Flowmeter\\\\infra\\\\nginx\" -Force)",
-      "Bash(Out-Null)",
-      "PowerShell(New-Item *)",
-      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\Lenovo\\\\Documents\\\\GitHub\\\\TA-Flowmeter\" -Recurse -Directory)",
-      "Bash(Select-Object -ExpandProperty FullName)",
-      "Bash(git add *)",
-      "Bash(git commit -m ' *)"
+      "Bash(Test-Path *)",
+      "Bash(npx jest *)",
+      "Bash(npx tsc *)",
+      "Bash(pnpm build *)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\Lenovo\\\\Documents\\\\GitHub\\\\TA-Flowmeter\" -Directory)",
+      "Bash(Select-Object Name)"
     ]
   }
 }

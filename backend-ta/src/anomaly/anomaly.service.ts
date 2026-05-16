@@ -8,6 +8,7 @@ import type { AnomalyItem, AnomalyType } from './anomaly.types';
 import { Anomaly } from './entities/anomaly.entity';
 import { encodeCommand } from '../common/binary-codec';
 import { NotificationService } from '../notification/notification.service';
+import { ResidentsService } from '../residents/residents.service';
 
 // ── Detection thresholds ────────────────────────────────────────────────────
 const MCB_WATT_LIMIT = 1300;
@@ -41,6 +42,7 @@ export class AnomalyService implements OnModuleInit {
     private readonly anomalyRepo: Repository<Anomaly>,
     @Inject('MQTT_CLIENT') private readonly mqttClient: ClientProxy,
     private readonly notificationService: NotificationService,
+    private readonly residentsService: ResidentsService,
   ) {}
 
   onModuleInit() {
@@ -186,6 +188,22 @@ export class AnomalyService implements OnModuleInit {
               )
               .catch(() => {});
           }
+
+          // Admin Telegram Notification
+          if (comp.severity === 'critical' || comp.severity === 'warning') {
+            void this.residentsService.findAdmins().then((admins) => {
+              for (const admin of admins) {
+                if (admin.telegram_chat_id) {
+                  void this.notificationService
+                    .sendTelegram(
+                      admin.telegram_chat_id,
+                      `🚨 *[Admin Alert]* ${comp.anomalyType.toUpperCase()} — Unit ${unitNo}\n\n${comp.message}`,
+                    )
+                    .catch(() => {});
+                }
+              }
+            }).catch(() => {});
+          }
         }
       }
     } catch {
@@ -258,17 +276,6 @@ export class AnomalyService implements OnModuleInit {
         });
         return anomalies;
       }
-    }
-
-    if (latest.water_flow !== null && latest.water_flow < -0.1) {
-      anomalies.push({
-        anomalyType: 'backflow',
-        severity: 'warning',
-        target: 'both',
-        message: `Aliran air balik: ${latest.water_flow.toFixed(2)} L/menit.`,
-        metadata: { flow_lpm: latest.water_flow },
-        detectedAt: now,
-      });
     }
 
     const pw = latest.power ?? 0;
@@ -374,30 +381,6 @@ export class AnomalyService implements OnModuleInit {
               current_w: currentPower,
               baseline_avg_w: parseFloat(avgBaseline.toFixed(2)),
               multiplier: parseFloat((currentPower / avgBaseline).toFixed(2)),
-            },
-            detectedAt: now,
-          });
-        }
-      }
-    }
-
-    if (unit.relay_status && unit.balance > 0) {
-      const flowReadings = readings
-        .slice(0, 20)
-        .filter((r) => r.water_flow !== null);
-      if (flowReadings.length >= 15) {
-        const zeroCount = flowReadings.filter(
-          (r) => (r.water_flow ?? 0) <= 0.05,
-        ).length;
-        if (zeroCount === flowReadings.length) {
-          anomalies.push({
-            anomalyType: 'zero_flow',
-            severity: 'warning',
-            target: 'both',
-            message: `Tidak ada aliran air selama ${flowReadings.length} pembacaan meski layanan aktif.`,
-            metadata: {
-              zero_readings: zeroCount,
-              readings_checked: flowReadings.length,
             },
             detectedAt: now,
           });

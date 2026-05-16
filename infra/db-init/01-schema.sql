@@ -23,12 +23,13 @@ INSERT IGNORE INTO buildings (id, code, name) VALUES (1, 'DEFAULT', 'Default Bui
 -- 2. RESIDENTS
 -- -----------------------------------------
 CREATE TABLE IF NOT EXISTS residents (
-  email      VARCHAR(255) PRIMARY KEY,
-  google_id  VARCHAR(255) UNIQUE,
-  name       VARCHAR(255),
-  picture    TEXT,
-  role       ENUM('resident','admin') NOT NULL DEFAULT 'resident',
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+  email              VARCHAR(255) PRIMARY KEY,
+  google_id          VARCHAR(255) UNIQUE,
+  name               VARCHAR(255),
+  picture            TEXT,
+  role               ENUM('resident','admin') NOT NULL DEFAULT 'resident',
+  telegram_chat_id   VARCHAR(64)  NULL DEFAULT NULL,
+  created_at         DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- -----------------------------------------
@@ -255,9 +256,7 @@ INSERT IGNORE INTO legend_anomaly_type VALUES
   ('voltage_anomaly',    'Voltage Anomaly',        'Measured voltage outside +/- 10% of 220 V nominal'),
   ('sensor_malfunction', 'Sensor Malfunction',     'Sensor returning implausible or missing readings'),
   ('low_power_factor',   'Low Power Factor',       'Power factor below 0.7 - inefficient load detected'),
-  ('zero_flow',          'Zero Flow',              'Meter reports zero flow while valve is open'),
   ('usage_spike',        'Usage Spike',            'Consumption jumped beyond normal variance'),
-  ('backflow',           'Backflow',               'Reverse water flow detected - possible contamination risk'),
   ('ml_anomaly',         'ML Anomaly',             'Isolation Forest detected statistically anomalous sensor pattern');
 
 CREATE TABLE IF NOT EXISTS legend_payment_method (
@@ -294,5 +293,11 @@ CREATE EVENT IF NOT EXISTS cleanup_old_partitions
   ON SCHEDULE EVERY 1 DAY
   STARTS (CURRENT_DATE + INTERVAL 1 DAY + INTERVAL 3 HOUR)
   DO DELETE FROM meter_readings WHERE time < DATE_SUB(NOW(), INTERVAL 1 YEAR);
+
+-- Delete expired refresh tokens; fires daily at 03:05.
+CREATE EVENT IF NOT EXISTS cleanup_expired_tokens
+  ON SCHEDULE EVERY 1 DAY
+  STARTS (CURRENT_DATE + INTERVAL 1 DAY + INTERVAL 3 HOUR + INTERVAL 5 MINUTE)
+  DO DELETE FROM auth_refresh_tokens WHERE expires_at < NOW();
 
 -- Seed data lives in db-init/02-seed-demo.sql.

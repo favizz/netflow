@@ -1,4 +1,11 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useSyncExternalStore } from 'react';
+
+function useIsDark() {
+  return useSyncExternalStore(
+    (cb) => { const mq = window.matchMedia('(prefers-color-scheme: dark)'); mq.addEventListener('change', cb); return () => mq.removeEventListener('change', cb); },
+    () => document.documentElement.classList.contains('dark') || window.matchMedia('(prefers-color-scheme: dark)').matches,
+  );
+}
 import { useNavigate } from 'react-router-dom';
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
@@ -26,6 +33,7 @@ export default function LoginPage({ onSuccess }: LoginPageProps) {
   const buttonRef = useRef<HTMLDivElement>(null);
   const initializedRef = useRef(false);
   const navigate = useNavigate();
+  const isDark = useIsDark();
 
   const handleCredential = async (response: { credential: string }) => {
     setLoading(true);
@@ -92,9 +100,9 @@ export default function LoginPage({ onSuccess }: LoginPageProps) {
           <div className="text-center space-y-3">
             <div className="flex justify-center mb-6">
               <img
-                src={`${import.meta.env.BASE_URL}netflow-logo-icon.png`}
+                src={`${import.meta.env.BASE_URL}${isDark ? 'netflow-logo-white.png' : 'netflow-logo-black.png'}`}
                 alt="NETFLOW"
-                className="h-20 w-20 object-contain"
+                className="h-20 object-contain"
               />
             </div>
             <h1 className="text-4xl font-extrabold text-foreground tracking-tight">NETFLOW</h1>
@@ -116,14 +124,12 @@ export default function LoginPage({ onSuccess }: LoginPageProps) {
               </div>
             )}
 
-            {loading ? (
-              <div className="flex items-center justify-center py-3 gap-2">
-                <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-                <span className="text-sm text-muted-text">Verifying...</span>
+            {loading && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+                <div className="h-10 w-10 animate-spin rounded-full border-4 border-white border-t-transparent" />
               </div>
-            ) : (
-              <div ref={buttonRef} className="flex justify-center w-full" />
             )}
+            <div ref={buttonRef} className="flex justify-center w-full" />
           </div>
 
           {/* Footer */}

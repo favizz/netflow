@@ -1,13 +1,12 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
-import { Zap, Droplets, Wifi, WifiOff, Radio, CalendarDays, TrendingDown, AlertTriangle } from "lucide-react"
+import { Zap, Droplets, Wifi, WifiOff, Radio } from "lucide-react"
 import mqtt from "mqtt"
 import { decode as msgpackDecode } from "@msgpack/msgpack"
 import { toast } from "sonner"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -22,7 +21,7 @@ import StatusBar from "./status-bar"
 import ConsumptionChart from "./consumption-chart"
 import { MQTT_CONFIG } from "@/lib/config"
 import { api, type UnitSummary } from "@/lib/api"
-import { STATUS_MAP, type BalanceStatus, type TimePeriod } from "@/lib/styles"
+import { type BalanceStatus, type TimePeriod, STATUS_MAP } from "@/lib/styles"
 
 interface DashboardProps {
   unitId: string
@@ -59,9 +58,10 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
   // ── Summary ──────────────────────────────────────────────────────────────
   const [kwh, setKwh]             = useState(0)
   const [water, setWater]         = useState(0)
-  const [relayOn, setRelayOn]     = useState(true)
-  const [valveOpen, setValveOpen] = useState(true)
-  const [loading, setLoading]     = useState(true)
+  const [relayOn, setRelayOn]         = useState(true)
+  const [valveOpen, setValveOpen]     = useState(true)
+  const [isDeviceOnline, setIsDeviceOnline] = useState(false)
+  const [loading, setLoading]         = useState(true)
 
   // ── Control dialog ───────────────────────────────────────────────────────
   const [confirmTarget, setConfirmTarget]   = useState<ControlTarget | null>(null)
@@ -73,14 +73,6 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
   const [chartUtility, setChartUtility] = useState<"electricity" | "water">("electricity")
   const [trendData, setTrendData]       = useState<TrendPoint[]>([])
   const [trendLoading, setTrendLoading] = useState(false)
-
-  // ── ML Forecast ──────────────────────────────────────────────────────────
-  const [forecast, setForecast] = useState<{
-    estimatedDaysRemaining: number;
-    avgDailyKwh: number;
-    dailyCostRp: number;
-    confidence: 'high' | 'medium' | 'low';
-  } | null>(null)
 
   // ── MQTT live ────────────────────────────────────────────────────────────
   const [liveData, setLiveData]           = useState<LivePoint[]>([])
@@ -98,19 +90,12 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
         setKwh(d.summary.remainingEstimate.kwh)
         setWater(Math.max(0, d.summary.remainingEstimate.kwh / 2.5))
         setRelayOn(d.summary.relayStatus)
+        setValveOpen(d.summary.valveStatus)
+        setIsDeviceOnline(d.summary.connectivity?.online ?? false)
       } catch { /* errors surface in notification bell */ }
       finally { if (active) setLoading(false) }
     }
     void load()
-    return () => { active = false }
-  }, [unitId])
-
-  // ── Load ML forecast (once on mount / unit change) ───────────────────────
-  useEffect(() => {
-    let active = true
-    api.getForecast(unitId)
-      .then((f) => { if (active) setForecast(f) })
-      .catch(() => { /* ML service may be down - forecast stays hidden */ })
     return () => { active = false }
   }, [unitId])
 
@@ -148,7 +133,7 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
   useEffect(() => {
     if (period !== "live") {
       if (mqttRef.current) {
-        mqttRef.current.end(true)
+        mqttRef.current.end(false)
         mqttRef.current = null
       }
       setMqttConnected(false)
@@ -163,7 +148,7 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
       username: MQTT_CONFIG.username || undefined,
       password: MQTT_CONFIG.password || undefined,
       clientId: `dash_${Math.random().toString(16).slice(2, 10)}`,
-      reconnectPeriod: 5000,
+      reconnectPeriod: 0,
       connectTimeout: 10000,
     })
     mqttRef.current = client
@@ -239,7 +224,7 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
     })
 
     return () => {
-      client.end(true)
+      client.end(false)
       setMqttConnected(false)
       mqttRef.current = null
     }
@@ -250,6 +235,16 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
   const waterPercentage = useMemo(() => Math.min(100, Math.max(0, water * 2)), [water])
   const kwhStatus:   BalanceStatus = kwh   <= 0 ? "terputus" : kwh   <= 5  ? "kritis" : kwh   <= 20 ? "kurang" : "aman"
   const waterStatus: BalanceStatus = water <= 0 ? "terputus" : water <= 0.5 ? "kritis" : water <= 3  ? "kurang" : "aman"
+
+  const avgDailyKwh = useMemo(() => {
+    if (trendData.length === 0) return null
+    return trendData.reduce((s, d) => s + d.kwh, 0) / trendData.length
+  }, [trendData])
+
+  const avgDailyWater = useMemo(() => {
+    if (trendData.length === 0) return null
+    return trendData.reduce((s, d) => s + d.water, 0) / trendData.length
+  }, [trendData])
 
   const isLive      = period === "live"
   const displayData = isLive ? liveData : trendData
@@ -309,26 +304,6 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
   return (
     <div className="p-5 space-y-5 w-full">
 
-      {/* Unit selector */}
-      {availableUnits && availableUnits.length > 1 && (
-        <Select
-          value={unitId}
-          onValueChange={(val) => {
-            const unit = availableUnits.find((u) => u.unitNo === val)
-            if (unit && onSelectUnit) void onSelectUnit(unit.id)
-          }}
-        >
-          <SelectTrigger className="w-40 h-9 rounded-xl border-border bg-card text-sm font-semibold shadow-sm">
-            <SelectValue placeholder="Pilih Unit" />
-          </SelectTrigger>
-          <SelectContent>
-            {availableUnits.map((u) => (
-              <SelectItem key={u.id} value={u.unitNo}>Unit {u.unitNo}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      )}
-
       {/* 2-col stat cards */}
       <div className="grid grid-cols-2 gap-3">
         <StatCard
@@ -336,10 +311,12 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
           label="Listrik"
           value={kwh.toFixed(1)}
           unit="KWh"
+          rate={avgDailyKwh !== null ? `~${avgDailyKwh.toFixed(1)} kWh/hari` : undefined}
           percentage={kwhPercentage}
           status={kwhStatus}
           controlOn={relayOn}
           controlPending={controlPending && confirmTarget === "relay"}
+          deviceOnline={isDeviceOnline}
           onControlToggle={(next) => requestToggle("relay", next)}
         />
         <StatCard
@@ -347,47 +324,16 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
           label="Air Bersih"
           value={water.toFixed(1)}
           unit="m³"
+          rate={avgDailyWater !== null ? `~${avgDailyWater.toFixed(2)} m³/hari` : undefined}
           percentage={waterPercentage}
           status={waterStatus}
           controlOn={valveOpen}
           controlPending={controlPending && confirmTarget === "valve"}
+          deviceOnline={isDeviceOnline}
           onControlToggle={(next) => requestToggle("valve", next)}
         />
       </div>
 
-      {/* ML Forecast card */}
-      {forecast && (() => {
-        const days = forecast.estimatedDaysRemaining
-        const fStatus: BalanceStatus =
-          days <= 0 ? "terputus" :
-          days <= 3 ? "kritis"   :
-          days <= 7 ? "kurang"   : "aman"
-        const { textColor, bgColor, borderColor } = STATUS_MAP[fStatus]
-        const ForecastIcon = fStatus === "aman" ? CalendarDays : fStatus === "kurang" ? AlertTriangle : TrendingDown
-        return (
-          <div className={`border rounded-2xl p-4 flex items-center gap-4 ${bgColor} ${borderColor}`}>
-            <div className={`p-2.5 rounded-xl bg-card/80`}>
-              <ForecastIcon size={20} className={textColor} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs text-muted-foreground">Estimasi Saldo Habis</p>
-              <p className={`text-xl font-bold leading-tight ${textColor}`}>
-                {days <= 0 ? "Habis" : `${days.toFixed(1)} hari`}
-              </p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Rp {forecast.dailyCostRp.toLocaleString("id-ID", { maximumFractionDigits: 0 })}/hari · {forecast.avgDailyKwh.toFixed(2)} kWh rata-rata
-              </p>
-            </div>
-            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
-              forecast.confidence === 'high'   ? "bg-primary/15 text-primary" :
-              forecast.confidence === 'medium' ? "bg-status-warn/15 text-status-warn" :
-                                                 "bg-muted text-muted-foreground"
-            }`}>
-              {forecast.confidence === 'high' ? "Tinggi" : forecast.confidence === 'medium' ? "Sedang" : "Rendah"}
-            </span>
-          </div>
-        )
-      })()}
 
       {/* Konsumsi card */}
       <div className="bg-card border border-border rounded-2xl p-4 space-y-4">
@@ -401,12 +347,12 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
               <button
                 key={u}
                 onClick={() => setChartUtility(u)}
-                className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold transition-all ${
+                title={u === "electricity" ? "Listrik" : "Air"}
+                className={`flex items-center justify-center w-8 h-7 rounded-md text-xs font-semibold transition-all ${
                   chartUtility === u ? "bg-card text-primary shadow-sm" : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                {u === "electricity" ? <Zap size={11} /> : <Droplets size={11} />}
-                {u === "electricity" ? "Listrik" : "Air"}
+                {u === "electricity" ? <Zap size={13} /> : <Droplets size={13} />}
               </button>
             ))}
           </div>
@@ -546,15 +492,17 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
 }
 
 // ── Compact stat card ─────────────────────────────────────────────────────────
-function StatCard({ icon, label, value, unit, percentage, status, controlOn, controlPending, onControlToggle }: {
+function StatCard({ icon, label, value, unit, rate, percentage, status, controlOn, controlPending, deviceOnline, onControlToggle }: {
   icon: React.ReactNode
   label: string
   value: string
   unit: string
+  rate?: string
   percentage: number
   status: BalanceStatus
   controlOn: boolean
   controlPending: boolean
+  deviceOnline: boolean
   onControlToggle: (next: boolean) => void
 }) {
   const { label: statusLabel, textColor, bgColor, borderColor } = STATUS_MAP[status]
@@ -565,7 +513,7 @@ function StatCard({ icon, label, value, unit, percentage, status, controlOn, con
         <div className={`p-2 rounded-xl bg-card/80 shadow-sm ${textColor}`}>{icon}</div>
         <Switch
           checked={controlOn}
-          disabled={controlPending}
+          disabled={controlPending || !deviceOnline}
           onCheckedChange={onControlToggle}
           className="data-[state=checked]:bg-primary scale-90"
         />
@@ -574,9 +522,14 @@ function StatCard({ icon, label, value, unit, percentage, status, controlOn, con
         <p className="text-2xl font-bold text-foreground tracking-tight leading-none">{value}</p>
         <p className="text-xs text-muted-foreground mt-0.5">{unit} · {label}</p>
       </div>
-      <span className={`inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full border ${bgColor} ${textColor} ${borderColor}`}>
-        {statusLabel}
-      </span>
+      <div className="flex items-center justify-between">
+        <span className={`inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full border ${bgColor} ${textColor} ${borderColor}`}>
+          {statusLabel}
+        </span>
+        {rate && (
+          <span className="text-[10px] text-muted-foreground font-medium">{rate}</span>
+        )}
+      </div>
       <StatusBar percentage={percentage} status={status} />
     </div>
   )

@@ -1,24 +1,35 @@
-import { IsIn, IsNotEmpty, IsString, Matches } from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
 export class PaymentWebhookDto {
   @IsString()
   @IsNotEmpty()
-  transactionId!: string;
-
-  @IsString()
-  @IsIn(['success', 'failed'])
-  status!: 'success' | 'failed';
+  order_id!: string;
 
   @IsString()
   @IsNotEmpty()
-  eventId!: string;
+  transaction_status!: string;
 
   @IsString()
   @IsNotEmpty()
-  @Matches(/^\d+$/, { message: 'timestamp must be unix epoch milliseconds' })
-  timestamp!: string;
+  status_code!: string;
 
   @IsString()
   @IsNotEmpty()
-  signature!: string;
+  gross_amount!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  signature_key!: string;
+
+  @IsOptional()
+  @IsString()
+  transaction_id?: string;
+
+  @IsOptional()
+  @IsString()
+  fraud_status?: string;
+
+  @IsOptional()
+  @IsString()
+  payment_type?: string;
 }

@@ -118,10 +118,12 @@ export type TokenPair = {
 };
 
 export type GoogleLoginResponse = TokenPair & {
+  name?: string | null;
   units: UnitSummary[];
 };
 
 export type SelectUnitResponse = TokenPair & {
+  name?: string | null;
   units: UnitSummary[];
 };
 
@@ -130,7 +132,9 @@ export type DashboardSummary = {
   unitNo: string;
   balance: number;
   energyTariff: number;
+  waterTariff: number;
   relayStatus: boolean;
+  valveStatus: boolean;
   remainingEstimate: {
     kwh: number;
     hours: number;
@@ -156,10 +160,8 @@ export type AnomalyType =
   | 'voltage_anomaly'
   | 'sensor_malfunction'
   | 'low_power_factor'
-  | 'zero_flow'
   | 'usage_spike'
-  | 'topup_success'
-  | 'backflow';
+  | 'topup_success';
 
 export type AnomalySeverity = 'critical' | 'warning' | 'info';
 
@@ -191,6 +193,7 @@ export type TrendPoint = {
 
 export type MeResponse = {
   email: string;
+  name: string | null;
   role: 'resident';
   unitId: number | null;
   unitNo: string | null;
@@ -325,6 +328,12 @@ export const api = {
     );
   },
 
+
+  getTopupStatus(unitNo: string, transactionId: string) {
+    return request<{ status: string; confirmedAt: string | null }>(
+      `/gateway/mobile/${encodeURIComponent(unitNo)}/topup/status/${encodeURIComponent(transactionId)}`,
+    );
+  },
 
   autoConfirmTopup(unitNo: string, transactionId: string) {
     return request<PaymentTransaction>(

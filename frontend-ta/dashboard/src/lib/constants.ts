@@ -3,8 +3,9 @@ export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL as string;
 export const MQTT_CONFIG = {
     brokerUrl: import.meta.env.VITE_MQTT_BROKER_URL as string,
     options: {
-        username: import.meta.env.VITE_MQTT_USERNAME || '',
-        password: import.meta.env.VITE_MQTT_PASSWORD || '',
+        username: import.meta.env.VITE_MQTT_USERNAME || undefined,
+        password: import.meta.env.VITE_MQTT_PASSWORD || undefined,
+        reconnectPeriod: 0,
     },
 };
 

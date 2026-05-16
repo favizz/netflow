@@ -122,6 +122,7 @@ export default function ConsumptionHistory({ unitId }: ConsumptionHistoryProps) 
       username: MQTT_CONFIG.username || undefined,
       password: MQTT_CONFIG.password || undefined,
       clientId: `mobile_${Math.random().toString(16).slice(2, 10)}`,
+      reconnectPeriod: 0,
     })
 
     client.on("connect", () => {

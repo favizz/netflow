@@ -1,5 +1,5 @@
 import { ValidationPipe } from '@nestjs/common';
-import { NestFactory } from '@nestjs/core';
+import { NestFactory, HttpAdapterHost } from '@nestjs/core';
 import { MicroserviceOptions, Transport } from '@nestjs/microservices';
 import { AppModule } from './app.module';
 import compression from 'compression';
@@ -20,6 +20,31 @@ process.on('unhandledRejection', (reason: unknown) => {
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  // ── Bull-board: mount directly on Express at the base path ───────────────────
+  // NestJS middleware forRoutes only matches the exact path, not sub-paths.
+  // Bull Board's router uses relative internal routes (/static/*, /api/*), so it
+  // must be mounted at the base path so Express strips the prefix before routing.
+  const { httpAdapter } = app.get(HttpAdapterHost);
+
+  const bullAdapter = app.get<{
+    setBasePath(p: string): void;
+    getRouter(): unknown;
+  }>('bull_board_adapter');
+  bullAdapter.setBasePath('/api/admin/queues');
+
+  /* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
+  // Mount at the exact base path so Express strips the prefix before the router
+  // processes it.  The Bull Board router uses relative routes (/static/*, /api/*)
+  // internally, so it must receive the path WITHOUT the base prefix.
+  httpAdapter
+    .getInstance()
+    .use(
+      '/api/admin/queues',
+      bullAdapter.getRouter() as import('express').RequestHandler,
+    );
+  /* eslint-enable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
+
   app.setGlobalPrefix('api');
 
   // ── Security headers ────────────────────────────────────────────────────────
@@ -86,7 +111,7 @@ async function bootstrap() {
 
   const port = Number(process.env.PORT || 5000);
   await app.listen(port, '0.0.0.0');
-  
+
   await app.startAllMicroservices();
 
   console.log(`NetFlow backend listening on 0.0.0.0:${port}`);

@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Outlet } from "react-router-dom";
 import { Sidebar } from "./Sidebar";
 import { Header } from "./Header";
-import { Menu } from "lucide-react";
+import { Menu, Sun, Moon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export function DashboardLayout() {
@@ -38,17 +38,32 @@ export function DashboardLayout() {
                 "fixed inset-y-0 left-0 z-50 w-64 transform transition-transform duration-200 ease-in-out lg:static lg:translate-x-0",
                 sidebarOpen ? "translate-x-0" : "-translate-x-full"
             )}>
-                <Sidebar />
+                <Sidebar onClose={() => setSidebarOpen(false)} />
             </div>
 
             {/* Main Content */}
-            <div className="flex flex-1 flex-col overflow-hidden">
-                {/* Mobile Header Toggle */}
-                <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4 lg:hidden">
-                    <span className="font-bold text-gray-900 dark:text-gray-100">NETFLOW</span>
-                    <button onClick={() => setSidebarOpen(true)}>
-                        <Menu className="h-6 w-6 text-gray-600 dark:text-gray-300" />
-                    </button>
+            <div className="flex flex-1 flex-col overflow-hidden min-w-0">
+                {/* Mobile Header */}
+                <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 h-14 lg:hidden">
+                    <img
+                        src={`${import.meta.env.BASE_URL}${theme === 'dark' ? 'netflow-logo-white.png' : 'netflow-logo-black.png'}`}
+                        alt="NETFLOW"
+                        className="h-7 object-contain"
+                    />
+                    <div className="flex items-center gap-1">
+                        <button
+                            onClick={toggleTheme}
+                            className="rounded-full p-2 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                        >
+                            {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+                        </button>
+                        <button
+                            onClick={() => setSidebarOpen(true)}
+                            className="rounded-full p-2 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                        >
+                            <Menu className="h-5 w-5" />
+                        </button>
+                    </div>
                 </div>
 
                 <div className="hidden lg:block">

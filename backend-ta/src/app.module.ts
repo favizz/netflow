@@ -21,6 +21,7 @@ import { TariffModule } from './tariff/tariff.module';
 import { AuditLogModule } from './audit-log/audit-log.module';
 import { MlModule } from './ml/ml.module';
 import { RetentionModule } from './retention/retention.module';
+import { TelegramModule } from './telegram/telegram.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
@@ -92,6 +93,10 @@ import { AppService } from './app.service';
         name: 'payment-expiry',
         adapter: BullMQAdapter,
       },
+      {
+        name: 'broadcast',
+        adapter: BullMQAdapter,
+      },
     ),
 
     // ── Rate limiting (per-IP) ────────────────────────────────────────────────
@@ -131,6 +136,7 @@ import { AppService } from './app.service';
     AuditLogModule,
     MlModule,
     RetentionModule,
+    TelegramModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -1,6 +1,7 @@
 /* eslint-disable */
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { getQueueToken } from '@nestjs/bullmq';
 import { AdminService } from './admin.service';
 import { CalibrationSetting } from './entities/calibration-setting.entity';
 import { Building } from './entities/building.entity';
@@ -25,6 +26,7 @@ describe('AdminService', () => {
     };
     mockUnitService = {
       findAll: jest.fn().mockResolvedValue([]),
+      setOnlineThresholdMs: jest.fn(),
     };
     mockPaymentsService = {
       getTransactions: jest.fn().mockResolvedValue([]),
@@ -44,6 +46,7 @@ describe('AdminService', () => {
         { provide: UnitService, useValue: mockUnitService },
         { provide: PaymentsService, useValue: mockPaymentsService },
         { provide: 'MQTT_CLIENT', useValue: mockMqttClient },
+        { provide: getQueueToken('broadcast'), useValue: { add: jest.fn() } },
       ],
     }).compile();
 

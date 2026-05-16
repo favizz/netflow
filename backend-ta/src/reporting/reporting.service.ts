@@ -50,16 +50,15 @@ export class ReportingService {
       cnt: string;
     }> = await this.meterRepo.query(
       `SELECT
-         ${bucketExpr}                                        AS bucket,
-         GREATEST(0, MAX(energy_total) - MIN(energy_total))  AS kwh,
-         GREATEST(0, MAX(water_total)  - MIN(water_total))   AS water_m3,
-         AVG(power)                                          AS avg_power,
-         AVG(water_flow)                                     AS avg_flow,
-         COUNT(*)                                            AS cnt
+         ${bucketExpr}                                                                    AS bucket,
+         GREATEST(0, COALESCE(MAX(energy_total), 0) - COALESCE(MIN(energy_total), 0))  AS kwh,
+         GREATEST(0, COALESCE(MAX(water_total),  0) - COALESCE(MIN(water_total),  0))  AS water_m3,
+         AVG(power)                                                                     AS avg_power,
+         AVG(water_flow)                                                                AS avg_flow,
+         COUNT(*)                                                                       AS cnt
        FROM meter_readings
        WHERE device_id = ?
          AND time >= ${intervalExpr}
-         AND energy_total IS NOT NULL
        GROUP BY ${bucketExpr}
        ORDER BY bucket ASC
        LIMIT 30`,

@@ -15,7 +15,17 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
       <App />
-      <Toaster richColors closeButton position="top-right" offset={72} />
+      <Toaster
+        richColors
+        closeButton
+        position="top-right"
+        offset={72}
+        toastOptions={{
+          classNames: {
+            closeButton: '!top-2 !right-2 !left-auto !translate-x-0 !translate-y-0',
+          },
+        }}
+      />
     </ThemeProvider>
   </StrictMode>,
 )

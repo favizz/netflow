@@ -7,6 +7,7 @@ import { UnitService } from './unit.service';
 import { TariffModule } from '../tariff/tariff.module';
 import { ConfigModule } from '@nestjs/config';
 import { AdminJwtGuard } from '../common/guards/admin-jwt.guard';
+import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { AuditLogModule } from '../audit-log/audit-log.module';
 
 @Module({
@@ -17,7 +18,7 @@ import { AuditLogModule } from '../audit-log/audit-log.module';
     AuditLogModule,
   ],
   controllers: [UnitController],
-  providers: [UnitService, AdminJwtGuard],
+  providers: [UnitService, AdminJwtGuard, JwtAuthGuard],
   exports: [TypeOrmModule, UnitService],
 })
 export class UnitModule {}

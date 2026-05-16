@@ -99,8 +99,7 @@ jobs:
         working-directory: ml-service
         run: |
           uvicorn main:app --host 0.0.0.0 --port 8000 &
-          sleep 5
-          curl --fail http://localhost:8000/health || (echo "Health check failed" && exit 1)
+          curl --retry 20 --retry-delay 2 --retry-connrefused --fail http://localhost:8000/health || (echo "Health check failed" && exit 1)
 
   # ── Dashboard: lint + build ─────────────────────────────────────────────────
   dashboard:
@@ -110,7 +109,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           version: 9
 
@@ -144,7 +143,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           version: 9
 
@@ -182,7 +181,36 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 
     steps:
-      - name: SSH deploy
+      - uses: actions/checkout@v4
+
+      - name: Setup deploy SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf 'Host *\n  StrictHostKeyChecking no\n  UserKnownHostsFile /dev/null\n  ConnectTimeout 30\n  ServerAliveInterval 30\n  ServerAliveCountMax 3\n' > ~/.ssh/config
+
+      - name: Rsync source to server
+        run: |
+          for attempt in 1 2 3; do
+            echo "Rsync attempt $attempt/3..."
+            rsync -az --delete \
+              --exclude='.git' \
+              --exclude='.env' \
+              --exclude='**/.env' \
+              --exclude='node_modules' \
+              --exclude='frontend-ta/dashboard/dist' \
+              --exclude='frontend-ta/mobile/dist' \
+              --exclude='backend-ta/dist' \
+              --exclude='__pycache__' \
+              --exclude='*.pyc' \
+              -e "ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }}" \
+              . \
+              ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:~/TA-Flowmeter/ && break
+            [ $attempt -lt 3 ] && echo "Attempt $attempt failed, retrying in 15s..." && sleep 15
+          done
+
+      - name: Run deploy script on server
         uses: appleboy/ssh-action@v1.0.3
         env:
           VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
@@ -193,4 +221,5 @@ jobs:
           key: ${{ secrets.DEPLOY_KEY }}
           envs: VITE_GOOGLE_CLIENT_ID
           script_stop: true
-          script: bash ~/TA-Flowmeter/infra/scripts/deploy.sh
+          command_timeout: 30m
+          script: SKIP_PULL=1 bash ~/TA-Flowmeter/infra/scripts/deploy.sh

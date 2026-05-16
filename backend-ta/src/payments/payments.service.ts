@@ -14,6 +14,7 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { UnitService } from '../unit/unit.service';
 import { AuditLogService } from '../audit-log/audit-log.service';
+import { NotificationService } from '../notification/notification.service';
 import { Transaction } from './entities/transaction.entity';
 import { InitiateTopupDto } from './dto/initiate-topup.dto';
 import { PAYMENT_EXPIRY_QUEUE } from './payment-expiry.processor';
@@ -36,6 +37,7 @@ export class PaymentsService {
     @InjectQueue(PAYMENT_EXPIRY_QUEUE)
     private readonly expiryQueue: Queue,
     @Inject('MQTT_CLIENT') private readonly mqttClient: ClientProxy,
+    private readonly notificationService: NotificationService,
   ) {}
 
   async initiateTopup(dto: InitiateTopupDto) {
@@ -135,7 +137,9 @@ export class PaymentsService {
       };
     } catch (e: any) {
       this.logger.error('Midtrans Error:', e);
-      throw new Error('Gagal initiate pembayaran dengan Midtrans');
+      throw new Error('Gagal initiate pembayaran dengan Midtrans', {
+        cause: e,
+      });
     }
   }
 
@@ -187,8 +191,22 @@ export class PaymentsService {
             amount: Number(tx.amount_rp),
             timestamp: Math.floor(Date.now() / 1000),
           });
-          this.logger.log(`Pushing top-up of Rp ${tx.amount_rp} to device [${updatedUnit.device_id}]`);
-          this.mqttClient.emit(`device/${updatedUnit.device_id}/topup`, payload);
+          this.logger.log(
+            `Pushing top-up of Rp ${tx.amount_rp} to device [${updatedUnit.device_id}]`,
+          );
+          this.mqttClient.emit(
+            `device/${updatedUnit.device_id}/topup`,
+            payload,
+          );
+        }
+        if (updatedUnit.resident_email) {
+          void this.notificationService
+            .sendResidentNotification(
+              updatedUnit.resident_email,
+              `[NetFlow] Top-up Berhasil — Unit ${tx.unit_no}`,
+              `✅ Pembayaran Rp ${Number(tx.amount_rp).toLocaleString('id-ID')} berhasil dikonfirmasi.\n\nUnit: ${tx.unit_no}\nMetode: ${tx.method}\nID Transaksi: ${tx.id}\n\nSaldo akan segera diperbarui.`,
+            )
+            .catch(() => {});
         }
       }
 
@@ -200,7 +218,12 @@ export class PaymentsService {
           'TOKEN_PURCHASE',
           'transaction',
           tx.id,
-          { amount: Number(tx.amount_rp), method: tx.method, status: finalStatus, gateway_status: mStatus },
+          {
+            amount: Number(tx.amount_rp),
+            method: tx.method,
+            status: finalStatus,
+            gateway_status: mStatus,
+          },
           finalStatus === 'success' ? 'success' : 'failure',
         );
       }
@@ -226,8 +249,19 @@ export class PaymentsService {
         amount: Number(tx.amount_rp),
         timestamp: Math.floor(Date.now() / 1000),
       });
-      this.logger.log(`Pushing top-up of Rp ${tx.amount_rp} to device [${updatedUnit.device_id}]`);
+      this.logger.log(
+        `Pushing top-up of Rp ${tx.amount_rp} to device [${updatedUnit.device_id}]`,
+      );
       this.mqttClient.emit(`device/${updatedUnit.device_id}/topup`, payload);
+    }
+    if (updatedUnit.resident_email) {
+      void this.notificationService
+        .sendResidentNotification(
+          updatedUnit.resident_email,
+          `[NetFlow] Top-up Berhasil — Unit ${tx.unit_no}`,
+          `✅ Pembayaran Rp ${Number(tx.amount_rp).toLocaleString('id-ID')} berhasil dikonfirmasi.\n\nUnit: ${tx.unit_no}\nMetode: ${tx.method}\nID Transaksi: ${tx.id}\n\nSaldo akan segera diperbarui.`,
+        )
+        .catch(() => {});
     }
     await this.txRepo.save(tx);
 
@@ -241,6 +275,11 @@ export class PaymentsService {
     );
 
     return this.toResponse(tx);
+  }
+
+  async getTopupStatus(unitNo: string, transactionId: string) {
+    const tx = await this.getTransactionForUnit(unitNo, transactionId);
+    return { status: tx.status, confirmedAt: tx.confirmed_at?.toISOString() ?? null };
   }
 
   async listTransactionsForUnit(unitNo: string) {
