@@ -1,12 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Bell, Sun, Moon, User, X } from "lucide-react";
 import { getAdminEmail } from "@/lib/auth";
-
-const MOCK_NOTIFICATIONS = [
-    { id: 1, title: "Low balance - Unit A-201", desc: "Balance below Rp 20,000", time: "2m ago", unread: true },
-    { id: 2, title: "Device offline - SM-003", desc: "No heartbeat for 10 minutes", time: "15m ago", unread: true },
-    { id: 3, title: "Payment received - Unit B-102", desc: "Rp 100,000 via QRIS", time: "1h ago", unread: false },
-];
+import { fetchApi } from "@/lib/api";
 
 interface HeaderProps {
     theme: 'light' | 'dark';
@@ -15,12 +10,45 @@ interface HeaderProps {
 
 export function Header({ theme, toggleTheme }: HeaderProps) {
     const [notifOpen, setNotifOpen] = useState(false);
-    const [notifications, setNotifications] = useState(MOCK_NOTIFICATIONS);
+    const [notifications, setNotifications] = useState<any[]>([]);
+    const [readIds, setReadIds] = useState<Set<string>>(new Set());
+    const readIdsRef = useRef<Set<string>>(readIds);
     const adminEmail = getAdminEmail();
+
+    useEffect(() => {
+        readIdsRef.current = readIds;
+    }, [readIds]);
+
+    useEffect(() => {
+        const loadNotifications = () => {
+            fetchApi('/admin/anomalies')
+                .then(data => {
+                    const mapped = (data || []).map((a: any) => {
+                        const uniqueId = `${a.anomalyType}-${(a.message || '').slice(0, 50)}`;
+                        return {
+                            id: uniqueId,
+                            title: `${(a.anomalyType || 'ANOMALY').replace('_', ' ').toUpperCase()}`,
+                            desc: a.message,
+                            time: new Date(a.detectedAt).toLocaleTimeString('id-ID'),
+                            unread: !readIdsRef.current.has(uniqueId)
+                        };
+                    });
+                    setNotifications(mapped);
+                })
+                .catch(() => {});
+        };
+
+        loadNotifications();
+        const interval = setInterval(loadNotifications, 15000);
+        return () => clearInterval(interval);
+    }, []);
 
     const unreadCount = notifications.filter(n => n.unread).length;
 
     const markAllRead = () => {
+        const newReadIds = new Set(readIds);
+        notifications.forEach(n => newReadIds.add(n.id));
+        setReadIds(newReadIds);
         setNotifications(prev => prev.map(n => ({ ...n, unread: false })));
     };
 
