@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { Zap, Droplets, Wifi, WifiOff, Radio } from "lucide-react"
 import mqtt from "mqtt"
-import { decode as msgpackDecode } from "@msgpack/msgpack"
 import { toast } from "sonner"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
@@ -173,14 +172,8 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
         let p: Record<string, unknown> | null = null
         const uint8 = new Uint8Array(msg)
 
-        // 1. Try MessagePack
-        try {
-          const decoded = msgpackDecode(uint8) as Record<string, unknown>
-          if (decoded && typeof decoded === 'object') p = decoded
-        } catch { /* not msgpack */ }
-
-        // 2. Try 21-byte custom binary frame
-        if (!p && uint8.length >= 21) {
+        // 1. Try 21-byte custom binary frame
+        if (uint8.length >= 21) {
           const view = new DataView(uint8.buffer, uint8.byteOffset, uint8.byteLength)
           p = {
             et: view.getUint32(0, false) / 100,

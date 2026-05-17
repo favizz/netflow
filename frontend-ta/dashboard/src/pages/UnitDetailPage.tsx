@@ -6,7 +6,6 @@ import { ArrowLeft, Power, Droplets, Zap, FileText, ChevronDown, ChevronUp, Wifi
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, AreaChart, Area } from "recharts";
 import { cn } from "@/lib/utils";
 import mqtt from "mqtt";
-import { decode as msgpackDecode } from "@msgpack/msgpack";
 import { fetchApi } from "@/lib/api";
 import { useToast } from "@/components/layout/ToastProvider";
 
@@ -271,14 +270,7 @@ export default function UnitDetailPage() {
             try {
                 let parsed: IoTPayload | null = null;
 
-                try {
-                    const decoded = msgpackDecode(new Uint8Array(message)) as IoTPayload;
-                    if (decoded && (decoded.p !== undefined || decoded.wf !== undefined)) {
-                        parsed = decoded;
-                    }
-                } catch {
-                    parsed = decodeTelemetry(new Uint8Array(message));
-                }
+                parsed = decodeTelemetry(new Uint8Array(message));
 
                 if (!parsed) return;
 
@@ -302,7 +294,7 @@ export default function UnitDetailPage() {
                     setWaterStats({ total_m3: parsed.wt ?? waterStats.total_m3, flow_rate_lpm: parsed.wf ?? 0 });
                     if (parsed.vs !== undefined) setWaterState(parsed.vs === 1);
 
-                    const rawLabel = parsed.et !== undefined ? 'MsgPack' : 'Binary 21B';
+                    const rawLabel = 'Binary 21B';
                     setLiveLogs(prev => [{
                         timestamp: now.toISOString(),
                         value: parsed?.p ?? 0,

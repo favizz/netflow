@@ -295,7 +295,7 @@ export default function App() {
           <div className="w-full max-w-xs rounded-2xl bg-card shadow-xl ring-1 ring-border">
             <div className="p-6 flex flex-col items-center text-center gap-4">
               <p className="text-sm font-semibold text-foreground">
-                Keluar sebagai <span className="font-normal text-muted-foreground">{userName || `Unit ${userUnit}`}</span>?
+                Keluar dari <span className="font-normal text-muted-foreground">{userName || `Unit ${userUnit}`}</span>?
               </p>
               <div className="flex gap-3 w-full">
                 <button

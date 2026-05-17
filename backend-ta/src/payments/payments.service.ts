@@ -99,8 +99,6 @@ export class PaymentsService {
         unit_id: unit.id,
         unit_no: dto.unitNo,
         amount_rp: totalAmount,
-        electricity_amount_rp: dto.electricityAmount,
-        water_amount_rp: dto.waterAmount,
         method: dto.method,
         status: 'pending',
         gateway_reference: mResponse.transaction_id || mResponse.order_id,
@@ -114,8 +112,6 @@ export class PaymentsService {
         'transaction',
         id,
         {
-          electricity_amount: dto.electricityAmount,
-          water_amount: dto.waterAmount,
           total: totalAmount,
           method: dto.method,
           status: 'pending',
@@ -200,13 +196,17 @@ export class PaymentsService {
           Number(tx.amount_rp),
         );
         if (updatedUnit.device_id) {
+          // Note: V2 schema only stores total amount_rp in DB.
+          // However, the device protocol (12 bytes) expects a split.
+          // We default to 100% electricity if we don't have the original split here.
+          // In handleWebhook, we might not have the original DTO, so we use amount_rp.
           const payload = encodeTopup({
-            electricAmount: Number(tx.electricity_amount_rp),
-            waterAmount: Number(tx.water_amount_rp),
+            electricAmount: Number(tx.amount_rp),
+            waterAmount: 0,
             timestamp: Math.floor(Date.now() / 1000),
           });
           this.logger.log(
-            `Pushing top-up to device [${updatedUnit.device_id}]: elec=Rp${tx.electricity_amount_rp} water=Rp${tx.water_amount_rp}`,
+            `Pushing top-up to device [${updatedUnit.device_id}]: elec=Rp${tx.amount_rp} water=Rp0`,
           );
           this.mqttClient.emit(
             `device/${updatedUnit.device_id}/topup`,
@@ -214,24 +214,15 @@ export class PaymentsService {
           );
         }
         if (updatedUnit.resident_email) {
-          const elecLine =
-            Number(tx.electricity_amount_rp) > 0
-              ? `⚡ Listrik: Rp ${Number(tx.electricity_amount_rp).toLocaleString('id-ID')}\n`
-              : '';
-          const waterLine =
-            Number(tx.water_amount_rp) > 0
-              ? `💧 Air: Rp ${Number(tx.water_amount_rp).toLocaleString('id-ID')}\n`
-              : '';
           void this.notificationService
             .sendResidentNotification(
               updatedUnit.resident_email,
               `[NetFlow] Top-up Berhasil — Unit ${tx.unit_no}`,
-              `✅ Pembayaran Rp ${Number(tx.amount_rp).toLocaleString('id-ID')} berhasil dikonfirmasi.\n\n${elecLine}${waterLine}\nUnit: ${tx.unit_no}\nMetode: ${tx.method}\nID Transaksi: ${tx.id}\n\nSaldo akan segera diperbarui.`,
+              `✅ Pembayaran Rp ${Number(tx.amount_rp).toLocaleString('id-ID')} berhasil dikonfirmasi.\n\nUnit: ${tx.unit_no}\nMetode: ${tx.method}\nID Transaksi: ${tx.id}\n\nSaldo akan segera diperbarui.`,
             )
             .catch(() => {});
         }
       }
-
       await this.txRepo.save(tx);
 
       if (finalStatus !== 'pending') {
@@ -267,30 +258,23 @@ export class PaymentsService {
       Number(tx.amount_rp),
     );
     if (updatedUnit.device_id) {
+      // Note: V2 schema only stores total amount_rp.
       const payload = encodeTopup({
-        electricAmount: Number(tx.electricity_amount_rp),
-        waterAmount: Number(tx.water_amount_rp),
+        electricAmount: Number(tx.amount_rp),
+        waterAmount: 0,
         timestamp: Math.floor(Date.now() / 1000),
       });
       this.logger.log(
-        `Pushing top-up to device [${updatedUnit.device_id}]: elec=Rp${tx.electricity_amount_rp} water=Rp${tx.water_amount_rp}`,
+        `Pushing top-up to device [${updatedUnit.device_id}]: total=Rp${tx.amount_rp}`,
       );
       this.mqttClient.emit(`device/${updatedUnit.device_id}/topup`, payload);
     }
     if (updatedUnit.resident_email) {
-      const elecLine =
-        Number(tx.electricity_amount_rp) > 0
-          ? `⚡ Listrik: Rp ${Number(tx.electricity_amount_rp).toLocaleString('id-ID')}\n`
-          : '';
-      const waterLine =
-        Number(tx.water_amount_rp) > 0
-          ? `💧 Air: Rp ${Number(tx.water_amount_rp).toLocaleString('id-ID')}\n`
-          : '';
       void this.notificationService
         .sendResidentNotification(
           updatedUnit.resident_email,
           `[NetFlow] Top-up Berhasil — Unit ${tx.unit_no}`,
-          `✅ Pembayaran Rp ${Number(tx.amount_rp).toLocaleString('id-ID')} berhasil dikonfirmasi.\n\n${elecLine}${waterLine}\nUnit: ${tx.unit_no}\nMetode: ${tx.method}\nID Transaksi: ${tx.id}\n\nSaldo akan segera diperbarui.`,
+          `✅ Pembayaran Rp ${Number(tx.amount_rp).toLocaleString('id-ID')} berhasil dikonfirmasi.\n\nUnit: ${tx.unit_no}\nMetode: ${tx.method}\nID Transaksi: ${tx.id}\n\nSaldo akan segera diperbarui.`,
         )
         .catch(() => {});
     }
@@ -391,8 +375,6 @@ export class PaymentsService {
       `Transaction ID: ${tx.id}`,
       `Gateway Ref:    ${tx.gateway_reference ?? '-'}`,
       `Unit:           ${tx.unit_no}`,
-      `Electricity:    Rp ${Number(tx.electricity_amount_rp).toLocaleString('id-ID')}`,
-      `Water:          Rp ${Number(tx.water_amount_rp).toLocaleString('id-ID')}`,
       `Total:          Rp ${Number(tx.amount_rp).toLocaleString('id-ID')}`,
       `Method:         ${tx.method}`,
       `Status:         ${tx.status}`,
