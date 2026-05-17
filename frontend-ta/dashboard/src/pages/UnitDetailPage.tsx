@@ -183,7 +183,7 @@ export default function UnitDetailPage() {
                 setPowerState(!!data.relay_status);
                 setWaterState(!!data.valve_status);
 
-                fetchApi(`/unit/${data.unit_no}/anomalies`)
+                fetchApi(`/admin/anomalies/${data.unit_no}`)
                     .then(anomalyData => {
                         setAnomalies(anomalyData || []);
                     })
@@ -228,7 +228,7 @@ export default function UnitDetailPage() {
         if (!unitInfo?.unit) return;
 
         const intervalId = setInterval(() => {
-            fetchApi(`/unit/${unitInfo.unit}/anomalies`)
+            fetchApi(`/admin/anomalies/${unitInfo.unit}`)
                 .then(anomalyData => {
                     setAnomalies(anomalyData || []);
                 })
