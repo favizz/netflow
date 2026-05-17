@@ -153,7 +153,7 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
     if (!selectedOption) return
     setLoading(true)
     try {
-      const result = await api.initiateTopup(unitId, totalAmount, selectedOption.method)
+      const result = await api.initiateTopup(unitId, elecAmount, waterAmount, selectedOption.method)
       setInitResult({
         transactionId: result.transactionId,
         vaNumber: result.vaNumber,

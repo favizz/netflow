@@ -16,7 +16,7 @@
 // MQTT binary protocol (matches backend binary-codec.ts):
 //   TELEMETRY  21 B  →  device/{id}/data
 //   COMMAND     1 B  ←  device/{id}/command
-//   TOPUP       8 B  ←  device/{id}/topup       (payment-gateway token refill)
+//   TOPUP      12 B  ←  device/{id}/topup       (payment-gateway token refill)
 //   CALIBRATION 4 B  ←  device/{id}/config
 //   ADMIN       1 B  ←  device/{id}/admin        (admin SSR latch override)
 //   OTA  binary     ←  device/{id}/ota
@@ -81,8 +81,10 @@ const int   MQTT_PORT    = 8883;           // TLS
 const char* MQTT_SECRET  = "";
 const char* DEVICE_ID    = "DEV-A-101";   // must match units.device_id in DB
 
-// Electricity tariff used for per-second token decrement in Core 0
-static const float RP_PER_KWH = 1450.0f;  // Rp / kWh
+// Tariffs used for per-second token decrement in Core 0.
+// Updated via MQTT config frame in production; keep in sync with DB tariffs.
+static const float RP_PER_KWH = 1450.0f;  // Rp / kWh  (electricity)
+static const float RP_PER_M3  = 5000.0f;  // Rp / m³   (water)
 
 // =============================================================================
 // CALIBRATION — updated live via MQTT config frame
@@ -93,16 +95,18 @@ uint8_t SENSOR_SAMPLING_TIME = 5;      // seconds between MQTT publishes
 // =============================================================================
 // DEVICE STATE
 // =============================================================================
-float balance = 999999.0f;  // Rp — high initial so device doesn't cut off
-                             // before backend syncs the real value
+// Separate sub-balances so each utility can be cut off independently.
+// High initial values so the device doesn't cut off before the backend syncs.
+float electricBalance = 999999.0f;  // Rp — decremented for kWh consumption
+float waterBalance    = 999999.0f;  // Rp — decremented for m³ consumption
 int rs = 1;  // relay/SSR  : 1=ON   0=OFF
 int vs = 1;  // servo valve: 1=OPEN 0=CLOSE
 
 // Admin SSR latch — set by Core 1 MQTT handler, read by Core 0 every 1 s.
-// When true: SSR stays ON even if token balance is insufficient.
+// When true: SSR stays ON even if electricity token balance is insufficient.
 volatile bool adminSSRLatch = false;
 
-// Protects balance across Core 0 (decrement) and Core 1 (topup, state save).
+// Protects both sub-balances across Core 0 (decrement) and Core 1 (topup, state save).
 static SemaphoreHandle_t balanceMutex = NULL;
 
 // =============================================================================
@@ -197,21 +201,24 @@ void writeState() {
     xSemaphoreGive(snapMutex);
   }
 
-  float savedBalance;
+  float savedElecBal, savedWaterBal;
   if (xSemaphoreTake(balanceMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
-    savedBalance = balance;
+    savedElecBal  = electricBalance;
+    savedWaterBal = waterBalance;
     xSemaphoreGive(balanceMutex);
   } else {
-    savedBalance = balance;
+    savedElecBal  = electricBalance;
+    savedWaterBal = waterBalance;
   }
 
   JsonDocument doc;
-  doc["ts"]      = (long)time(NULL);
-  doc["vs"]      = (bool)vs;
-  doc["rs"]      = (bool)rs;
-  doc["vol_L"]   = s.vol;    // flowmeter cumulative volume in Litres
-  doc["et_kWh"]  = s.et;     // PZEM cumulative energy (persists in PZEM EEPROM too)
-  doc["balance"] = savedBalance;
+  doc["ts"]        = (long)time(NULL);
+  doc["vs"]        = (bool)vs;
+  doc["rs"]        = (bool)rs;
+  doc["vol_L"]     = s.vol;    // flowmeter cumulative volume in Litres
+  doc["et_kWh"]    = s.et;     // PZEM cumulative energy (persists in PZEM EEPROM too)
+  doc["elec_bal"]  = savedElecBal;
+  doc["water_bal"] = savedWaterBal;
 
   serializeJson(doc, f);
   f.flush();
@@ -232,17 +239,18 @@ void readState() {
   if (deserializeJson(doc, f)) { f.close(); Serial.println("[SD] state.json corrupt"); return; }
   f.close();
 
-  vs      = doc["vs"]      | 1;
-  rs      = doc["rs"]      | 1;
-  balance = doc["balance"] | 999999.0f;
+  vs              = doc["vs"]        | 1;
+  rs              = doc["rs"]        | 1;
+  electricBalance = doc["elec_bal"]  | 999999.0f;
+  waterBalance    = doc["water_bal"] | 999999.0f;
 
   float savedVol = doc["vol_L"] | 0.0f;
   // Re-seed the pulse counter so readFlowmeters() continues from the saved volume.
   // Formula from sRusun_Flowmeter.cpp: volume = pulseCount / CALIBRATION_FACTOR / 60
   pulseCount = (int64_t)(savedVol * CALIBRATION_FACTOR * 60.0f);
 
-  Serial.printf("[SD] Restored — vs=%d rs=%d vol=%.2fL bal=%.0f\n",
-                vs, rs, savedVol, balance);
+  Serial.printf("[SD] Restored — vs=%d rs=%d vol=%.2fL elec=%.0f water=%.0f\n",
+                vs, rs, savedVol, electricBalance, waterBalance);
 }
 
 // ── Backup helpers ────────────────────────────────────────────────────────────
@@ -396,23 +404,29 @@ void handleCommand(uint8_t b) {
 static uint32_t lastTopupTimestamp = 0;
 
 void handleTopup(uint8_t* buf, unsigned int length) {
-  if (length != 8) { Serial.println("[TOPUP] Frame wrong size"); return; }
-  uint32_t amount = (buf[0] << 24) | (buf[1] << 16) | (buf[2] << 8) | buf[3];
-  uint32_t ts     = (buf[4] << 24) | (buf[5] << 16) | (buf[6] << 8) | buf[7];
+  if (length != 12) { Serial.println("[TOPUP] Frame wrong size"); return; }
+  uint32_t elecAmt  = ((uint32_t)buf[0] << 24) | ((uint32_t)buf[1] << 16) | ((uint32_t)buf[2] << 8) | buf[3];
+  uint32_t waterAmt = ((uint32_t)buf[4] << 24) | ((uint32_t)buf[5] << 16) | ((uint32_t)buf[6] << 8) | buf[7];
+  uint32_t ts       = ((uint32_t)buf[8] << 24) | ((uint32_t)buf[9] << 16) | ((uint32_t)buf[10] << 8) | buf[11];
 
   char ackMsg[128];
   if (ts <= lastTopupTimestamp && lastTopupTimestamp != 0) {
     Serial.printf("[TOPUP] Ignored duplicate ts=%u\n", ts);
-    snprintf(ackMsg, sizeof(ackMsg), "{\"status\":\"ok\",\"amount\":%u,\"duplicate\":true}", amount);
+    snprintf(ackMsg, sizeof(ackMsg),
+             "{\"status\":\"ok\",\"elec\":%u,\"water\":%u,\"duplicate\":true}",
+             elecAmt, waterAmt);
   } else {
     if (xSemaphoreTake(balanceMutex, pdMS_TO_TICKS(20)) == pdTRUE) {
-      balance += amount;
+      electricBalance += (float)elecAmt;
+      waterBalance    += (float)waterAmt;
       xSemaphoreGive(balanceMutex);
     }
     lastTopupTimestamp = ts;
-    Serial.printf("[TOPUP] Added Rp %u | New Balance: Rp %.0f | ts: %u\n", amount, balance, ts);
+    Serial.printf("[TOPUP] elec=+Rp%u water=+Rp%u | elecBal=%.0f waterBal=%.0f | ts=%u\n",
+                  elecAmt, waterAmt, electricBalance, waterBalance, ts);
     writeState();
-    snprintf(ackMsg, sizeof(ackMsg), "{\"status\":\"ok\",\"amount\":%u}", amount);
+    snprintf(ackMsg, sizeof(ackMsg),
+             "{\"status\":\"ok\",\"elec\":%u,\"water\":%u}", elecAmt, waterAmt);
   }
 
   char ackTopic[64];
@@ -560,7 +574,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
   String t = String(topic);
   Serial.printf("[MQTT] ← %s (%u B)\n", topic, length);
   if      (t.endsWith("/command") && length == 1) handleCommand(payload[0]);
-  else if (t.endsWith("/topup")   && length == 8) handleTopup(payload, length);
+  else if (t.endsWith("/topup")   && length == 12) handleTopup(payload, length);
   else if (t.endsWith("/config")  && length == 4) handleCalibration(payload);
   else if (t.endsWith("/admin")   && length == 1) handleAdminCommand(payload[0]);
   else if (t.endsWith("/ota"))                    handleOta(payload, length);
@@ -583,8 +597,9 @@ void taskSensorRead(void* param) {
       readPZEM();        // → voltage, current, power, energy (kWh)
       ServoDebounce();   // hold servo angle after open/close command
 
-      // Update snapshot for Core 1; capture calibrated power for decrement below
+      // Update snapshot for Core 1; capture calibrated power and flow for decrement below
       float localPower = 0.0f;
+      float localFlow  = 0.0f;  // L/min
       if (xSemaphoreTake(snapMutex, pdMS_TO_TICKS(5)) == pdTRUE) {
         snap.p   = power   * CAL_FACTOR_POWER;
         snap.v   = voltage;
@@ -593,19 +608,28 @@ void taskSensorRead(void* param) {
         snap.et  = energy;   // kWh from PZEM cumulative register
         snap.vol = volume;   // Litres from flowmeter pulse counter
         localPower = snap.p;
+        localFlow  = snap.wf;
         xSemaphoreGive(snapMutex);
       }
       lastSensorRead += SENSOR_READ_INTERVAL;
 
       // ── Token decrement (every 1 s) ────────────────────────────────────────
-      // cost = power_W * 1 s * (1450 Rp/kWh) / (1000 W/kW * 3600 s/h)
-      float costPerSecond = localPower * RP_PER_KWH / 3600000.0f;
-      bool tokenSufficient = false;
+      // elec cost  = power_W * 1 s * (Rp/kWh) / (1000 W/kW * 3600 s/h)
+      // water cost = flow_L/min * (1 min / 60 s) * (1 m³ / 1000 L) * (Rp/m³)
+      float elecCost  = localPower * RP_PER_KWH / 3600000.0f;
+      float waterCost = localFlow  * RP_PER_M3  / 60000.0f;
+      bool elecOk  = false;
+      bool waterOk = false;
       if (xSemaphoreTake(balanceMutex, pdMS_TO_TICKS(5)) == pdTRUE) {
-        tokenSufficient = (balance >= costPerSecond);
-        if (tokenSufficient) {
-          balance -= costPerSecond;
-          if (balance < 0.0f) balance = 0.0f;
+        elecOk  = (electricBalance >= elecCost);
+        waterOk = (waterBalance    >= waterCost);
+        if (elecOk) {
+          electricBalance -= elecCost;
+          if (electricBalance < 0.0f) electricBalance = 0.0f;
+        }
+        if (waterOk) {
+          waterBalance -= waterCost;
+          if (waterBalance < 0.0f) waterBalance = 0.0f;
         }
         xSemaphoreGive(balanceMutex);
       }
@@ -613,9 +637,15 @@ void taskSensorRead(void* param) {
       // ── SSR enforcement ────────────────────────────────────────────────────
       // Token OK  → follow server command (rs).
       // Token low → normally OFF; admin latch keeps it ON.
-      int effectiveSSR = tokenSufficient ? rs : (adminSSRLatch ? 1 : 0);
+      int effectiveSSR = elecOk ? rs : (adminSSRLatch ? 1 : 0);
       if      ( effectiveSSR && !SSR_state) SSROpen();
       else if (!effectiveSSR &&  SSR_state) SSRClose();
+
+      // ── Valve enforcement ──────────────────────────────────────────────────
+      // Water token exhausted → close valve regardless of server command.
+      int effectiveValve = waterOk ? vs : 0;
+      if      ( effectiveValve && !ServoValve_state) ServoValveOpen();
+      else if (!effectiveValve &&  ServoValve_state) ServoValveClose();
     }
     vTaskDelay(pdMS_TO_TICKS(10));
   }
@@ -667,12 +697,11 @@ const int  LCD_PAGES = 3;
 void updateLCD(const SensorSnap& s, float wt) {
   lcd.clear();
   switch (lcdPage % LCD_PAGES) {
-    case 0:  // Balance + relay/valve state
+    case 0:  // Sub-balances (electricity + water)
       lcd.setCursor(0, 0);
-      lcd.print("Rp:"); lcd.print((long)balance);
+      lcd.print("E:"); lcd.print((long)electricBalance); lcd.print("Rp");
       lcd.setCursor(0, 1);
-      lcd.print(rs ? "Relay:ON " : "Relay:OFF");
-      lcd.print(vs ? " V:O" : " V:C");
+      lcd.print("W:"); lcd.print((long)waterBalance); lcd.print("Rp");
       break;
     case 1:  // Power + flowrate
       lcd.setCursor(0, 0);
@@ -767,7 +796,15 @@ void taskMQTT(void* param) {
       }
       float wt = s.vol / 1000.0f;  // L → m³
 
-      // Balance deduction and SSR cutoff are handled by Core 0 (every 1 s).
+      // Snapshot combined balance for telemetry; Core 0 decrements each sub-balance independently.
+      float totalBal;
+      if (xSemaphoreTake(balanceMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+        totalBal = electricBalance + waterBalance;
+        xSemaphoreGive(balanceMutex);
+      } else {
+        totalBal = electricBalance + waterBalance;
+      }
+
       String dataTopic = "device/" + String(DEVICE_ID) + "/data";
 
       bool online = ensureMQTT();
@@ -776,10 +813,10 @@ void taskMQTT(void* param) {
       // ── ONLINE path ──────────────────────────────────────────────────────
       if (online) {
         sent = publishFrame(dataTopic.c_str(),
-                            s.et, s.p, s.v, s.c, s.wf, wt, balance, rs, vs);
+                            s.et, s.p, s.v, s.c, s.wf, wt, totalBal, rs, vs);
         if (sent) {
-          Serial.printf("[PUB] Rp:%.0f | P:%.1fW | V:%.1fV | WF:%.2fLPM | ET:%.2fkWh | WT:%.3fm3\n",
-                        balance, s.p, s.v, s.wf, s.et, wt);
+          Serial.printf("[PUB] E:%.0f W:%.0f | P:%.1fW | V:%.1fV | WF:%.2fLPM | ET:%.2fkWh | WT:%.3fm3\n",
+                        electricBalance, waterBalance, s.p, s.v, s.wf, s.et, wt);
 
           // Drain one backup file per successful publish — same channel, binary
           // format (mirrors HTTP ref "ONLY attempt batch send if sendData succeeded")
@@ -827,7 +864,7 @@ void taskMQTT(void* param) {
           }
 
           appendBackup(backupFileName,
-                       s.et, s.p, s.v, s.c, s.wf, wt, balance, rs, vs);
+                       s.et, s.p, s.v, s.c, s.wf, wt, totalBal, rs, vs);
           backupCount++;
           Serial.printf("[SD] Offline backup (%u/%u) → %s\n",
                         backupCount, BACKUP_COUNT_LIMIT + 1, backupFileName.c_str());
