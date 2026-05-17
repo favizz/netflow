@@ -5,7 +5,7 @@ const { encode } = require('@msgpack/msgpack');
 // ── USAGE: node scripts/singleDeviceSimulator.js [UNIT_NO]
 // Example: node scripts/singleDeviceSimulator.js A-0002
 const UNIT_NO = process.argv[2] || 'A-0002';
-const DEVICE_ID = `SMART-METER-${UNIT_NO.split('-')[1]}`;
+const DEVICE_ID = `DEV-${UNIT_NO}`;
 const BROKER_URL = 'mqtt://broker.emqx.io:1883';
 const INTERVAL_MS = 5000; // Send every 5 seconds for faster testing
 
