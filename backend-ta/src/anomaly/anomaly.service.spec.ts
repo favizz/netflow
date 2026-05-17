@@ -311,7 +311,7 @@ describe('AnomalyService', () => {
       const results = await service['computeAll']('A-101');
 
       // The current service does not implement backflow detection
-      expect(results.some((a) => a.anomalyType === 'backflow')).toBe(false);
+      expect(results.some((a) => (a.anomalyType as string) === 'backflow')).toBe(false);
     });
   });
 
@@ -564,7 +564,7 @@ describe('AnomalyService', () => {
       const results = await service['computeAll']('A-101');
 
       // The current service does not implement zero_flow detection
-      expect(results.some((a) => a.anomalyType === 'zero_flow')).toBe(false);
+      expect(results.some((a) => (a.anomalyType as string) === 'zero_flow')).toBe(false);
     });
   });
 
