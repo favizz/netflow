@@ -64,7 +64,7 @@ const MQTT_CONFIG = {
         clientId: 'ta-dashboard-' + Math.random().toString(16).substring(2, 10),
         username: import.meta.env.VITE_MQTT_USERNAME || undefined,
         password: import.meta.env.VITE_MQTT_PASSWORD || undefined,
-        reconnectPeriod: 0,
+        reconnectPeriod: 5000,
     }
 };
 
