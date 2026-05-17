@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useParams, useNavigate } from "react-router-dom";
 import { useIsDark } from "@/lib/useIsDark";
-import { ArrowLeft, Power, Droplets, Zap, FileText, ChevronDown, ChevronUp, Wifi, WifiOff, Activity, AlertTriangle, Wallet, Trash2, Radio } from "lucide-react";
+import { ArrowLeft, Power, Droplets, Zap, FileText, ChevronDown, ChevronUp, Wifi, WifiOff, Activity, AlertTriangle, Trash2, Radio } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, AreaChart, Area } from "recharts";
 import { cn } from "@/lib/utils";
 import mqtt from "mqtt";
@@ -284,6 +284,8 @@ export default function UnitDetailPage() {
 
                 if (topic === telemetryTopic) {
                     setUnitInfo((prev: UnitInfoState | null) => prev?.status !== "Online" ? { ...prev!, status: "Online" } : prev);
+                    // Device is provably online — clear stale offline anomaly immediately
+                    setAnomalies(prev => prev.filter(a => (a.anomalyType ?? a.type) !== 'device_offline'));
                     setEnergyStats({
                         total_kwh: parsed.et ?? energyStats.total_kwh,
                         active_power_w: parsed.p ?? 0,
@@ -499,45 +501,7 @@ export default function UnitDetailPage() {
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-1 space-y-6">
-                    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-6 relative overflow-hidden">
-                        <div className="flex items-center gap-3 mb-3">
-                            <div className="p-2 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg text-emerald-600 dark:text-emerald-400">
-                                <Wallet className="w-5 h-5" />
-                            </div>
-                            <h3 className="font-semibold text-gray-900 dark:text-gray-100">Sisa Token</h3>
-                        </div>
-                        <div className="space-y-3">
-                            <div className="flex items-center gap-3">
-                                <div className="p-1.5 bg-amber-50 dark:bg-amber-900/20 rounded-md text-amber-600 dark:text-amber-400">
-                                    <Zap className="w-3.5 h-3.5" />
-                                </div>
-                                <div>
-                                    <p className={cn("text-xl font-bold leading-tight", (unitInfo.balance || 0) < 20000 ? "text-red-600 dark:text-red-400" : "text-gray-900 dark:text-gray-100")}>
-                                        {(electricityTariff > 0 ? (unitInfo.balance || 0) / electricityTariff : 0).toFixed(2)} <span className="text-sm font-medium text-gray-500 dark:text-gray-400">kWh</span>
-                                    </p>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400">Listrik tersisa</p>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-3">
-                                <div className="p-1.5 bg-cyan-50 dark:bg-cyan-900/20 rounded-md text-cyan-600 dark:text-cyan-400">
-                                    <Droplets className="w-3.5 h-3.5" />
-                                </div>
-                                <div>
-                                    <p className={cn("text-xl font-bold leading-tight", (unitInfo.balance || 0) < 20000 ? "text-red-600 dark:text-red-400" : "text-gray-900 dark:text-gray-100")}>
-                                        {(waterTariff > 0 ? (unitInfo.balance || 0) / waterTariff : 0).toFixed(2)} <span className="text-sm font-medium text-gray-500 dark:text-gray-400">m³</span>
-                                    </p>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400">Air tersisa</p>
-                                </div>
-                            </div>
-                        </div>
-                        {(unitInfo.balance || 0) < 20000 && (
-                            <p className="text-xs text-red-500 font-medium mt-3 animate-pulse">
-                                Saldo kritis, mohon segera top-up!
-                            </p>
-                        )}
-                    </div>
-
-                    {/* Utility Controls */}
+                        {/* Utility Controls */}
                     <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-5">
                         <h2 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">Utility Controls</h2>
                         <div className="space-y-1">

@@ -33,6 +33,9 @@ const TELEMETRY_REFRESH_THROTTLE_MS = 30_000;
 export class AnomalyService implements OnModuleInit {
   private readonly anomalyCache = new Map<string, AnomalyItem[]>();
   private readonly lastTelemetryRefresh = new Map<string, number>();
+  // Updated on every telemetry frame (not just when the throttled computeAll fires).
+  // Used to suppress device_offline during the BullMQ processing window.
+  private readonly lastTelemetryArrivalMs = new Map<string, number>();
 
   constructor(
     private readonly unitService: UnitService,
@@ -46,8 +49,10 @@ export class AnomalyService implements OnModuleInit {
   ) {}
 
   onModuleInit() {
-    setTimeout(() => void this.refreshAllUnitsCache(), 5_000);
-    setInterval(() => void this.refreshAllUnitsCache(), CACHE_REFRESH_MS);
+    // Lightweight offline check only — does NOT run computeAll for every unit.
+    // All other anomaly types are detected on-demand when telemetry arrives.
+    setTimeout(() => void this.checkOfflineUnits(), 10_000);
+    setInterval(() => void this.checkOfflineUnits(), 5 * 60 * 1_000);
   }
 
   // ── Public API ─────────────────────────────────────────────────────────────
@@ -64,8 +69,15 @@ export class AnomalyService implements OnModuleInit {
 
   async getAllAnomaliesForUnit(unitNo: string): Promise<AnomalyItem[]> {
     const all = await this.computeAll(unitNo);
-    this.anomalyCache.set(unitNo, all);
-    return all;
+    // If telemetry arrived in the last 60 s, the device is provably online even if
+    // computeAll still sees old meter_readings (BullMQ processing lag).
+    const lastArrival = this.lastTelemetryArrivalMs.get(unitNo) ?? 0;
+    const result =
+      Date.now() - lastArrival < 60_000
+        ? all.filter((a) => a.anomalyType !== 'device_offline')
+        : all;
+    this.anomalyCache.set(unitNo, result);
+    return result;
   }
 
   checkOnTelemetry(
@@ -102,6 +114,12 @@ export class AnomalyService implements OnModuleInit {
         );
       }
 
+      // Receiving telemetry proves the device is online.
+      // Track arrival time (used by getAllAnomaliesForUnit to suppress stale offline).
+      this.lastTelemetryArrivalMs.set(unitNo, Date.now());
+      void this.resolveOfflineAnomaly(deviceId, unitNo);
+
+      // Throttled full check for all other anomaly types
       const last = this.lastTelemetryRefresh.get(unitNo) ?? 0;
       if (Date.now() - last > TELEMETRY_REFRESH_THROTTLE_MS) {
         this.lastTelemetryRefresh.set(unitNo, Date.now());
@@ -117,24 +135,105 @@ export class AnomalyService implements OnModuleInit {
     }
   }
 
-  // ── Background refresh ─────────────────────────────────────────────────────
+  // ── Offline background check ───────────────────────────────────────────────
+  // Runs every 5 min. Only checks device_offline — one indexed findOne per unit,
+  // no full computeAll. All other anomaly types are detected via checkOnTelemetry.
 
-  private async refreshAllUnitsCache(): Promise<void> {
+  private async checkOfflineUnits(): Promise<void> {
     try {
       const units = await this.unitService.findAll();
-      await Promise.all(
-        units.map(async (unit) => {
-          try {
-            const anomalies = await this.computeAll(unit.unit_no);
-            await this.syncAnomaliesToDb(unit.unit_no, anomalies);
-            this.anomalyCache.set(unit.unit_no, anomalies);
-          } catch {
-            // Keep stale cache
+      for (const unit of units) {
+        if (!unit.device_id) continue;
+        try {
+          const latest = await this.meterRepo.findOne({
+            where: { device_id: unit.device_id },
+            order: { time: 'DESC' },
+          });
+          const ageMs = latest
+            ? Date.now() - new Date(latest.time).getTime()
+            : Infinity;
+          if (ageMs < OFFLINE_THRESHOLD_MS) continue;
+
+          // Unit is offline — insert DB anomaly and notify once (deduplicated)
+          const existing = await this.anomalyRepo.findOne({
+            where: {
+              device_id: unit.device_id,
+              type: 'device_offline',
+              resolved_at: IsNull(),
+            },
+          });
+          if (!existing) {
+            await this.anomalyRepo.save({
+              device_id: unit.device_id,
+              type: 'device_offline',
+              severity: 'critical',
+              description: `Perangkat unit ${unit.unit_no} offline. Tidak ada data masuk selama ${Math.floor(ageMs / 60_000)} menit.`,
+              action_taken: JSON.stringify({
+                last_seen_ms: ageMs,
+                offline_threshold_ms: OFFLINE_THRESHOLD_MS,
+              }),
+            });
+            if (unit.resident_email) {
+              void this.notificationService
+                .sendResidentNotification(
+                  unit.resident_email,
+                  `[NetFlow Alert] DEVICE_OFFLINE — Unit ${unit.unit_no}`,
+                  `Perangkat unit ${unit.unit_no} offline. Tidak ada data masuk selama ${Math.floor(ageMs / 60_000)} menit.`,
+                )
+                .catch(() => {});
+            }
+            void this.residentsService
+              .findAdmins()
+              .then((admins) => {
+                for (const admin of admins) {
+                  if (admin.telegram_chat_id) {
+                    void this.notificationService
+                      .sendTelegram(
+                        admin.telegram_chat_id,
+                        `🚨 *[Admin Alert]* DEVICE_OFFLINE — Unit ${unit.unit_no}\n\nTidak ada data masuk selama ${Math.floor(ageMs / 60_000)} menit.`,
+                      )
+                      .catch(() => {});
+                  }
+                }
+              })
+              .catch(() => {});
           }
-        }),
-      );
+        } catch {
+          // Skip unit on error, continue others
+        }
+      }
     } catch {
-      // DB not ready - retry next interval
+      // DB not ready — retry on next interval
+    }
+  }
+
+  // Clears the device_offline anomaly from cache and DB the moment telemetry
+  // is received, so the admin view reflects online status without delay.
+  private async resolveOfflineAnomaly(
+    deviceId: string,
+    unitNo: string,
+  ): Promise<void> {
+    try {
+      const cached = this.anomalyCache.get(unitNo);
+      if (cached?.some((a) => a.anomalyType === 'device_offline')) {
+        this.anomalyCache.set(
+          unitNo,
+          cached.filter((a) => a.anomalyType !== 'device_offline'),
+        );
+      }
+      const active = await this.anomalyRepo.findOne({
+        where: {
+          device_id: deviceId,
+          type: 'device_offline',
+          resolved_at: IsNull(),
+        },
+      });
+      if (active) {
+        active.resolved_at = new Date();
+        await this.anomalyRepo.save(active);
+      }
+    } catch {
+      // Best-effort — do not propagate
     }
   }
 
@@ -214,6 +313,24 @@ export class AnomalyService implements OnModuleInit {
   private async computeAll(unitNo: string): Promise<AnomalyItem[]> {
     const unit = await this.unitService.findByUnitNo(unitNo);
 
+    const anomalies: AnomalyItem[] = [];
+    const now = new Date().toISOString();
+
+    // No device assigned → cannot determine online status; skip device_offline.
+    if (!unit.device_id) {
+      if (unit.balance > 0 && unit.balance < LOW_BALANCE_THRESHOLD) {
+        anomalies.push({
+          anomalyType: 'low_balance',
+          severity: 'warning',
+          target: 'resident',
+          message: `Saldo hampir habis: Rp${Math.floor(unit.balance).toLocaleString('id-ID')}. Segera top-up.`,
+          metadata: { balance_rp: unit.balance, threshold_rp: LOW_BALANCE_THRESHOLD },
+          detectedAt: now,
+        });
+      }
+      return anomalies;
+    }
+
     const readings = await this.meterRepo.find({
       where: { device_id: unit.device_id },
       order: { time: 'DESC' },
@@ -221,8 +338,6 @@ export class AnomalyService implements OnModuleInit {
     });
 
     const latest = readings[0] ?? null;
-    const anomalies: AnomalyItem[] = [];
-    const now = new Date().toISOString();
     const ageMs = latest
       ? Date.now() - new Date(latest.time).getTime()
       : Infinity;

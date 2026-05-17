@@ -61,10 +61,12 @@ describe('AnomalyService', () => {
 
     mockMeterRepo = {
       find: jest.fn().mockResolvedValue([makeReading()]),
+      findOne: jest.fn().mockResolvedValue(makeReading()),
     };
 
     mockAnomalyRepo = {
       find: jest.fn().mockResolvedValue([]),
+      findOne: jest.fn().mockResolvedValue(null),
       save: jest.fn().mockImplementation((e) => Promise.resolve(e)),
     };
 
@@ -789,105 +791,86 @@ describe('AnomalyService', () => {
     });
   });
 
-  // ── refreshAllUnitsCache - chunked processing ────────────────────────────────
+  // ── checkOfflineUnits ─────────────────────────────────────────────────────────
 
-  describe('refreshAllUnitsCache - chunked vs non-chunked', () => {
-    function buildUnits(count: number) {
-      return Array.from({ length: count }, (_, i) =>
-        makeUnit({ unit_no: `A-${i + 1}`, device_id: `DEV-A-${i + 1}` }),
-      );
-    }
-
-    it('processes ALL units regardless of chunk count', async () => {
-      const units = buildUnits(10);
+  describe('checkOfflineUnits', () => {
+    it('inserts a DB anomaly for offline units that have no active offline record', async () => {
+      const units = [makeUnit({ device_id: 'DEV-A-101', unit_no: 'A-101' })];
       mockUnitService.findAll.mockResolvedValue(units);
-      mockUnitService.findByUnitNo.mockImplementation((unitNo: string) =>
-        Promise.resolve(makeUnit({ unit_no: unitNo })),
+      // Latest reading is >10 min ago → offline
+      mockMeterRepo.findOne.mockResolvedValue(
+        makeReading({ time: new Date(Date.now() - 11 * 60_000) }),
       );
+      mockAnomalyRepo.findOne.mockResolvedValue(null); // no existing offline record
 
-      await service['refreshAllUnitsCache']();
+      await service['checkOfflineUnits']();
 
-      expect(service['anomalyCache'].size).toBe(10);
+      expect(mockAnomalyRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'device_offline', device_id: 'DEV-A-101' }),
+      );
     });
 
-    it('processes all units concurrently via Promise.all', async () => {
-      const UNIT_COUNT = 150;
-      mockUnitService.findAll.mockResolvedValue(buildUnits(UNIT_COUNT));
-      mockUnitService.findByUnitNo.mockImplementation((unitNo: string) =>
-        Promise.resolve(makeUnit({ unit_no: unitNo })),
+    it('skips inserting when an active offline record already exists', async () => {
+      mockUnitService.findAll.mockResolvedValue([makeUnit()]);
+      mockMeterRepo.findOne.mockResolvedValue(
+        makeReading({ time: new Date(Date.now() - 11 * 60_000) }),
       );
+      mockAnomalyRepo.findOne.mockResolvedValue({ id: 1, type: 'device_offline', resolved_at: null });
 
-      jest.spyOn(service as any, 'computeAll').mockResolvedValue([]);
-      jest.spyOn(service as any, 'syncAnomaliesToDb').mockResolvedValue(undefined);
+      await service['checkOfflineUnits']();
 
-      jest.useRealTimers();
-      await service['refreshAllUnitsCache']();
-
-      // All units should be in the cache after processing
-      expect(service['anomalyCache'].size).toBe(UNIT_COUNT);
+      expect(mockAnomalyRepo.save).not.toHaveBeenCalled();
     });
 
-    it('adds NO delay when all units fit in a single chunk (≤ 50 units)', async () => {
-      const UNIT_COUNT = 50;
-      mockUnitService.findAll.mockResolvedValue(buildUnits(UNIT_COUNT));
-      mockUnitService.findByUnitNo.mockImplementation((unitNo: string) =>
-        Promise.resolve(makeUnit({ unit_no: unitNo })),
-      );
+    it('skips units with no device_id', async () => {
+      mockUnitService.findAll.mockResolvedValue([makeUnit({ device_id: null })]);
 
-      jest.spyOn(service as any, 'computeAll').mockResolvedValue([]);
-      jest.spyOn(service as any, 'syncAnomaliesToDb').mockResolvedValue(undefined);
+      await service['checkOfflineUnits']();
 
-      // useRealTimers BEFORE spyOn so the spy wraps the real setTimeout
-      jest.useRealTimers();
-      const setTimeoutSpy = jest.spyOn(global, 'setTimeout');
-
-      await service['refreshAllUnitsCache']();
-
-      const delayCalls = setTimeoutSpy.mock.calls.filter(([, ms]) => ms === 200);
-      expect(delayCalls).toHaveLength(0);
+      expect(mockMeterRepo.findOne).not.toHaveBeenCalled();
     });
 
-    it('continues processing remaining chunks even when one unit in a chunk throws', async () => {
-      const units = buildUnits(3);
+    it('continues processing remaining units when one throws', async () => {
+      const units = [
+        makeUnit({ device_id: 'DEV-A-1', unit_no: 'A-1' }),
+        makeUnit({ device_id: 'DEV-A-2', unit_no: 'A-2' }),
+      ];
       mockUnitService.findAll.mockResolvedValue(units);
+      mockMeterRepo.findOne
+        .mockRejectedValueOnce(new Error('DB error'))
+        .mockResolvedValueOnce(makeReading({ time: new Date(Date.now() - 11 * 60_000) }));
+      mockAnomalyRepo.findOne.mockResolvedValue(null);
 
-      let callCount = 0;
-      mockUnitService.findByUnitNo.mockImplementation(() => {
-        callCount++;
-        if (callCount === 2) return Promise.reject(new Error('DB timeout'));
-        return Promise.resolve(makeUnit());
-      });
+      await expect(service['checkOfflineUnits']()).resolves.not.toThrow();
+    });
+  });
 
-      // Should not throw, and other units should still be processed
-      await expect(service['refreshAllUnitsCache']()).resolves.not.toThrow();
+  // ── resolveOfflineAnomaly ─────────────────────────────────────────────────────
+
+  describe('resolveOfflineAnomaly', () => {
+    it('removes device_offline from cache', async () => {
+      service['anomalyCache'].set('A-101', [
+        { anomalyType: 'device_offline', severity: 'critical', target: 'admin', message: '', metadata: {}, detectedAt: '' },
+        { anomalyType: 'low_balance', severity: 'warning', target: 'resident', message: '', metadata: {}, detectedAt: '' },
+      ]);
+      mockAnomalyRepo.findOne.mockResolvedValue(null);
+
+      await service['resolveOfflineAnomaly']('DEV-A-101', 'A-101');
+
+      const cached = service['anomalyCache'].get('A-101')!;
+      expect(cached.some((a) => a.anomalyType === 'device_offline')).toBe(false);
+      expect(cached.some((a) => a.anomalyType === 'low_balance')).toBe(true);
     });
 
-    it('processes 1444 units correctly across 29 chunks with 28 delays', async () => {
-      const UNIT_COUNT = 1444;
-      mockUnitService.findAll.mockResolvedValue(buildUnits(UNIT_COUNT));
-      mockUnitService.findByUnitNo.mockImplementation((unitNo: string) =>
-        Promise.resolve(makeUnit({ unit_no: unitNo })),
+    it('sets resolved_at on the active DB anomaly', async () => {
+      const activeAnomaly = { id: 1, device_id: 'DEV-A-101', type: 'device_offline', resolved_at: null };
+      mockAnomalyRepo.findOne.mockResolvedValue(activeAnomaly);
+
+      await service['resolveOfflineAnomaly']('DEV-A-101', 'A-101');
+
+      expect(mockAnomalyRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ resolved_at: expect.any(Date) }),
       );
-
-      const computeAllSpy = jest
-        .spyOn(service as any, 'computeAll')
-        .mockResolvedValue([]);
-      jest.spyOn(service as any, 'syncAnomaliesToDb').mockResolvedValue(undefined);
-
-      // useRealTimers BEFORE spyOn; mock setTimeout to resolve immediately
-      // so 28 × 200ms delays don't slow down the test suite
-      jest.useRealTimers();
-      jest.spyOn(global, 'setTimeout').mockImplementation((cb: any) => {
-        (cb as Function)();
-        return 0 as any;
-      });
-
-      await service['refreshAllUnitsCache']();
-
-      // All units processed
-      expect(service['anomalyCache'].size).toBe(UNIT_COUNT);
-      // computeAll called exactly once per unit
-      expect(computeAllSpy).toHaveBeenCalledTimes(UNIT_COUNT);
     });
   });
 });

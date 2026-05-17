@@ -63,6 +63,13 @@ export class DeviceService {
         lock: { mode: 'pessimistic_write' },
       });
 
+      if (!unit) {
+        this.logger.warn(
+          `No unit found for device_id="${deviceId}" — telemetry dropped. ` +
+          `Check that units.device_id matches the MQTT topic prefix.`,
+        );
+      }
+
       if (unit) {
         let deltaEnergy = 0;
         if (incomingEnergyTotal > Number(unit.last_energy_reading)) {
