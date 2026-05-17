@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { Zap, Droplets, Wifi, WifiOff, Radio } from "lucide-react"
 import mqtt from "mqtt"
-import { decode as msgpackDecode } from "@msgpack/msgpack"
 import { toast } from "sonner"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"

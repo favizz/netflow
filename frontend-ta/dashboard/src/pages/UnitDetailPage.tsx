@@ -6,7 +6,6 @@ import { ArrowLeft, Power, Droplets, Zap, FileText, ChevronDown, ChevronUp, Wifi
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, AreaChart, Area } from "recharts";
 import { cn } from "@/lib/utils";
 import mqtt from "mqtt";
-import { decode as msgpackDecode } from "@msgpack/msgpack";
 import { fetchApi } from "@/lib/api";
 import { useToast } from "@/components/layout/ToastProvider";
 
@@ -271,14 +270,7 @@ export default function UnitDetailPage() {
             try {
                 let parsed: IoTPayload | null = null;
 
-                try {
-                    const decoded = msgpackDecode(new Uint8Array(message)) as IoTPayload;
-                    if (decoded && (decoded.p !== undefined || decoded.wf !== undefined)) {
-                        parsed = decoded;
-                    }
-                } catch {
-                    parsed = decodeTelemetry(new Uint8Array(message));
-                }
+                parsed = decodeTelemetry(new Uint8Array(message));
 
                 if (!parsed) return;
 
