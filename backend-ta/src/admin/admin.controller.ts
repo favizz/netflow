@@ -119,6 +119,11 @@ export class AdminController {
       .slice(0, 20);
   }
 
+  @Get('anomalies/:unitNo')
+  getUnitAnomalies(@Param('unitNo') unitNo: string) {
+    return this.anomalyService.getAllAnomaliesForUnit(unitNo);
+  }
+
   // ── Buildings ─────────────────────────────────────────────────────────────
 
   @Get('buildings')
