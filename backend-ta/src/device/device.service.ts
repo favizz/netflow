@@ -63,6 +63,13 @@ export class DeviceService {
         lock: { mode: 'pessimistic_write' },
       });
 
+      if (!unit) {
+        this.logger.warn(
+          `No unit found for device_id="${deviceId}" — telemetry dropped. ` +
+            `Check that units.device_id matches the MQTT topic prefix.`,
+        );
+      }
+
       if (unit) {
         let deltaEnergy = 0;
         if (incomingEnergyTotal > Number(unit.last_energy_reading)) {
@@ -123,15 +130,20 @@ export class DeviceService {
           power,
           water_flow: waterFlow,
           // Use explicit null-check so 0 is stored as 0, not NULL
-          energy_total: Number.isFinite(incomingEnergyTotal) ? incomingEnergyTotal : null,
-          water_total: Number.isFinite(incomingWaterTotal) ? incomingWaterTotal : null,
+          energy_total: Number.isFinite(incomingEnergyTotal)
+            ? incomingEnergyTotal
+            : null,
+          water_total: Number.isFinite(incomingWaterTotal)
+            ? incomingWaterTotal
+            : null,
         });
         try {
           await queryRunner.manager.save(row);
         } catch (dupErr: unknown) {
           // Two telemetry packets within the same MySQL-second share a PK —
           // skip the duplicate row but keep the balance update in this transaction.
-          if ((dupErr as { code?: string })?.code !== 'ER_DUP_ENTRY') throw dupErr;
+          if ((dupErr as { code?: string })?.code !== 'ER_DUP_ENTRY')
+            throw dupErr;
         }
       }
 

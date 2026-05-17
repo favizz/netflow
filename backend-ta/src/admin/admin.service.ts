@@ -56,7 +56,14 @@ export class AdminService implements OnModuleInit {
    *  if the underlying mqtt.js socket is not yet open. */
   publishRetained(topic: string, payload: Buffer): void {
     // Access the raw mqtt.js MqttClient held inside NestJS ClientMqtt wrapper.
-    const raw = (this.mqttClient as unknown as { mqttClient?: { connected?: boolean; publish?: (...a: unknown[]) => void } }).mqttClient;
+    const raw = (
+      this.mqttClient as unknown as {
+        mqttClient?: {
+          connected?: boolean;
+          publish?: (...a: unknown[]) => void;
+        };
+      }
+    ).mqttClient;
     if (raw?.connected && raw.publish) {
       raw.publish(topic, payload, { retain: true, qos: 1 });
     } else {

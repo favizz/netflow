@@ -78,10 +78,14 @@ export class NotificationService {
       );
       if (!res.ok) {
         const body = await res.text();
-        this.logger.warn(`Telegram sendMessage failed (${res.status}): ${body}`);
+        this.logger.warn(
+          `Telegram sendMessage failed (${res.status}): ${body}`,
+        );
       }
     } catch (err) {
-      this.logger.error(`Failed to send Telegram message: ${(err as Error).message}`);
+      this.logger.error(
+        `Failed to send Telegram message: ${(err as Error).message}`,
+      );
     }
   }
 
