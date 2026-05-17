@@ -115,6 +115,14 @@ cd "$REPO_DIR"
 # ── Fix dist permissions so nginx (www-data) can read static files ────────────
 chmod -R o+rX frontend-ta/dashboard/dist frontend-ta/mobile/dist
 
+# ── Reload nginx to pick up any config changes ─────────────────────────────
+if sudo nginx -t 2>/dev/null; then
+  sudo systemctl reload nginx
+  log "Nginx config reloaded"
+else
+  log "WARNING: nginx config test failed, skipping reload"
+fi
+
 pm2 save
 
 # ── Smoke test ──────────────────────────────────────────────────────────────
