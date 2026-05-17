@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useParams, useNavigate } from "react-router-dom";
 import { useIsDark } from "@/lib/useIsDark";
-import { ArrowLeft, Power, Droplets, Zap, FileText, ChevronDown, ChevronUp, Wifi, WifiOff, Activity, Trash2, Radio } from "lucide-react";
+import { ArrowLeft, Power, Droplets, Zap, FileText, ChevronDown, ChevronUp, Wifi, WifiOff, Activity, AlertTriangle, Wallet, Trash2, Radio } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, AreaChart, Area } from "recharts";
 import { cn } from "@/lib/utils";
 import mqtt from "mqtt";
@@ -140,9 +140,10 @@ export default function UnitDetailPage() {
         fontSize: '12px',
     };
 
-    type UnitInfoState = { unit: string; tenant: string; meterSerial: string; status: string; lastUpdate: string; relay_status?: number; valve_status?: number; };
+    type UnitInfoState = { unit: string; tenant: string; meterSerial: string; status: string; lastUpdate: string; relay_status?: number; valve_status?: number; balance?: number; };
     const [unitInfo, setUnitInfo] = useState<UnitInfoState | null>(null);
     const [loadingInfo, setLoadingInfo] = useState(true);
+    const [anomalies, setAnomalies] = useState<any[]>([]);
 
     const [powerState, setPowerState] = useState(false);
     const [waterState, setWaterState] = useState(false);
@@ -175,11 +176,18 @@ export default function UnitDetailPage() {
                     meterSerial: data.device_id,
                     status: "Unknown",
                     lastUpdate: "Wait...",
+                    balance: Number(data.balance || 0),
                 });
                 setEnergyStats({ total_kwh: Number(data.last_energy_reading || 0), active_power_w: 0 });
                 setWaterStats({ total_m3: Number(data.last_water_reading || 0), flow_rate_lpm: 0 });
                 setPowerState(!!data.relay_status);
                 setWaterState(!!data.valve_status);
+
+                fetchApi(`/unit/${data.unit_no}/anomalies`)
+                    .then(anomalyData => {
+                        setAnomalies(anomalyData || []);
+                    })
+                    .catch(() => {});
 
                 return fetchApi('/unit/connectivity');
             })
@@ -214,6 +222,21 @@ export default function UnitDetailPage() {
             .catch(() => setHistoricalTrends([]))
             .finally(() => setTrendLoading(false));
     }, [unitInfo?.unit, period]);
+
+    // Auto-refresh anomalies every 10 seconds
+    useEffect(() => {
+        if (!unitInfo?.unit) return;
+
+        const intervalId = setInterval(() => {
+            fetchApi(`/unit/${unitInfo.unit}/anomalies`)
+                .then(anomalyData => {
+                    setAnomalies(anomalyData || []);
+                })
+                .catch(() => {});
+        }, 10000);
+
+        return () => clearInterval(intervalId);
+    }, [unitInfo?.unit]);
 
     // MQTT live connection
     useEffect(() => {
@@ -439,8 +462,51 @@ export default function UnitDetailPage() {
                 </div>
             </div>
 
+            {anomalies.length > 0 && (
+                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 rounded-xl p-4 flex flex-col gap-3 shadow-sm">
+                    {anomalies.map((anomaly, idx) => (
+                        <div key={idx} className="flex items-start gap-3">
+                            <div className="p-2 bg-red-100 dark:bg-red-900/50 rounded-full shrink-0">
+                                <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400" />
+                            </div>
+                            <div>
+                                <h4 className="text-sm font-bold text-red-800 dark:text-red-300 uppercase tracking-wider">
+                                    {(anomaly.type || anomaly.anomalyType || 'ANOMALY').replace('_', ' ')}
+                                </h4>
+                                <p className="text-sm text-red-700 dark:text-red-400 mt-0.5">
+                                    {anomaly.message}
+                                </p>
+                                <span className="text-xs text-red-500/80 dark:text-red-400/70 mt-1 block font-medium">
+                                    Terdeteksi: {new Date(anomaly.timestamp || anomaly.detectedAt).toLocaleString('id-ID')}
+                                </span>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-1 space-y-6">
+                    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-6 relative overflow-hidden">
+                        <div className="flex items-center gap-3 mb-2">
+                            <div className="p-2 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg text-emerald-600 dark:text-emerald-400">
+                                <Wallet className="w-5 h-5" />
+                            </div>
+                            <h3 className="font-semibold text-gray-900 dark:text-gray-100">Sisa Saldo</h3>
+                        </div>
+                        <p className={cn(
+                            "text-3xl font-bold mt-2",
+                            (unitInfo.balance || 0) < 20000 ? "text-red-600 dark:text-red-400" : "text-gray-900 dark:text-gray-100"
+                        )}>
+                            Rp{(unitInfo.balance || 0).toLocaleString('id-ID')}
+                        </p>
+                        {(unitInfo.balance || 0) < 20000 && (
+                            <p className="text-xs text-red-500 font-medium mt-2 animate-pulse">
+                                Saldo kritis, mohon segera top-up!
+                            </p>
+                        )}
+                    </div>
+
                     {/* Utility Controls */}
                     <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-6">
                         <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Utility Controls</h2>
