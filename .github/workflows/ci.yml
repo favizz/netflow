@@ -188,13 +188,31 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.DEPLOY_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          printf 'Host *\n  StrictHostKeyChecking no\n  UserKnownHostsFile /dev/null\n  ConnectTimeout 30\n  ServerAliveInterval 30\n  ServerAliveCountMax 3\n' > ~/.ssh/config
+          cat > ~/.ssh/config <<'EOF'
+          Host *
+            StrictHostKeyChecking no
+            UserKnownHostsFile /dev/null
+            ConnectTimeout 30
+            ServerAliveInterval 10
+            ServerAliveCountMax 3
+            BatchMode yes
+          EOF
+
+      - name: Check server reachability
+        run: |
+          echo "Testing TCP connectivity to ${{ secrets.DEPLOY_HOST }}:${{ secrets.DEPLOY_PORT }}..."
+          if ! nc -z -w 15 "${{ secrets.DEPLOY_HOST }}" "${{ secrets.DEPLOY_PORT }}" 2>/dev/null; then
+            echo "::error::Cannot reach ${{ secrets.DEPLOY_HOST }}:${{ secrets.DEPLOY_PORT }} — check that the server is up and the SSH port is reachable from GitHub Actions runners."
+            exit 1
+          fi
+          echo "Port open — proceeding with deploy."
 
       - name: Rsync source to server
         run: |
+          RSYNC_OK=false
           for attempt in 1 2 3; do
             echo "Rsync attempt $attempt/3..."
-            rsync -az --delete \
+            if rsync -az --delete \
               --exclude='.git' \
               --exclude='.env' \
               --exclude='**/.env' \
@@ -204,11 +222,18 @@ jobs:
               --exclude='backend-ta/dist' \
               --exclude='__pycache__' \
               --exclude='*.pyc' \
-              -e "ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }}" \
+              -e "ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} -o ConnectTimeout=30 -o ServerAliveInterval=10 -o ServerAliveCountMax=3" \
               . \
-              ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:~/TA-Flowmeter/ && break
-            [ $attempt -lt 3 ] && echo "Attempt $attempt failed, retrying in 15s..." && sleep 15
+              "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:~/TA-Flowmeter/"; then
+              RSYNC_OK=true
+              break
+            fi
+            [ "$attempt" -lt 3 ] && echo "Attempt $attempt failed, retrying in 15s..." && sleep 15
           done
+          if [ "$RSYNC_OK" != "true" ]; then
+            echo "::error::All rsync attempts failed — deploy aborted."
+            exit 1
+          fi
 
       - name: Run deploy script on server
         uses: appleboy/ssh-action@v1.0.3
