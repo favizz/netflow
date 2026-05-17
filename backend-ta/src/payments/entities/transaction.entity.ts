@@ -28,22 +28,6 @@ export class Transaction {
   })
   amount_rp!: number;
 
-  @Column('decimal', {
-    precision: 12,
-    scale: 2,
-    default: 0,
-    transformer: new NumericTransformer(),
-  })
-  electricity_amount_rp!: number;
-
-  @Column('decimal', {
-    precision: 12,
-    scale: 2,
-    default: 0,
-    transformer: new NumericTransformer(),
-  })
-  water_amount_rp!: number;
-
   @Column({ type: 'enum', enum: ['qris', 'transfer', 'ewallet'] })
   method!: 'qris' | 'transfer' | 'ewallet';
 

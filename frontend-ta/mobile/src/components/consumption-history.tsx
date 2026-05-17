@@ -134,12 +134,25 @@ export default function ConsumptionHistory({ unitId }: ConsumptionHistoryProps) 
       if (incomingTopic !== topic) return
 
       try {
-        let payload: Record<string, unknown>
-        try {
-          const uint8 = new Uint8Array(message)
-          payload = msgpackDecode(uint8) as Record<string, unknown>
-        } catch {
-          payload = JSON.parse(message.toString())
+        let payload: Record<string, unknown> | null = null
+        const uint8 = new Uint8Array(message)
+
+        if (uint8.length >= 21) {
+          const view = new DataView(uint8.buffer, uint8.byteOffset, uint8.byteLength)
+          payload = {
+            et: view.getUint32(0, false) / 100,
+            p:  view.getUint16(4, false) / 10,
+            v:  view.getUint16(6, false) / 10,
+            c:  view.getUint16(8, false) / 1000,
+            wf: view.getUint16(10, false) / 100,
+            wt: view.getUint32(12, false) / 1000,
+            rs: uint8[20] & 1,
+            vs: (uint8[20] >> 1) & 1,
+          }
+        } else {
+          try {
+            payload = JSON.parse(message.toString())
+          } catch { /* ignore */ }
         }
 
         if (!payload) return

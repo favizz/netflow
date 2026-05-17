@@ -302,7 +302,7 @@ export default function UnitDetailPage() {
                     setWaterStats({ total_m3: parsed.wt ?? waterStats.total_m3, flow_rate_lpm: parsed.wf ?? 0 });
                     if (parsed.vs !== undefined) setWaterState(parsed.vs === 1);
 
-                    const rawLabel = parsed.et !== undefined ? 'MsgPack' : 'Binary 21B';
+                    const rawLabel = 'Binary 21B';
                     setLiveLogs(prev => [{
                         timestamp: now.toISOString(),
                         value: parsed?.p ?? 0,
