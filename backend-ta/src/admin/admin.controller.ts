@@ -98,8 +98,8 @@ export class AdminController {
   // ── Transactions ──────────────────────────────────────────────────────────
 
   @Get('transactions')
-  getTransactions() {
-    return this.adminService.getTransactions();
+  async getTransactions() {
+    return await this.adminService.getTransactions();
   }
 
   // ── Anomalies ─────────────────────────────────────────────────────────────

@@ -141,9 +141,7 @@ export class UnitService {
   ): Promise<void> {
     if (ids.length === 0) return;
     const update =
-      type === 'relay'
-        ? { relay_status: value }
-        : { valve_status: value };
+      type === 'relay' ? { relay_status: value } : { valve_status: value };
     await this.unitRepo.update({ id: In(ids) }, update);
   }
 
@@ -154,7 +152,9 @@ export class UnitService {
       order: { time: 'DESC' },
     });
     if (!latest?.time) return false;
-    return Date.now() - new Date(latest.time).getTime() <= this.onlineThresholdMs;
+    return (
+      Date.now() - new Date(latest.time).getTime() <= this.onlineThresholdMs
+    );
   }
 
   async setRelayStatus(id: number, relayStatus: boolean, actorEmail?: string) {
@@ -215,7 +215,8 @@ export class UnitService {
       ? new Date(latest.time).toISOString()
       : null;
     const online = lastTelemetryAt
-      ? Date.now() - new Date(lastTelemetryAt).getTime() <= this.onlineThresholdMs
+      ? Date.now() - new Date(lastTelemetryAt).getTime() <=
+        this.onlineThresholdMs
       : false;
 
     return {

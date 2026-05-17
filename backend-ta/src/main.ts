@@ -1,5 +1,5 @@
 import { ValidationPipe } from '@nestjs/common';
-import { NestFactory, HttpAdapterHost } from '@nestjs/core';
+import { NestFactory } from '@nestjs/core';
 import { MicroserviceOptions, Transport } from '@nestjs/microservices';
 import { AppModule } from './app.module';
 import compression from 'compression';
@@ -21,31 +21,19 @@ process.on('unhandledRejection', (reason: unknown) => {
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // ── Bull-board: mount directly on Express at the base path ───────────────────
-  // NestJS middleware forRoutes only matches the exact path, not sub-paths.
-  // Bull Board's router uses relative internal routes (/static/*, /api/*), so it
-  // must be mounted at the base path so Express strips the prefix before routing.
-  const { httpAdapter } = app.get(HttpAdapterHost);
+  app.setGlobalPrefix('api');
 
+  // ── Bull-board: mount directly on Express at the base path ───────────────────
+  // We use the BullBoard adapter to set the base path correctly for assets.
   const bullAdapter = app.get<{
     setBasePath(p: string): void;
-    getRouter(): unknown;
+    getRouter(): import('express').RequestHandler;
   }>('bull_board_adapter');
   bullAdapter.setBasePath('/api/admin/queues');
 
-  /* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
-  // Mount at the exact base path so Express strips the prefix before the router
-  // processes it.  The Bull Board router uses relative routes (/static/*, /api/*)
-  // internally, so it must receive the path WITHOUT the base prefix.
-  httpAdapter
-    .getInstance()
-    .use(
-      '/api/admin/queues',
-      bullAdapter.getRouter() as import('express').RequestHandler,
-    );
-  /* eslint-enable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
-
-  app.setGlobalPrefix('api');
+  // Security: Ensure BullBoard is mounted AFTER global prefix but via direct Express
+  // to handle the sub-paths (/static, /api) correctly.
+  app.use('/api/admin/queues', bullAdapter.getRouter());
 
   // ── Security headers ────────────────────────────────────────────────────────
   app.use(

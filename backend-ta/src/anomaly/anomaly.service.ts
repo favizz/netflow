@@ -26,7 +26,6 @@ const SPIKE_MULTIPLIER = 3.0;
 const SPIKE_MIN_BASELINE_W = 100;
 const SPIKE_MIN_W = 500;
 
-const CACHE_REFRESH_MS = 2 * 60 * 1_000;
 const TELEMETRY_REFRESH_THROTTLE_MS = 30_000;
 
 @Injectable()
@@ -288,18 +287,21 @@ export class AnomalyService implements OnModuleInit {
 
           // Admin Telegram Notification
           if (comp.severity === 'critical' || comp.severity === 'warning') {
-            void this.residentsService.findAdmins().then((admins) => {
-              for (const admin of admins) {
-                if (admin.telegram_chat_id) {
-                  void this.notificationService
-                    .sendTelegram(
-                      admin.telegram_chat_id,
-                      `🚨 *[Admin Alert]* ${comp.anomalyType.toUpperCase()} — Unit ${unitNo}\n\n${comp.message}`,
-                    )
-                    .catch(() => {});
+            void this.residentsService
+              .findAdmins()
+              .then((admins) => {
+                for (const admin of admins) {
+                  if (admin.telegram_chat_id) {
+                    void this.notificationService
+                      .sendTelegram(
+                        admin.telegram_chat_id,
+                        `🚨 *[Admin Alert]* ${comp.anomalyType.toUpperCase()} — Unit ${unitNo}\n\n${comp.message}`,
+                      )
+                      .catch(() => {});
+                  }
                 }
-              }
-            }).catch(() => {});
+              })
+              .catch(() => {});
           }
         }
       }
@@ -324,7 +326,10 @@ export class AnomalyService implements OnModuleInit {
           severity: 'warning',
           target: 'resident',
           message: `Saldo hampir habis: Rp${Math.floor(unit.balance).toLocaleString('id-ID')}. Segera top-up.`,
-          metadata: { balance_rp: unit.balance, threshold_rp: LOW_BALANCE_THRESHOLD },
+          metadata: {
+            balance_rp: unit.balance,
+            threshold_rp: LOW_BALANCE_THRESHOLD,
+          },
           detectedAt: now,
         });
       }

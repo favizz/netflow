@@ -214,12 +214,14 @@ export class PaymentsService {
           );
         }
         if (updatedUnit.resident_email) {
-          const elecLine = Number(tx.electricity_amount_rp) > 0
-            ? `⚡ Listrik: Rp ${Number(tx.electricity_amount_rp).toLocaleString('id-ID')}\n`
-            : '';
-          const waterLine = Number(tx.water_amount_rp) > 0
-            ? `💧 Air: Rp ${Number(tx.water_amount_rp).toLocaleString('id-ID')}\n`
-            : '';
+          const elecLine =
+            Number(tx.electricity_amount_rp) > 0
+              ? `⚡ Listrik: Rp ${Number(tx.electricity_amount_rp).toLocaleString('id-ID')}\n`
+              : '';
+          const waterLine =
+            Number(tx.water_amount_rp) > 0
+              ? `💧 Air: Rp ${Number(tx.water_amount_rp).toLocaleString('id-ID')}\n`
+              : '';
           void this.notificationService
             .sendResidentNotification(
               updatedUnit.resident_email,
@@ -276,12 +278,14 @@ export class PaymentsService {
       this.mqttClient.emit(`device/${updatedUnit.device_id}/topup`, payload);
     }
     if (updatedUnit.resident_email) {
-      const elecLine = Number(tx.electricity_amount_rp) > 0
-        ? `⚡ Listrik: Rp ${Number(tx.electricity_amount_rp).toLocaleString('id-ID')}\n`
-        : '';
-      const waterLine = Number(tx.water_amount_rp) > 0
-        ? `💧 Air: Rp ${Number(tx.water_amount_rp).toLocaleString('id-ID')}\n`
-        : '';
+      const elecLine =
+        Number(tx.electricity_amount_rp) > 0
+          ? `⚡ Listrik: Rp ${Number(tx.electricity_amount_rp).toLocaleString('id-ID')}\n`
+          : '';
+      const waterLine =
+        Number(tx.water_amount_rp) > 0
+          ? `💧 Air: Rp ${Number(tx.water_amount_rp).toLocaleString('id-ID')}\n`
+          : '';
       void this.notificationService
         .sendResidentNotification(
           updatedUnit.resident_email,
@@ -306,7 +310,10 @@ export class PaymentsService {
 
   async getTopupStatus(unitNo: string, transactionId: string) {
     const tx = await this.getTransactionForUnit(unitNo, transactionId);
-    return { status: tx.status, confirmedAt: tx.confirmed_at?.toISOString() ?? null };
+    return {
+      status: tx.status,
+      confirmedAt: tx.confirmed_at?.toISOString() ?? null,
+    };
   }
 
   async listTransactionsForUnit(unitNo: string) {
@@ -317,9 +324,10 @@ export class PaymentsService {
     return txs.map((tx) => this.toResponse(tx));
   }
 
-  async listAllTransactions() {
+  async listAllTransactions(limit = 1000) {
     const txs = await this.txRepo.find({
       order: { created_at: 'DESC' },
+      take: limit,
     });
     return txs.map((tx) => this.toResponse(tx));
   }
@@ -354,6 +362,17 @@ export class PaymentsService {
   }
 
   private toResponse(tx: Transaction) {
+    // Robust date conversion to prevent 500 errors if DB returns strings
+    const ensureIso = (d: any) => {
+      if (!d) return null;
+      try {
+        const date = d instanceof Date ? d : new Date(d);
+        return isNaN(date.getTime()) ? null : date.toISOString();
+      } catch {
+        return null;
+      }
+    };
+
     return {
       id: tx.id,
       unitNo: tx.unit_no,
@@ -361,8 +380,8 @@ export class PaymentsService {
       method: tx.method,
       status: tx.status,
       gatewayReference: tx.gateway_reference,
-      createdAt: tx.created_at?.toISOString(),
-      confirmedAt: tx.confirmed_at?.toISOString() ?? null,
+      createdAt: ensureIso(tx.created_at),
+      confirmedAt: ensureIso(tx.confirmed_at),
     };
   }
 

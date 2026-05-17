@@ -48,10 +48,11 @@ export class GatewayService {
       detectedAt: tx.confirmedAt || tx.createdAt,
     }));
 
-    return [...topupNotifs, ...anomalies].sort(
-      (a, b) =>
-        new Date(b.detectedAt).getTime() - new Date(a.detectedAt).getTime(),
-    );
+    return [...topupNotifs, ...anomalies].sort((a, b) => {
+      const timeA = a.detectedAt ? new Date(a.detectedAt).getTime() : 0;
+      const timeB = b.detectedAt ? new Date(b.detectedAt).getTime() : 0;
+      return timeB - timeA;
+    });
   }
 
   getMobileTrends(unitNo: string, period: 'daily' | 'monthly') {
@@ -91,7 +92,14 @@ export class GatewayService {
   }
 
   private publishRetained(topic: string, payload: Buffer): void {
-    const raw = (this.mqttClient as unknown as { mqttClient?: { connected?: boolean; publish?: (...a: unknown[]) => void } }).mqttClient;
+    const raw = (
+      this.mqttClient as unknown as {
+        mqttClient?: {
+          connected?: boolean;
+          publish?: (...a: unknown[]) => void;
+        };
+      }
+    ).mqttClient;
     if (raw?.connected && raw.publish) {
       raw.publish(topic, payload, { retain: true, qos: 1 });
     } else {

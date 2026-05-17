@@ -39,21 +39,30 @@ export class TelegramController {
     // /start command — enter linking flow
     if (text === '/start' || text.startsWith('/start ')) {
       this.pending.set(chatId, true);
-      await this.reply(chatId,
+      await this.reply(
+        chatId,
         `👋 Hi ${firstName}! I'm the NetFlow notification bot.\n\n` +
-        `Please reply with your *registered email address* to link this Telegram account and start receiving alerts.`,
+          `Please reply with your *registered email address* to link this Telegram account and start receiving alerts.`,
       );
       return;
     }
 
     // /unlink command
     if (text === '/unlink') {
-      const resident = await this.residentsService.findByTelegramChatId(String(chatId));
+      const resident = await this.residentsService.findByTelegramChatId(
+        String(chatId),
+      );
       if (resident) {
         await this.residentsService.setTelegramChatId(resident.email, null);
-        await this.reply(chatId, '✅ Your Telegram account has been unlinked from NetFlow.');
+        await this.reply(
+          chatId,
+          '✅ Your Telegram account has been unlinked from NetFlow.',
+        );
       } else {
-        await this.reply(chatId, 'No NetFlow account is linked to this Telegram.');
+        await this.reply(
+          chatId,
+          'No NetFlow account is linked to this Telegram.',
+        );
       }
       return;
     }
@@ -63,13 +72,17 @@ export class TelegramController {
       const email = text.toLowerCase().trim();
 
       if (!email.includes('@')) {
-        await this.reply(chatId, '❌ That doesn\'t look like a valid email. Please try again.');
+        await this.reply(
+          chatId,
+          "❌ That doesn't look like a valid email. Please try again.",
+        );
         return;
       }
 
       const resident = await this.residentsService.findByEmail(email);
       if (!resident) {
-        await this.reply(chatId,
+        await this.reply(
+          chatId,
           `❌ No account found for *${email}*.\n\nMake sure it matches the email registered by your building admin.`,
         );
         return;
@@ -79,15 +92,17 @@ export class TelegramController {
       await this.residentsService.setTelegramChatId(email, String(chatId));
       this.logger.log(`Telegram linked: ${email} → chatId ${chatId}`);
 
-      await this.reply(chatId,
+      await this.reply(
+        chatId,
         `✅ *Linked!* Your account (${email}) will now receive NetFlow alerts here.\n\n` +
-        `Send /unlink at any time to disconnect.`,
+          `Send /unlink at any time to disconnect.`,
       );
       return;
     }
 
     // Unknown message — prompt the user
-    await this.reply(chatId,
+    await this.reply(
+      chatId,
       `Send /start to link your NetFlow account, or /unlink to disconnect.`,
     );
   }
