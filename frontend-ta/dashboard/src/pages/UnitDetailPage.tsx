@@ -165,6 +165,8 @@ export default function UnitDetailPage() {
 
     const [energyStats, setEnergyStats] = useState({ total_kwh: 0, active_power_w: 0 });
     const [waterStats, setWaterStats] = useState({ total_m3: 0, flow_rate_lpm: 0 });
+    const [electricityTariff, setElectricityTariff] = useState(1444.7);
+    const [waterTariff, setWaterTariff] = useState(5000);
 
     useEffect(() => {
         if (!id) return;
@@ -200,6 +202,16 @@ export default function UnitDetailPage() {
             })
             .catch(() => {})
             .finally(() => setLoadingInfo(false));
+
+        fetchApi('/admin/tariff')
+            .then((tariffs: Array<{ utility_type: string; price_per_unit: number; effective_date: string }>) => {
+                const today = new Date().toISOString().split('T')[0];
+                const elec = tariffs.find(t => t.utility_type === 'electricity' && t.effective_date <= today);
+                const water = tariffs.find(t => t.utility_type === 'water' && t.effective_date <= today);
+                if (elec) setElectricityTariff(Number(elec.price_per_unit));
+                if (water) setWaterTariff(Number(water.price_per_unit));
+            })
+            .catch(() => {});
     }, [id]);
 
     // Load historical trends
@@ -488,36 +500,51 @@ export default function UnitDetailPage() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-1 space-y-6">
                     <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-6 relative overflow-hidden">
-                        <div className="flex items-center gap-3 mb-2">
+                        <div className="flex items-center gap-3 mb-3">
                             <div className="p-2 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg text-emerald-600 dark:text-emerald-400">
                                 <Wallet className="w-5 h-5" />
                             </div>
-                            <h3 className="font-semibold text-gray-900 dark:text-gray-100">Sisa Saldo</h3>
+                            <h3 className="font-semibold text-gray-900 dark:text-gray-100">Sisa Token</h3>
                         </div>
-                        <p className={cn(
-                            "text-3xl font-bold mt-2",
-                            (unitInfo.balance || 0) < 20000 ? "text-red-600 dark:text-red-400" : "text-gray-900 dark:text-gray-100"
-                        )}>
-                            Rp{(unitInfo.balance || 0).toLocaleString('id-ID')}
-                        </p>
+                        <div className="space-y-3">
+                            <div className="flex items-center gap-3">
+                                <div className="p-1.5 bg-amber-50 dark:bg-amber-900/20 rounded-md text-amber-600 dark:text-amber-400">
+                                    <Zap className="w-3.5 h-3.5" />
+                                </div>
+                                <div>
+                                    <p className={cn("text-xl font-bold leading-tight", (unitInfo.balance || 0) < 20000 ? "text-red-600 dark:text-red-400" : "text-gray-900 dark:text-gray-100")}>
+                                        {(electricityTariff > 0 ? (unitInfo.balance || 0) / electricityTariff : 0).toFixed(2)} <span className="text-sm font-medium text-gray-500 dark:text-gray-400">kWh</span>
+                                    </p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">Listrik tersisa</p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <div className="p-1.5 bg-cyan-50 dark:bg-cyan-900/20 rounded-md text-cyan-600 dark:text-cyan-400">
+                                    <Droplets className="w-3.5 h-3.5" />
+                                </div>
+                                <div>
+                                    <p className={cn("text-xl font-bold leading-tight", (unitInfo.balance || 0) < 20000 ? "text-red-600 dark:text-red-400" : "text-gray-900 dark:text-gray-100")}>
+                                        {(waterTariff > 0 ? (unitInfo.balance || 0) / waterTariff : 0).toFixed(2)} <span className="text-sm font-medium text-gray-500 dark:text-gray-400">m³</span>
+                                    </p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">Air tersisa</p>
+                                </div>
+                            </div>
+                        </div>
                         {(unitInfo.balance || 0) < 20000 && (
-                            <p className="text-xs text-red-500 font-medium mt-2 animate-pulse">
+                            <p className="text-xs text-red-500 font-medium mt-3 animate-pulse">
                                 Saldo kritis, mohon segera top-up!
                             </p>
                         )}
                     </div>
 
                     {/* Utility Controls */}
-                    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-6">
-                        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Utility Controls</h2>
-
-                        <div className="p-4 rounded-lg bg-gray-50 dark:bg-gray-700/50 border border-gray-100 dark:border-gray-600">
-                            <div className="flex items-center justify-between mb-2">
+                    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-5">
+                        <h2 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">Utility Controls</h2>
+                        <div className="space-y-1">
+                            <div className="flex items-center justify-between py-2">
                                 <div className="flex items-center gap-2">
-                                    <div className={cn("p-2 rounded-lg", powerState ? "bg-primary/10 dark:bg-primary/20 text-primary" : "bg-gray-200 dark:bg-gray-600 text-gray-500 dark:text-gray-400")}>
-                                        <Power className="w-5 h-5" />
-                                    </div>
-                                    <span className="font-medium text-gray-900 dark:text-gray-100">Power Supply</span>
+                                    <Power className={cn("w-4 h-4", powerState ? "text-primary" : "text-gray-400 dark:text-gray-500")} />
+                                    <span className="text-sm font-medium text-gray-800 dark:text-gray-200">Power Supply</span>
                                 </div>
                                 <label className={cn("relative inline-flex items-center", isOnline ? "cursor-pointer" : "cursor-not-allowed opacity-50")}>
                                     <input
@@ -530,18 +557,10 @@ export default function UnitDetailPage() {
                                     <div className="w-11 h-6 bg-gray-200 dark:bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
                                 </label>
                             </div>
-                            <p className="text-xs text-gray-500 dark:text-gray-400 ml-1">
-                                {powerState ? "Main grid connected." : "Power disconnected."}
-                            </p>
-                        </div>
-
-                        <div className="p-4 rounded-lg bg-gray-50 dark:bg-gray-700/50 border border-gray-100 dark:border-gray-600">
-                            <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center justify-between py-2">
                                 <div className="flex items-center gap-2">
-                                    <div className={cn("p-2 rounded-lg", waterState ? "bg-cyan-100 dark:bg-cyan-900/30 text-cyan-600 dark:text-cyan-400" : "bg-gray-200 dark:bg-gray-600 text-gray-500 dark:text-gray-400")}>
-                                        <Droplets className="w-5 h-5" />
-                                    </div>
-                                    <span className="font-medium text-gray-900 dark:text-gray-100">Water Supply</span>
+                                    <Droplets className={cn("w-4 h-4", waterState ? "text-cyan-500" : "text-gray-400 dark:text-gray-500")} />
+                                    <span className="text-sm font-medium text-gray-800 dark:text-gray-200">Water Supply</span>
                                 </div>
                                 <label className={cn("relative inline-flex items-center", isOnline ? "cursor-pointer" : "cursor-not-allowed opacity-50")}>
                                     <input
@@ -554,11 +573,7 @@ export default function UnitDetailPage() {
                                     <div className="w-11 h-6 bg-gray-200 dark:bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-cyan-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500"></div>
                                 </label>
                             </div>
-                            <p className="text-xs text-gray-500 dark:text-gray-400 ml-1">
-                                {waterState ? "Valve OPEN." : "Valve CLOSED."}
-                            </p>
                         </div>
-
                     </div>
 
                     {/* Stats */}
@@ -585,6 +600,11 @@ export default function UnitDetailPage() {
                                     <p className="text-lg font-semibold text-gray-700 dark:text-gray-300">
                                         {energyStats.total_kwh.toFixed(2)} <span className="text-sm font-medium text-gray-500 dark:text-gray-400">kWh</span>
                                     </p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                        Sisa: <span className={cn("font-semibold", (unitInfo.balance || 0) < 20000 ? "text-red-500 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400")}>
+                                            {(electricityTariff > 0 ? (unitInfo.balance || 0) / electricityTariff : 0).toFixed(2)} kWh
+                                        </span>
+                                    </p>
                                 </div>
                             </div>
                         </div>
@@ -610,6 +630,11 @@ export default function UnitDetailPage() {
                                     <p className="text-xs text-gray-500 dark:text-gray-400 uppercase font-medium">Total Volume</p>
                                     <p className="text-lg font-semibold text-gray-700 dark:text-gray-300">
                                         {waterStats.total_m3.toFixed(2)} <span className="text-sm font-medium text-gray-500 dark:text-gray-400">m³</span>
+                                    </p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                        Sisa: <span className={cn("font-semibold", (unitInfo.balance || 0) < 20000 ? "text-red-500 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400")}>
+                                            {(waterTariff > 0 ? (unitInfo.balance || 0) / waterTariff : 0).toFixed(2)} m³
+                                        </span>
                                     </p>
                                 </div>
                             </div>

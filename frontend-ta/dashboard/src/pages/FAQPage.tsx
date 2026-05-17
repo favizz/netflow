@@ -150,6 +150,10 @@ const FAQ_DATA: FAQSection[] = [
                 answer: "Tampering is detected when the device's physical case-open switch (tamper switch) is triggered, signalled via a flag bit in the MQTT telemetry payload. This indicates someone has physically opened the meter enclosure. An anomaly record is created and a notification is dispatched immediately.",
             },
             {
+                question: "Do anomaly notifications still get sent when the valve or relay is turned off?",
+                answer: "Yes. Anomaly detection runs independently of the relay and valve state. Turning off the relay or valve does not suspend monitoring. The system will still detect and notify for events such as device offline, voltage anomaly, and sensor malfunction. Some anomalies — like MCB trip or water leak — are less likely to trigger when utilities are off because no power or water is flowing, but the pipeline continues to run. Importantly, if sensors report consumption while the relay is OFF and the balance is zero, the system flags a 'jailbreak' anomaly, indicating a potential bypass of the metering system.",
+            },
+            {
                 question: "How do dashboard notifications work?",
                 answer: "The bell icon in the header shows unread alerts sourced from the audit log — specifically anomaly events and failed device/firmware commands. Clicking the bell opens the panel. Closing the panel marks all shown notifications as read; they will no longer appear on next visit. Read state is stored in localStorage.",
             },

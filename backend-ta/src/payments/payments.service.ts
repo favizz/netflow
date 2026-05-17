@@ -44,6 +44,11 @@ export class PaymentsService {
     const unit = await this.unitService.findByUnitNo(dto.unitNo);
     const id = `TRX-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
+    const totalAmount = dto.electricityAmount + dto.waterAmount;
+    if (totalAmount < 1000) {
+      throw new Error('Total amount must be at least Rp 1.000');
+    }
+
     const isProd =
       this.configService.get<string>('MIDTRANS_IS_PRODUCTION') === 'true';
     const serverKey = this.configService.get<string>('MIDTRANS_SERVER_KEY');
@@ -60,7 +65,7 @@ export class PaymentsService {
       payment_type: dto.method === 'transfer' ? 'bank_transfer' : 'gopay',
       transaction_details: {
         order_id: id,
-        gross_amount: dto.amount,
+        gross_amount: totalAmount,
       },
       customer_details: {
         first_name: 'Unit',
@@ -93,7 +98,9 @@ export class PaymentsService {
         id,
         unit_id: unit.id,
         unit_no: dto.unitNo,
-        amount_rp: dto.amount,
+        amount_rp: totalAmount,
+        electricity_amount_rp: dto.electricityAmount,
+        water_amount_rp: dto.waterAmount,
         method: dto.method,
         status: 'pending',
         gateway_reference: mResponse.transaction_id || mResponse.order_id,
@@ -106,7 +113,13 @@ export class PaymentsService {
         'TOKEN_PURCHASE',
         'transaction',
         id,
-        { amount: dto.amount, method: dto.method, status: 'pending' },
+        {
+          electricity_amount: dto.electricityAmount,
+          water_amount: dto.waterAmount,
+          total: totalAmount,
+          method: dto.method,
+          status: 'pending',
+        },
         'info',
       );
 
@@ -188,11 +201,12 @@ export class PaymentsService {
         );
         if (updatedUnit.device_id) {
           const payload = encodeTopup({
-            amount: Number(tx.amount_rp),
+            electricAmount: Number(tx.electricity_amount_rp),
+            waterAmount: Number(tx.water_amount_rp),
             timestamp: Math.floor(Date.now() / 1000),
           });
           this.logger.log(
-            `Pushing top-up of Rp ${tx.amount_rp} to device [${updatedUnit.device_id}]`,
+            `Pushing top-up to device [${updatedUnit.device_id}]: elec=Rp${tx.electricity_amount_rp} water=Rp${tx.water_amount_rp}`,
           );
           this.mqttClient.emit(
             `device/${updatedUnit.device_id}/topup`,
@@ -200,11 +214,17 @@ export class PaymentsService {
           );
         }
         if (updatedUnit.resident_email) {
+          const elecLine = Number(tx.electricity_amount_rp) > 0
+            ? `⚡ Listrik: Rp ${Number(tx.electricity_amount_rp).toLocaleString('id-ID')}\n`
+            : '';
+          const waterLine = Number(tx.water_amount_rp) > 0
+            ? `💧 Air: Rp ${Number(tx.water_amount_rp).toLocaleString('id-ID')}\n`
+            : '';
           void this.notificationService
             .sendResidentNotification(
               updatedUnit.resident_email,
               `[NetFlow] Top-up Berhasil — Unit ${tx.unit_no}`,
-              `✅ Pembayaran Rp ${Number(tx.amount_rp).toLocaleString('id-ID')} berhasil dikonfirmasi.\n\nUnit: ${tx.unit_no}\nMetode: ${tx.method}\nID Transaksi: ${tx.id}\n\nSaldo akan segera diperbarui.`,
+              `✅ Pembayaran Rp ${Number(tx.amount_rp).toLocaleString('id-ID')} berhasil dikonfirmasi.\n\n${elecLine}${waterLine}\nUnit: ${tx.unit_no}\nMetode: ${tx.method}\nID Transaksi: ${tx.id}\n\nSaldo akan segera diperbarui.`,
             )
             .catch(() => {});
         }
@@ -246,20 +266,27 @@ export class PaymentsService {
     );
     if (updatedUnit.device_id) {
       const payload = encodeTopup({
-        amount: Number(tx.amount_rp),
+        electricAmount: Number(tx.electricity_amount_rp),
+        waterAmount: Number(tx.water_amount_rp),
         timestamp: Math.floor(Date.now() / 1000),
       });
       this.logger.log(
-        `Pushing top-up of Rp ${tx.amount_rp} to device [${updatedUnit.device_id}]`,
+        `Pushing top-up to device [${updatedUnit.device_id}]: elec=Rp${tx.electricity_amount_rp} water=Rp${tx.water_amount_rp}`,
       );
       this.mqttClient.emit(`device/${updatedUnit.device_id}/topup`, payload);
     }
     if (updatedUnit.resident_email) {
+      const elecLine = Number(tx.electricity_amount_rp) > 0
+        ? `⚡ Listrik: Rp ${Number(tx.electricity_amount_rp).toLocaleString('id-ID')}\n`
+        : '';
+      const waterLine = Number(tx.water_amount_rp) > 0
+        ? `💧 Air: Rp ${Number(tx.water_amount_rp).toLocaleString('id-ID')}\n`
+        : '';
       void this.notificationService
         .sendResidentNotification(
           updatedUnit.resident_email,
           `[NetFlow] Top-up Berhasil — Unit ${tx.unit_no}`,
-          `✅ Pembayaran Rp ${Number(tx.amount_rp).toLocaleString('id-ID')} berhasil dikonfirmasi.\n\nUnit: ${tx.unit_no}\nMetode: ${tx.method}\nID Transaksi: ${tx.id}\n\nSaldo akan segera diperbarui.`,
+          `✅ Pembayaran Rp ${Number(tx.amount_rp).toLocaleString('id-ID')} berhasil dikonfirmasi.\n\n${elecLine}${waterLine}\nUnit: ${tx.unit_no}\nMetode: ${tx.method}\nID Transaksi: ${tx.id}\n\nSaldo akan segera diperbarui.`,
         )
         .catch(() => {});
     }
@@ -345,7 +372,9 @@ export class PaymentsService {
       `Transaction ID: ${tx.id}`,
       `Gateway Ref:    ${tx.gateway_reference ?? '-'}`,
       `Unit:           ${tx.unit_no}`,
-      `Amount:         Rp ${Number(tx.amount_rp).toLocaleString('id-ID')}`,
+      `Electricity:    Rp ${Number(tx.electricity_amount_rp).toLocaleString('id-ID')}`,
+      `Water:          Rp ${Number(tx.water_amount_rp).toLocaleString('id-ID')}`,
+      `Total:          Rp ${Number(tx.amount_rp).toLocaleString('id-ID')}`,
       `Method:         ${tx.method}`,
       `Status:         ${tx.status}`,
       `Created:        ${tx.created_at?.toISOString()}`,

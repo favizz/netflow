@@ -318,12 +318,17 @@ export const api = {
     return request<PaymentTransaction[]>(`/gateway/mobile/${encodeURIComponent(unitNo)}/transactions`);
   },
 
-  initiateTopup(unitNo: string, amount: number, method: 'qris' | 'transfer' | 'ewallet') {
+  initiateTopup(
+    unitNo: string,
+    electricityAmount: number,
+    waterAmount: number,
+    method: 'qris' | 'transfer' | 'ewallet',
+  ) {
     return request<{ transactionId: string; checkoutUrl: string; status: string; vaNumber?: string; qrUrl?: string }>(
       `/gateway/mobile/${encodeURIComponent(unitNo)}/topup/initiate`,
       {
         method: 'POST',
-        body: JSON.stringify({ amount, method }),
+        body: JSON.stringify({ electricityAmount, waterAmount, method }),
       },
     );
   },

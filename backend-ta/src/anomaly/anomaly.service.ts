@@ -63,11 +63,9 @@ export class AnomalyService implements OnModuleInit {
   }
 
   async getAllAnomaliesForUnit(unitNo: string): Promise<AnomalyItem[]> {
-    if (!this.anomalyCache.has(unitNo)) {
-      const all = await this.computeAll(unitNo);
-      this.anomalyCache.set(unitNo, all);
-    }
-    return this.anomalyCache.get(unitNo) ?? [];
+    const all = await this.computeAll(unitNo);
+    this.anomalyCache.set(unitNo, all);
+    return all;
   }
 
   checkOnTelemetry(

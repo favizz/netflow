@@ -135,11 +135,11 @@ describe('AnomalyService', () => {
       expect(results.some((a) => a.target === 'admin')).toBe(true);
     });
 
-    it('returns from cache on second call without re-querying DB', async () => {
+    it('always recomputes on each call to return fresh results', async () => {
       await service.getAllAnomaliesForUnit('A-101');
       await service.getAllAnomaliesForUnit('A-101');
 
-      expect(mockUnitService.findByUnitNo).toHaveBeenCalledTimes(1);
+      expect(mockUnitService.findByUnitNo).toHaveBeenCalledTimes(2);
     });
   });
 
