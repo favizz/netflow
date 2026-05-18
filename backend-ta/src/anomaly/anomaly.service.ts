@@ -398,7 +398,7 @@ export class AnomalyService implements OnModuleInit {
       });
     }
 
-    if (unit.token_water > 0 && unit.token_water < 1) {
+    if (unit.token_water > 0 && unit.token_water < LOW_TOKEN_THRESHOLD_M3) {
       anomalies.push({
         anomalyType: 'low_balance',
         severity: 'warning',
@@ -406,7 +406,7 @@ export class AnomalyService implements OnModuleInit {
         message: `Token air hampir habis: ${Number(unit.token_water).toFixed(2)} m³. Segera top-up.`,
         metadata: {
           token_m3: unit.token_water,
-          threshold_m3: 1,
+          threshold_m3: LOW_TOKEN_THRESHOLD_M3,
         },
         detectedAt: now,
       });
@@ -421,7 +421,7 @@ export class AnomalyService implements OnModuleInit {
       // Logic fix: 0 is a VALID reading (sensor is alive, just no load).
       // Sensor malfunction only fires if data is strictly NULL or NaN (missing).
       const allNull = last10.every((r) => {
-        const isNull = (v: any) => v === null || v === undefined || isNaN(v);
+        const isNull = (v: unknown) => v === null || v === undefined || isNaN(Number(v));
         return isNull(r.power) && isNull(r.voltage) && isNull(r.water_flow);
       });
 

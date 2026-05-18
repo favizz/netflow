@@ -10,14 +10,12 @@ import { TelemetryProcessor, TELEMETRY_QUEUE } from './telemetry.processor';
 import { MeterReading } from './entities/device.entity';
 import { Unit } from '../unit/entities/unit.entity';
 import { AnomalyModule } from '../anomaly/anomaly.module';
-import { TariffModule } from '../tariff/tariff.module';
 import { AuditLogModule } from '../audit-log/audit-log.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([MeterReading, Unit]),
     ConfigModule,
-    TariffModule,
     AnomalyModule,
     AuditLogModule,
 

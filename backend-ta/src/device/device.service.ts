@@ -6,7 +6,6 @@ import { decodeTelemetry, encodeCommand } from '../common/binary-codec';
 import { Unit } from '../unit/entities/unit.entity';
 import { MeterReading } from './entities/device.entity';
 import { AnomalyService } from '../anomaly/anomaly.service';
-import { TariffService } from '../tariff/tariff.service';
 
 @Injectable()
 export class DeviceService {
@@ -17,7 +16,6 @@ export class DeviceService {
     private readonly dataSource: DataSource,
     @Inject('MQTT_CLIENT') private readonly mqttClient: ClientProxy,
     private readonly anomalyService: AnomalyService,
-    private readonly tariffService: TariffService,
   ) {}
 
   async saveSensorData(payload: any) {
@@ -45,11 +43,6 @@ export class DeviceService {
     const waterFlow = this.toNumber(data.wf);
     const incomingBalance = data.b !== undefined ? Number(data.b) : null;
 
-    // Fetch current tariffs outside the transaction (read-only, no locking needed)
-    const [energyTariff, waterTariff] = await Promise.all([
-      this.tariffService.findCurrent('electricity'),
-      this.tariffService.findCurrent('water'),
-    ]);
 
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();

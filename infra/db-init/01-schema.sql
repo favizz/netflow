@@ -115,16 +115,18 @@ CREATE INDEX idx_mr_device_time ON meter_readings (device_id, time DESC);
 -- 5. TRANSACTIONS
 -- -----------------------------------------
 CREATE TABLE IF NOT EXISTS transactions (
-  id                VARCHAR(100)                       PRIMARY KEY,
-  unit_id           INT                                NOT NULL,
-  unit_no           VARCHAR(50)                        NOT NULL,
-  amount_rp         DECIMAL(12,2)                      NOT NULL,
-  method            ENUM('qris','transfer','ewallet')  NOT NULL,
-  status            ENUM('pending','success','failed') NOT NULL DEFAULT 'pending',
-  gateway_reference VARCHAR(100)                       NULL,
-  webhook_event_id  VARCHAR(255)                       NULL UNIQUE,
-  created_at        DATETIME                           NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  confirmed_at      DATETIME                           NULL,
+  id                      VARCHAR(100)                       PRIMARY KEY,
+  unit_id                 INT                                NOT NULL,
+  unit_no                 VARCHAR(50)                        NOT NULL,
+  amount_rp               DECIMAL(12,2)                      NOT NULL,
+  electricity_amount_rp   DECIMAL(12,2)                      NOT NULL DEFAULT 0 COMMENT 'Rp portion for electricity tokens',
+  water_amount_rp         DECIMAL(12,2)                      NOT NULL DEFAULT 0 COMMENT 'Rp portion for water tokens',
+  method                  ENUM('qris','transfer','ewallet')  NOT NULL,
+  status                  ENUM('pending','success','failed') NOT NULL DEFAULT 'pending',
+  gateway_reference       VARCHAR(100)                       NULL,
+  webhook_event_id        VARCHAR(255)                       NULL UNIQUE,
+  created_at              DATETIME                           NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  confirmed_at            DATETIME                           NULL,
   CONSTRAINT fk_transactions_unit FOREIGN KEY (unit_id) REFERENCES units(id)
 );
 
