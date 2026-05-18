@@ -15,7 +15,7 @@ USE `srusun-ta252601002`;
 -- 1. anomalies: remove ml_score
 -- ─────────────────────────────────────────────────────────────────────────────
 ALTER TABLE anomalies
-  DROP COLUMN ml_score;
+  DROP COLUMN IF EXISTS ml_score;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 2. audit_logs: rename fields for accuracy (not admin-only anymore)
@@ -27,48 +27,61 @@ ALTER TABLE audit_logs
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 3. auth_refresh_tokens: drop unit scope — sessions are now user-wide
+--    (unit_no/unit_id had no FK constraint; drop is unconditional)
 -- ─────────────────────────────────────────────────────────────────────────────
 ALTER TABLE auth_refresh_tokens
-  DROP FOREIGN KEY fk_refresh_tokens_unit;
-
-ALTER TABLE auth_refresh_tokens
-  DROP COLUMN unit_no,
-  DROP COLUMN unit_id;
+  DROP COLUMN IF EXISTS unit_no,
+  DROP COLUMN IF EXISTS unit_id;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 4. transactions: unit_id is redundant (unit_no is the business key);
 --    amount_rp is redundant (= electricity_amount_rp + water_amount_rp)
+--    (unit_id had no FK constraint; use IF EXISTS for safety)
 -- ─────────────────────────────────────────────────────────────────────────────
 ALTER TABLE transactions
-  DROP FOREIGN KEY fk_transactions_unit;
-
-ALTER TABLE transactions
-  DROP COLUMN unit_id,
-  DROP COLUMN amount_rp;
+  DROP COLUMN IF EXISTS unit_id,
+  DROP COLUMN IF EXISTS amount_rp;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 5. calibration_settings: per-device overrides removed; consolidate to 1 row
+--    Guard: only run the restructure if device_id column still exists.
 -- ─────────────────────────────────────────────────────────────────────────────
 
--- Save global (or any) calibration before restructuring
-SET @_cf = IFNULL(
-  (SELECT flowrate_factor FROM calibration_settings WHERE device_id IS NULL LIMIT 1),
-  IFNULL((SELECT flowrate_factor FROM calibration_settings LIMIT 1), 4.5500)
-);
-SET @_cp = IFNULL(
-  (SELECT power_factor FROM calibration_settings WHERE device_id IS NULL LIMIT 1),
-  IFNULL((SELECT power_factor FROM calibration_settings LIMIT 1), 1.0500)
-);
-SET @_st = IFNULL(
-  (SELECT sampling_time FROM calibration_settings WHERE device_id IS NULL LIMIT 1),
-  IFNULL((SELECT sampling_time FROM calibration_settings LIMIT 1), 5)
-);
+DROP PROCEDURE IF EXISTS _cleanup_calibration;
+DELIMITER //
+CREATE PROCEDURE _cleanup_calibration()
+BEGIN
+  -- Skip entirely if device_id column was already dropped
+  IF EXISTS (
+    SELECT 1 FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME   = 'calibration_settings'
+      AND COLUMN_NAME  = 'device_id'
+  ) THEN
+    -- Save global (or any) row before restructuring
+    SET @_cf = IFNULL(
+      (SELECT flowrate_factor FROM calibration_settings WHERE device_id IS NULL LIMIT 1),
+      IFNULL((SELECT flowrate_factor FROM calibration_settings LIMIT 1), 4.5500)
+    );
+    SET @_cp = IFNULL(
+      (SELECT power_factor FROM calibration_settings WHERE device_id IS NULL LIMIT 1),
+      IFNULL((SELECT power_factor FROM calibration_settings LIMIT 1), 1.0500)
+    );
+    SET @_st = IFNULL(
+      (SELECT sampling_time FROM calibration_settings WHERE device_id IS NULL LIMIT 1),
+      IFNULL((SELECT sampling_time FROM calibration_settings LIMIT 1), 5)
+    );
 
-TRUNCATE TABLE calibration_settings;
+    TRUNCATE TABLE calibration_settings;
 
-INSERT INTO calibration_settings (flowrate_factor, power_factor, sampling_time)
-VALUES (@_cf, @_cp, @_st);
+    INSERT INTO calibration_settings (flowrate_factor, power_factor, sampling_time)
+    VALUES (@_cf, @_cp, @_st);
 
--- Drop unique index then column
-ALTER TABLE calibration_settings DROP INDEX device_id;
-ALTER TABLE calibration_settings DROP COLUMN device_id;
+    ALTER TABLE calibration_settings DROP INDEX IF EXISTS device_id;
+    ALTER TABLE calibration_settings DROP COLUMN device_id;
+  END IF;
+END //
+DELIMITER ;
+
+CALL _cleanup_calibration();
+DROP PROCEDURE IF EXISTS _cleanup_calibration;
