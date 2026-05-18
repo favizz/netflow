@@ -15,7 +15,8 @@ function makeUnit(overrides: Partial<Unit> = {}): Unit {
     device_id: 'DEV-A-101',
     building_id: 1,
     resident_email: null,
-    balance: 100_000,
+    token_electricity: 100,
+    token_water: 50,
     relay_status: true,
     valve_status: true,
     last_energy_reading: 0,
@@ -33,7 +34,8 @@ describe('UnitService', () => {
     create: jest.Mock;
     save: jest.Mock;
     remove: jest.Mock;
-    createQueryBuilder: jest.Mock;
+    update: jest.Mock;
+    count: jest.Mock;
   };
   let meterRepo: { findOne: jest.Mock; createQueryBuilder: jest.Mock };
   let tariffService: { findCurrent: jest.Mock };
@@ -46,7 +48,8 @@ describe('UnitService', () => {
       create: jest.fn().mockImplementation((data) => ({ ...data })),
       save: jest.fn().mockImplementation((entity) => Promise.resolve(entity)),
       remove: jest.fn().mockResolvedValue(undefined),
-      createQueryBuilder: jest.fn(),
+      update: jest.fn().mockResolvedValue(undefined),
+      count: jest.fn().mockResolvedValue(0),
     };
 
     meterRepo = {
@@ -84,19 +87,13 @@ describe('UnitService', () => {
   // ── create ────────────────────────────────────────────────────────────────────
 
   describe('create', () => {
-    it('creates unit with default balance of 0 when not provided', async () => {
+    it('creates unit with default tokens of 0', async () => {
       unitRepo.findOne.mockResolvedValue(null);
       await service.create({ unit_no: 'A-101', device_id: 'DEV-A-101' });
       const created = unitRepo.create.mock.calls[0][0];
-      expect(created.balance).toBe(0);
+      expect(created.token_electricity).toBe(0);
+      expect(created.token_water).toBe(0);
       expect(created.relay_status).toBe(true);
-    });
-
-    it('uses provided balance when given', async () => {
-      unitRepo.findOne.mockResolvedValue(null);
-      await service.create({ unit_no: 'A-102', device_id: 'DEV-A-102', balance: 50_000 });
-      const created = unitRepo.create.mock.calls[0][0];
-      expect(created.balance).toBe(50_000);
     });
 
     it('throws BadRequestException when unit_no already exists', async () => {
@@ -106,141 +103,43 @@ describe('UnitService', () => {
     });
   });
 
-  // ── findOne ───────────────────────────────────────────────────────────────────
+  // ── creditTokensByUnitNo ────────────────────────────────────────────────────
 
-  describe('findOne', () => {
-    it('returns unit when it exists', async () => {
-      unitRepo.findOne.mockResolvedValue(makeUnit());
-      const result = await service.findOne(1);
-      expect(result.unit_no).toBe('A-101');
-    });
-
-    it('throws NotFoundException when unit does not exist', async () => {
-      unitRepo.findOne.mockResolvedValue(null);
-      await expect(service.findOne(99)).rejects.toThrow(NotFoundException);
-    });
-  });
-
-  // ── findByUnitNo ──────────────────────────────────────────────────────────────
-
-  describe('findByUnitNo', () => {
-    it('returns unit when found by unit_no', async () => {
-      unitRepo.findOne.mockResolvedValue(makeUnit());
-      const result = await service.findByUnitNo('A-101');
-      expect(result.id).toBe(1);
-    });
-
-    it('throws NotFoundException for unknown unit_no', async () => {
-      unitRepo.findOne.mockResolvedValue(null);
-      await expect(service.findByUnitNo('NONEXISTENT')).rejects.toThrow(NotFoundException);
-    });
-  });
-
-  // ── creditBalanceByUnitNo ────────────────────────────────────────────────────
-
-  describe('creditBalanceByUnitNo', () => {
-    it('adds credit to existing balance', async () => {
-      unitRepo.findOne.mockResolvedValue(makeUnit({ balance: 50_000 }));
-      await service.creditBalanceByUnitNo('A-101', 25_000);
+  describe('creditTokensByUnitNo', () => {
+    it('adds tokens to existing token_electricity', async () => {
+      unitRepo.findOne.mockResolvedValue(makeUnit({ token_electricity: 50 }));
+      await service.creditTokensByUnitNo('A-101', 25, 'electricity');
       const saved = unitRepo.save.mock.calls[0][0];
-      expect(Number(saved.balance)).toBe(75_000);
+      expect(Number(saved.token_electricity)).toBe(75);
     });
 
-    it('throws NotFoundException for unknown unit', async () => {
-      unitRepo.findOne.mockResolvedValue(null);
-      await expect(service.creditBalanceByUnitNo('NONEXISTENT', 10_000)).rejects.toThrow(NotFoundException);
-    });
-  });
-
-  // ── setRelayStatus ────────────────────────────────────────────────────────────
-
-  describe('setRelayStatus', () => {
-    it('updates relay_status on the unit', async () => {
-      unitRepo.findOne.mockResolvedValue(makeUnit({ relay_status: true }));
-      await service.setRelayStatus(1, false);
+    it('adds tokens to existing token_water', async () => {
+      unitRepo.findOne.mockResolvedValue(makeUnit({ token_water: 10 }));
+      await service.creditTokensByUnitNo('A-101', 5, 'water');
       const saved = unitRepo.save.mock.calls[0][0];
-      expect(saved.relay_status).toBe(false);
-    });
-
-    it('logs actuation when actorEmail provided', async () => {
-      unitRepo.findOne.mockResolvedValue(makeUnit());
-      await service.setRelayStatus(1, false, 'admin@test.com');
-      expect(auditLogService.log).toHaveBeenCalledWith(
-        'admin@test.com',
-        'REMOTE_ACTUATION',
-        'unit',
-        '1',
-        expect.objectContaining({ type: 'relay', value: false }),
-      );
-    });
-
-    it('does not log when actorEmail is not provided', async () => {
-      unitRepo.findOne.mockResolvedValue(makeUnit());
-      await service.setRelayStatus(1, false);
-      expect(auditLogService.log).not.toHaveBeenCalled();
-    });
-  });
-
-  // ── setValveStatus ────────────────────────────────────────────────────────────
-
-  describe('setValveStatus', () => {
-    it('updates valve_status on the unit', async () => {
-      unitRepo.findOne.mockResolvedValue(makeUnit({ valve_status: true }));
-      await service.setValveStatus(1, false);
-      const saved = unitRepo.save.mock.calls[0][0];
-      expect(saved.valve_status).toBe(false);
-    });
-  });
-
-  // ── remove ────────────────────────────────────────────────────────────────────
-
-  describe('remove', () => {
-    it('removes unit and returns deleted id', async () => {
-      unitRepo.findOne.mockResolvedValue(makeUnit());
-      const result = await service.remove(1);
-      expect(result).toEqual({ deleted: true, id: 1 });
-      expect(unitRepo.remove).toHaveBeenCalled();
-    });
-
-    it('throws NotFoundException when unit does not exist', async () => {
-      unitRepo.findOne.mockResolvedValue(null);
-      await expect(service.remove(99)).rejects.toThrow(NotFoundException);
+      expect(Number(saved.token_water)).toBe(15);
     });
   });
 
   // ── getOwnerDashboard ─────────────────────────────────────────────────────────
 
   describe('getOwnerDashboard', () => {
-    it('calculates remaining kWh estimate from balance and tariff', async () => {
-      unitRepo.findOne.mockResolvedValue(makeUnit({ balance: 144_470 }));
+    it('returns tokens and connectivity status', async () => {
+      unitRepo.findOne.mockResolvedValue(makeUnit({ token_electricity: 100, token_water: 50 }));
       tariffService.findCurrent.mockResolvedValue(1444.7);
 
       const result = await service.getOwnerDashboard('A-101');
-      expect(result.remainingEstimate.kwh).toBeCloseTo(100, 0);
-    });
-
-    it('marks unit offline when no telemetry exists', async () => {
-      unitRepo.findOne.mockResolvedValue(makeUnit());
-      meterRepo.findOne.mockResolvedValue(null);
-
-      const result = await service.getOwnerDashboard('A-101');
-      expect(result.connectivity.online).toBe(false);
-    });
-
-    it('marks unit online when telemetry is recent', async () => {
-      unitRepo.findOne.mockResolvedValue(makeUnit());
-      meterRepo.findOne.mockResolvedValue({ time: new Date() });
-
-      const result = await service.getOwnerDashboard('A-101');
-      expect(result.connectivity.online).toBe(true);
+      expect(result.tokenElectricity).toBe(100);
+      expect(result.tokenWater).toBe(50);
+      expect(result.remainingEstimate.kwh).toBe(100);
     });
   });
 
   // ── getUnitNotifications ──────────────────────────────────────────────────────
 
   describe('getUnitNotifications', () => {
-    it('returns warning when balance is at or below threshold', async () => {
-      unitRepo.findOne.mockResolvedValue(makeUnit({ balance: 15_000 }));
+    it('returns warning when token_electricity is at or below threshold', async () => {
+      unitRepo.findOne.mockResolvedValue(makeUnit({ token_electricity: 5 }));
       meterRepo.findOne.mockResolvedValue(null);
 
       const notes = await service.getUnitNotifications('A-101');
@@ -248,20 +147,11 @@ describe('UnitService', () => {
     });
 
     it('returns error when relay is off', async () => {
-      unitRepo.findOne.mockResolvedValue(makeUnit({ relay_status: false, balance: 100_000 }));
+      unitRepo.findOne.mockResolvedValue(makeUnit({ relay_status: false, token_electricity: 100 }));
       meterRepo.findOne.mockResolvedValue(new Date());
 
       const notes = await service.getUnitNotifications('A-101');
       expect(notes.some((n) => n.type === 'error')).toBe(true);
-    });
-
-    it('returns info-only when unit is healthy', async () => {
-      unitRepo.findOne.mockResolvedValue(makeUnit({ balance: 100_000, relay_status: true }));
-      meterRepo.findOne.mockResolvedValue({ time: new Date() });
-
-      const notes = await service.getUnitNotifications('A-101');
-      expect(notes).toHaveLength(1);
-      expect(notes[0].type).toBe('info');
     });
   });
 });

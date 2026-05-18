@@ -81,7 +81,7 @@ export default function ConsumptionChart({
   const displayLabel = activePoint?.label ?? latestPoint?.date ?? ""
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-2 min-h-[220px]">
       {/* Always-visible current value chip */}
       {displayValue != null && (
         <div className="flex items-baseline gap-1.5">

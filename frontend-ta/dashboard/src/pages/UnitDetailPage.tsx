@@ -139,7 +139,7 @@ export default function UnitDetailPage() {
         fontSize: '12px',
     };
 
-    type UnitInfoState = { unit: string; tenant: string; meterSerial: string; status: string; lastUpdate: string; relay_status?: number; valve_status?: number; balance?: number; };
+    type UnitInfoState = { unit: string; tenant: string; meterSerial: string; status: string; lastUpdate: string; relay_status?: number; valve_status?: number; token_electricity?: number; token_water?: number; };
     const [unitInfo, setUnitInfo] = useState<UnitInfoState | null>(null);
     const [loadingInfo, setLoadingInfo] = useState(true);
     const [anomalies, setAnomalies] = useState<any[]>([]);
@@ -177,7 +177,8 @@ export default function UnitDetailPage() {
                     meterSerial: data.device_id,
                     status: "Unknown",
                     lastUpdate: "Wait...",
-                    balance: Number(data.balance || 0),
+                    token_electricity: Number(data.token_electricity || 0),
+                    token_water: Number(data.token_water || 0),
                 });
                 setEnergyStats({ total_kwh: Number(data.last_energy_reading || 0), active_power_w: 0 });
                 setWaterStats({ total_m3: Number(data.last_water_reading || 0), flow_rate_lpm: 0 });
@@ -557,8 +558,8 @@ export default function UnitDetailPage() {
                                         {energyStats.total_kwh.toFixed(2)} <span className="text-sm font-medium text-gray-500 dark:text-gray-400">kWh</span>
                                     </p>
                                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                        Sisa: <span className={cn("font-semibold", (unitInfo.balance || 0) < 20000 ? "text-red-500 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400")}>
-                                            {(electricityTariff > 0 ? (unitInfo.balance || 0) / electricityTariff : 0).toFixed(2)} kWh
+                                        Sisa: <span className={cn("font-semibold", (unitInfo.token_electricity || 0) < 5 ? "text-red-500 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400")}>
+                                            {(unitInfo.token_electricity || 0).toFixed(2)} kWh
                                         </span>
                                     </p>
                                 </div>
@@ -588,8 +589,8 @@ export default function UnitDetailPage() {
                                         {waterStats.total_m3.toFixed(2)} <span className="text-sm font-medium text-gray-500 dark:text-gray-400">m³</span>
                                     </p>
                                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                        Sisa: <span className={cn("font-semibold", (unitInfo.balance || 0) < 20000 ? "text-red-500 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400")}>
-                                            {(waterTariff > 0 ? (unitInfo.balance || 0) / waterTariff : 0).toFixed(2)} m³
+                                        Sisa: <span className={cn("font-semibold", (unitInfo.token_water || 0) < 1 ? "text-red-500 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400")}>
+                                            {(unitInfo.token_water || 0).toFixed(2)} m³
                                         </span>
                                     </p>
                                 </div>

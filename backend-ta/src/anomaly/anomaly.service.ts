@@ -12,7 +12,8 @@ import { ResidentsService } from '../residents/residents.service';
 
 // ── Detection thresholds ────────────────────────────────────────────────────
 const MCB_WATT_LIMIT = 1300;
-const LOW_BALANCE_THRESHOLD = 20_000;
+const LOW_TOKEN_THRESHOLD_KWH = 5;
+const LOW_TOKEN_THRESHOLD_M3 = 1;
 const OFFLINE_THRESHOLD_MS = 10 * 60 * 1_000;
 const VOLTAGE_MIN = 198;
 const VOLTAGE_MAX = 242;
@@ -47,6 +48,8 @@ export class AnomalyService implements OnModuleInit {
     private readonly residentsService: ResidentsService,
   ) {}
 
+  private readonly lastSafetyCommandMs = new Map<string, number>();
+
   onModuleInit() {
     // Lightweight offline check only — does NOT run computeAll for every unit.
     // All other anomaly types are detected on-demand when telemetry arrives.
@@ -67,16 +70,7 @@ export class AnomalyService implements OnModuleInit {
   }
 
   async getAllAnomaliesForUnit(unitNo: string): Promise<AnomalyItem[]> {
-    const all = await this.computeAll(unitNo);
-    // If telemetry arrived in the last 60 s, the device is provably online even if
-    // computeAll still sees old meter_readings (BullMQ processing lag).
-    const lastArrival = this.lastTelemetryArrivalMs.get(unitNo) ?? 0;
-    const result =
-      Date.now() - lastArrival < 60_000
-        ? all.filter((a) => a.anomalyType !== 'device_offline')
-        : all;
-    this.anomalyCache.set(unitNo, result);
-    return result;
+    return await this.computeAll(unitNo);
   }
 
   checkOnTelemetry(
@@ -85,7 +79,8 @@ export class AnomalyService implements OnModuleInit {
     power: number | null,
     waterFlow: number | null,
     voltage: number | null,
-    balance: number,
+    tokenElec: number,
+    tokenWater: number,
     relayStatus: boolean,
   ): void {
     try {
@@ -93,20 +88,17 @@ export class AnomalyService implements OnModuleInit {
       const vv = voltage ?? 0;
       const wf = waterFlow ?? 0;
 
-      // Safety cutoffs - use binary-encoded commands for hardware compatibility
-      if (balance <= 0 && !relayStatus && (pw > 5 || wf > 0.1)) {
-        this.mqttClient.emit(
-          `device/${deviceId}/command`,
-          encodeCommand('relay', 0),
-        );
-      }
-      if (pw > MCB_WATT_LIMIT) {
-        this.mqttClient.emit(
-          `device/${deviceId}/command`,
-          encodeCommand('relay', 0),
-        );
-      }
-      if (vv > VOLTAGE_CRITICAL_HIGH) {
+      // Throttled safety cutoffs - prevents spamming MQTT and consuming resources
+      const lastCmd = this.lastSafetyCommandMs.get(deviceId) ?? 0;
+      const shouldCutoff =
+        ((tokenElec <= 0 || tokenWater <= 0) &&
+          !relayStatus &&
+          (pw > 5 || wf > 0.1)) ||
+        pw > MCB_WATT_LIMIT ||
+        vv > VOLTAGE_CRITICAL_HIGH;
+
+      if (shouldCutoff && Date.now() - lastCmd > 5 * 60 * 1000) {
+        this.lastSafetyCommandMs.set(deviceId, Date.now());
         this.mqttClient.emit(
           `device/${deviceId}/command`,
           encodeCommand('relay', 0),
@@ -114,7 +106,6 @@ export class AnomalyService implements OnModuleInit {
       }
 
       // Receiving telemetry proves the device is online.
-      // Track arrival time (used by getAllAnomaliesForUnit to suppress stale offline).
       this.lastTelemetryArrivalMs.set(unitNo, Date.now());
       void this.resolveOfflineAnomaly(deviceId, unitNo);
 
@@ -140,66 +131,73 @@ export class AnomalyService implements OnModuleInit {
 
   private async checkOfflineUnits(): Promise<void> {
     try {
-      const units = await this.unitService.findAll();
-      for (const unit of units) {
-        if (!unit.device_id) continue;
-        try {
-          const latest = await this.meterRepo.findOne({
-            where: { device_id: unit.device_id },
-            order: { time: 'DESC' },
-          });
-          const ageMs = latest
-            ? Date.now() - new Date(latest.time).getTime()
-            : Infinity;
-          if (ageMs < OFFLINE_THRESHOLD_MS) continue;
+      // Periodic cleanup of stale memory maps to prevent RAM growth
+      this.pruneMaps();
 
-          // Unit is offline — insert DB anomaly and notify once (deduplicated)
-          const existing = await this.anomalyRepo.findOne({
-            where: {
-              device_id: unit.device_id,
-              type: 'device_offline',
-              resolved_at: IsNull(),
-            },
-          });
-          if (!existing) {
-            await this.anomalyRepo.save({
-              device_id: unit.device_id,
-              type: 'device_offline',
-              severity: 'critical',
-              description: `Perangkat unit ${unit.unit_no} offline. Tidak ada data masuk selama ${Math.floor(ageMs / 60_000)} menit.`,
-              action_taken: JSON.stringify({
-                last_seen_ms: ageMs,
-                offline_threshold_ms: OFFLINE_THRESHOLD_MS,
-              }),
+      // Use the generator to stream units in chunks, preventing RAM spikes.
+      for await (const units of this.unitService.streamAllWithDevice(100)) {
+        for (const unit of units) {
+          if (!unit.device_id) continue;
+          try {
+            const latest = await this.meterRepo.findOne({
+              where: { device_id: unit.device_id },
+              order: { time: 'DESC' },
             });
-            if (unit.resident_email) {
-              void this.notificationService
-                .sendResidentNotification(
-                  unit.resident_email,
-                  `[NetFlow Alert] DEVICE_OFFLINE — Unit ${unit.unit_no}`,
-                  `Perangkat unit ${unit.unit_no} offline. Tidak ada data masuk selama ${Math.floor(ageMs / 60_000)} menit.`,
-                )
+            const ageMs = latest
+              ? Date.now() - new Date(latest.time).getTime()
+              : Infinity;
+            if (ageMs < OFFLINE_THRESHOLD_MS) continue;
+
+            // Unit is offline — insert DB anomaly and notify once (deduplicated)
+            const existing = await this.anomalyRepo.findOne({
+              where: {
+                device_id: unit.device_id,
+                type: 'device_offline',
+                resolved_at: IsNull(),
+              },
+            });
+            if (!existing) {
+              await this.anomalyRepo.save({
+                device_id: unit.device_id,
+                type: 'device_offline',
+                severity: 'critical',
+                description: `Perangkat unit ${unit.unit_no} offline. Tidak ada data masuk selama ${Math.floor(ageMs / 60_000)} menit.`,
+                action_taken: JSON.stringify({
+                  last_seen_ms: ageMs,
+                  offline_threshold_ms: OFFLINE_THRESHOLD_MS,
+                }),
+              });
+              if (unit.resident_email) {
+                void this.notificationService
+                  .sendResidentNotification(
+                    unit.resident_email,
+                    `[NetFlow Alert] DEVICE_OFFLINE — Unit ${unit.unit_no}`,
+                    `Perangkat unit ${unit.unit_no} offline. Tidak ada data masuk selama ${Math.floor(ageMs / 60_000)} menit.`,
+                  )
+                  .catch(() => {});
+              }
+              void this.residentsService
+                .findAdmins()
+                .then((admins) => {
+                  for (const admin of admins) {
+                    if (admin.telegram_chat_id) {
+                      void this.notificationService
+                        .sendTelegram(
+                          admin.telegram_chat_id,
+                          `🚨 *[Admin Alert]* DEVICE_OFFLINE — Unit ${unit.unit_no}\n\nTidak ada data masuk selama ${Math.floor(ageMs / 60_000)} menit.`,
+                        )
+                        .catch(() => {});
+                    }
+                  }
+                })
                 .catch(() => {});
             }
-            void this.residentsService
-              .findAdmins()
-              .then((admins) => {
-                for (const admin of admins) {
-                  if (admin.telegram_chat_id) {
-                    void this.notificationService
-                      .sendTelegram(
-                        admin.telegram_chat_id,
-                        `🚨 *[Admin Alert]* DEVICE_OFFLINE — Unit ${unit.unit_no}\n\nTidak ada data masuk selama ${Math.floor(ageMs / 60_000)} menit.`,
-                      )
-                      .catch(() => {});
-                  }
-                }
-              })
-              .catch(() => {});
+          } catch {
+            // Skip unit on error, continue others
           }
-        } catch {
-          // Skip unit on error, continue others
         }
+        // Small yield to event loop
+        await new Promise((resolve) => setTimeout(resolve, 20));
       }
     } catch {
       // DB not ready — retry on next interval
@@ -310,6 +308,25 @@ export class AnomalyService implements OnModuleInit {
     }
   }
 
+  private pruneMaps(): void {
+    const now = Date.now();
+    const staleThreshold = 24 * 60 * 60 * 1000; // 24 hours
+
+    const prune = (map: Map<string, number | any[]>) => {
+      for (const [key, value] of map.entries()) {
+        const timestamp = typeof value === 'number' ? value : now; // Fallback for cache
+        if (now - timestamp > staleThreshold) map.delete(key);
+      }
+    };
+
+    prune(this.lastTelemetryArrivalMs);
+    prune(this.lastTelemetryRefresh);
+    prune(this.lastSafetyCommandMs);
+
+    // Manual prune for anomalyCache since it stores objects, not timestamps
+    if (this.anomalyCache.size > 5000) this.anomalyCache.clear();
+  }
+
   // ── Core detection ─────────────────────────────────────────────────────────
 
   private async computeAll(unitNo: string): Promise<AnomalyItem[]> {
@@ -320,15 +337,15 @@ export class AnomalyService implements OnModuleInit {
 
     // No device assigned → cannot determine online status; skip device_offline.
     if (!unit.device_id) {
-      if (unit.balance > 0 && unit.balance < LOW_BALANCE_THRESHOLD) {
+      if (unit.token_electricity > 0 && unit.token_electricity < LOW_TOKEN_THRESHOLD_KWH) {
         anomalies.push({
           anomalyType: 'low_balance',
           severity: 'warning',
           target: 'resident',
-          message: `Saldo hampir habis: Rp${Math.floor(unit.balance).toLocaleString('id-ID')}. Segera top-up.`,
+          message: `Token listrik hampir habis: ${Number(unit.token_electricity).toFixed(2)} kWh. Segera top-up.`,
           metadata: {
-            balance_rp: unit.balance,
-            threshold_rp: LOW_BALANCE_THRESHOLD,
+            token_kwh: unit.token_electricity,
+            threshold_kwh: LOW_TOKEN_THRESHOLD_KWH,
           },
           detectedAt: now,
         });
@@ -343,46 +360,71 @@ export class AnomalyService implements OnModuleInit {
     });
 
     const latest = readings[0] ?? null;
-    const ageMs = latest
+    const arrivalMs = this.lastTelemetryArrivalMs.get(unit.unit_no) ?? 0;
+    const dbAgeMs = latest
       ? Date.now() - new Date(latest.time).getTime()
       : Infinity;
-    const isOnline = ageMs < OFFLINE_THRESHOLD_MS;
+    
+    // Logic fix: A device is truly offline ONLY if no MQTT has arrived recently 
+    // AND the DB readings are old. This handles timezone mismatches better.
+    const isMqttRecent = Date.now() - arrivalMs < 60_000;
+    const isOnline = isMqttRecent || (dbAgeMs < OFFLINE_THRESHOLD_MS);
 
     if (!isOnline) {
       anomalies.push({
         anomalyType: 'device_offline',
         severity: 'critical',
         target: 'admin',
-        message: `Perangkat unit ${unitNo} offline. Tidak ada data masuk selama ${Math.floor(ageMs / 60_000)} menit.`,
+        message: `Perangkat unit ${unitNo} offline. Tidak ada data masuk selama ${Math.floor(dbAgeMs / 60_000)} menit.`,
         metadata: {
-          last_seen_ms: ageMs,
+          last_seen_ms: dbAgeMs,
           offline_threshold_ms: OFFLINE_THRESHOLD_MS,
         },
         detectedAt: now,
       });
     }
 
-    if (unit.balance > 0 && unit.balance < LOW_BALANCE_THRESHOLD) {
+    if (unit.token_electricity > 0 && unit.token_electricity < 5) {
       anomalies.push({
         anomalyType: 'low_balance',
         severity: 'warning',
         target: 'resident',
-        message: `Saldo hampir habis: Rp${Math.floor(unit.balance).toLocaleString('id-ID')}. Segera top-up.`,
+        message: `Token listrik hampir habis: ${Number(unit.token_electricity).toFixed(2)} kWh. Segera top-up.`,
         metadata: {
-          balance_rp: unit.balance,
-          threshold_rp: LOW_BALANCE_THRESHOLD,
+          token_kwh: unit.token_electricity,
+          threshold_kwh: 5,
         },
         detectedAt: now,
       });
     }
 
-    if (!latest || !isOnline) return anomalies;
+    if (unit.token_water > 0 && unit.token_water < LOW_TOKEN_THRESHOLD_M3) {
+      anomalies.push({
+        anomalyType: 'low_balance',
+        severity: 'warning',
+        target: 'resident',
+        message: `Token air hampir habis: ${Number(unit.token_water).toFixed(2)} m³. Segera top-up.`,
+        metadata: {
+          token_m3: unit.token_water,
+          threshold_m3: LOW_TOKEN_THRESHOLD_M3,
+        },
+        detectedAt: now,
+      });
+    }
+
+    // Don't return early if offline! We still want to see the last detected
+    // anomalies from the data we DO have.
+    if (!latest) return anomalies;
 
     const last10 = readings.slice(0, 10);
     if (last10.length >= 5) {
-      const allNull = last10.every(
-        (r) => r.power === null && r.voltage === null && r.water_flow === null,
-      );
+      // Logic fix: 0 is a VALID reading (sensor is alive, just no load).
+      // Sensor malfunction only fires if data is strictly NULL or NaN (missing).
+      const allNull = last10.every((r) => {
+        const isNull = (v: unknown) => v === null || v === undefined || isNaN(Number(v));
+        return isNull(r.power) && isNull(r.voltage) && isNull(r.water_flow);
+      });
+
       if (allNull) {
         anomalies.push({
           anomalyType: 'sensor_malfunction',
@@ -399,14 +441,19 @@ export class AnomalyService implements OnModuleInit {
     const pw = latest.power ?? 0;
     const wf = latest.water_flow ?? 0;
 
-    if (unit.balance <= 0 && !unit.relay_status && (pw > 5 || wf > 0.1)) {
+    if (
+      (Number(unit.token_electricity) <= 0 || Number(unit.token_water) <= 0) &&
+      !unit.relay_status &&
+      (pw > 5 || wf > 0.1)
+    ) {
       anomalies.push({
         anomalyType: 'jailbreak',
         severity: 'critical',
         target: 'admin',
-        message: `Bypass terdeteksi pada unit ${unitNo}: saldo habis dan relay OFF, sensor masih aktif (${pw.toFixed(0)} W, ${wf.toFixed(2)} L/min).`,
+        message: `Bypass terdeteksi pada unit ${unitNo}: token habis dan relay OFF, sensor masih aktif (${pw.toFixed(0)} W, ${wf.toFixed(2)} L/min).`,
         metadata: {
-          balance_rp: unit.balance,
+          token_kwh: unit.token_electricity,
+          token_m3: unit.token_water,
           relay_status: unit.relay_status,
           power_w: pw,
           flow_lpm: wf,

@@ -1,12 +1,29 @@
 const mqtt = require('mqtt');
 const readline = require('readline');
+const fs = require('fs');
+const path = require('path');
 
-// ── USAGE: node scripts/singleDeviceSimulator.js [UNIT_NO]
-// Example: node scripts/singleDeviceSimulator.js A-0002
+// ── USAGE: node scripts/singleDeviceSimulator.js [UNIT_NO] [BROKER_URL]
+// Example: node scripts/singleDeviceSimulator.js A-0002 mqtt://ta252601002.srusun.id:1883
+
+// Simple .env parser to avoid extra dependencies
+function loadEnv() {
+    const envPath = path.resolve(__dirname, '../../../../.env');
+    if (fs.existsSync(envPath)) {
+        const content = fs.readFileSync(envPath, 'utf8');
+        content.split('\n').forEach(line => {
+            const [key, value] = line.split('=');
+            if (key && value) process.env[key.trim()] = value.trim();
+        });
+    }
+}
+loadEnv();
+
 const UNIT_NO = process.argv[2] || 'A-0002';
 const DEVICE_ID = `DEV-${UNIT_NO}`;
-const BROKER_URL = 'mqtt://broker.emqx.io:1883';
-const INTERVAL_MS = 5000;
+// Use .env broker, then command line arg, then fallback
+const BROKER_URL = process.env.MQTT_BROKER_URL || process.argv[3] || 'mqtt://ta252601002.srusun.id:1883';
+const INTERVAL_MS = 2000;
 
 console.log('====================================================');
 console.log(`🔌 Single Device Simulator`);

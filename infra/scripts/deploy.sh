@@ -8,8 +8,7 @@ export NVM_DIR="${HOME}/.nvm"
 # shellcheck source=/dev/null
 [[ -s "$NVM_DIR/nvm.sh" ]] && source "$NVM_DIR/nvm.sh"
 
-# Add user local bin to PATH (uvicorn, fastapi, etc. installed here via pip)
-export PATH="${HOME}/.local/bin:${PATH}"
+
 
 REPO_DIR="${HOME}/TA-Flowmeter"
 HEALTH_URL="http://localhost:5000/api/health"
@@ -50,12 +49,7 @@ start_backend() {
   cd "$REPO_DIR"
 }
 
-start_ml() {
-  pm2 delete netflow-ml 2>/dev/null || true
-  pm2 start "uvicorn main:app --host 127.0.0.1 --port 8000" \
-       --name netflow-ml --interpreter none \
-       --cwd "${REPO_DIR}/ml-service"
-}
+
 
 rollback() {
   log "FAILED - rolling back to ${PREV_COMMIT:0:8}..."
@@ -87,12 +81,7 @@ npm run build
 cd "$REPO_DIR"
 start_backend
 
-# ── ML service ──────────────────────────────────────────────────────────────
-log "Starting ML service..."
-cd ml-service
-pip3 install -r requirements.txt -q
-cd "$REPO_DIR"
-start_ml
+
 
 # ── Frontends (static builds - nginx serves the dist/ folders) ───────────────
 log "Building dashboard..."

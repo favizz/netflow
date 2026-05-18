@@ -3,8 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 import * as net from 'net';
-import * as http from 'http';
-import * as https from 'https';
+
 
 export type ServiceStatus = 'ok' | 'error' | 'configured' | 'not_configured';
 
@@ -29,7 +28,7 @@ export class HealthService {
   ) {}
 
   async check(): Promise<HealthReport> {
-    const [database, redis, mqtt, ml, smtp, telegram] = await Promise.all([
+    const [database, redis, mqtt, smtp, telegram] = await Promise.all([
       this.checkDatabase(),
       this.checkTcpService(
         'Redis',
@@ -37,23 +36,20 @@ export class HealthService {
         this.cfg.get<number>('REDIS_PORT', 6379),
       ),
       this.checkMqtt(),
-      this.checkMl(),
       Promise.resolve(this.checkSmtp()),
       Promise.resolve(this.checkTelegram()),
     ]);
 
     const critical = database.status === 'error' || mqtt.status === 'error';
-    const degraded = redis.status === 'error' || ml.status === 'error';
+    const degraded = redis.status === 'error';
     const overall = critical ? 'critical' : degraded ? 'degraded' : 'healthy';
 
-    this.logger.log(
-      `Health check: ${overall} (Redis: ${redis.status}, ML: ${ml.status})`,
-    );
+    this.logger.log(`Health check: ${overall} (Redis: ${redis.status})`);
 
     return {
       checkedAt: new Date().toISOString(),
       overall,
-      services: { database, redis, mqtt, ml, smtp, telegram },
+      services: { database, redis, mqtt, smtp, telegram },
     };
   }
 
@@ -97,30 +93,6 @@ export class HealthService {
     const host = match?.[1] ?? 'localhost';
     const port = parseInt(match?.[2] ?? '1883', 10);
     return this.checkTcpService('MQTT', host, port);
-  }
-
-  private checkMl(): Promise<ServiceHealth> {
-    const url = this.cfg.get<string>('ML_SERVICE_URL');
-    if (!url) return Promise.resolve({ status: 'error', latencyMs: null });
-
-    const start = Date.now();
-    const fullUrl = `${url}/health`;
-    const lib = fullUrl.startsWith('https') ? https : http;
-
-    return new Promise((resolve) => {
-      const req = lib.get(fullUrl, { timeout: 3000 }, (res) => {
-        res.resume();
-        resolve({
-          status: res.statusCode === 200 ? 'ok' : 'error',
-          latencyMs: Date.now() - start,
-        });
-      });
-      req.on('timeout', () => {
-        req.destroy();
-        resolve({ status: 'error', latencyMs: null });
-      });
-      req.on('error', () => resolve({ status: 'error', latencyMs: null }));
-    });
   }
 
   private checkSmtp(): ServiceHealth {

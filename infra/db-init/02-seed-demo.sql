@@ -58,30 +58,30 @@ INSERT IGNORE INTO residents (email, name, role) VALUES
 --    C-* → building_id=4 (Tower C)
 -- -----------------------------------------
 
-INSERT IGNORE INTO units (building_id, unit_no, device_id, resident_email, balance, relay_status, valve_status, last_energy_reading, last_water_reading) VALUES
+INSERT IGNORE INTO units (building_id, unit_no, device_id, resident_email, token_electricity, token_water, relay_status, valve_status, last_energy_reading, last_water_reading) VALUES
   -- Tower A
-  (2, 'A-101', 'DEV-A-101', 'cubloxitwo@gmail.com',         150000.00, 1, 1, 0, 0),
-  (2, 'A-102', 'DEV-A-102', 'cubloxitwo@gmail.com',          12000.00, 1, 1, 0, 0),
-  (2, 'A-103', 'DEV-A-103', 'cubloxithree@gmail.com',        75000.00, 1, 1, 0, 0),
-  (2, 'A-201', 'DEV-A-201', 'cubloxifour@gmail.com',        200000.00, 1, 1, 0, 0),
-  (2, 'A-202', 'DEV-A-202', 'cubloxifive@gmail.com',         95000.00, 1, 1, 0, 0),
-  (2, 'A-203', 'DEV-A-203', 'cubloxisix@gmail.com',          30000.00, 1, 1, 0, 0),
-  (2, 'A-301', 'DEV-A-301', 'cubloxiseven@gmail.com',       175000.00, 1, 1, 0, 0),
-  (2, 'A-302', 'DEV-A-302', NULL,                             50000.00, 1, 1, 0, 0),
+  (2, 'A-101', 'DEV-A-101', 'cubloxitwo@gmail.com',         100.0000, 20.0000, 1, 1, 0, 0),
+  (2, 'A-102', 'DEV-A-102', 'cubloxitwo@gmail.com',           8.0000,  5.0000, 1, 1, 0, 0),
+  (2, 'A-103', 'DEV-A-103', 'cubloxithree@gmail.com',        50.0000, 10.0000, 1, 1, 0, 0),
+  (2, 'A-201', 'DEV-A-201', 'cubloxifour@gmail.com',        133.0000, 25.0000, 1, 1, 0, 0),
+  (2, 'A-202', 'DEV-A-202', 'cubloxifive@gmail.com',         63.0000, 12.0000, 1, 1, 0, 0),
+  (2, 'A-203', 'DEV-A-203', 'cubloxisix@gmail.com',          20.0000,  4.0000, 1, 1, 0, 0),
+  (2, 'A-301', 'DEV-A-301', 'cubloxiseven@gmail.com',       116.0000, 22.0000, 1, 1, 0, 0),
+  (2, 'A-302', 'DEV-A-302', NULL,                             33.0000,  8.0000, 1, 1, 0, 0),
   -- Tower B
-  (3, 'B-101', 'DEV-B-101', 'cubloxieight@gmail.com',       120000.00, 1, 1, 0, 0),
-  (3, 'B-102', 'DEV-B-102', 'cubloxinine@gmail.com',         45000.00, 1, 1, 0, 0),
-  (3, 'B-103', 'DEV-B-103', 'cubloxiten@gmail.com',          88000.00, 1, 1, 0, 0),
-  (3, 'B-201', 'DEV-B-201', 'cubloxieleven@gmail.com',      250000.00, 1, 1, 0, 0),
-  (3, 'B-202', 'DEV-B-202', 'cubloxitwelve@gmail.com',        5000.00, 0, 0, 0, 0),
-  (3, 'B-203', 'DEV-B-203', NULL,                             60000.00, 1, 1, 0, 0),
-  (3, 'B-301', 'DEV-B-301', 'cubloxithirteen@gmail.com',    140000.00, 1, 1, 0, 0),
+  (3, 'B-101', 'DEV-B-101', 'cubloxieight@gmail.com',        80.0000, 15.0000, 1, 1, 0, 0),
+  (3, 'B-102', 'DEV-B-102', 'cubloxinine@gmail.com',         30.0000,  6.0000, 1, 1, 0, 0),
+  (3, 'B-103', 'DEV-B-103', 'cubloxiten@gmail.com',          58.0000, 11.0000, 1, 1, 0, 0),
+  (3, 'B-201', 'DEV-B-201', 'cubloxieleven@gmail.com',      166.0000, 30.0000, 1, 1, 0, 0),
+  (3, 'B-202', 'DEV-B-202', 'cubloxitwelve@gmail.com',        3.0000,  0.5000, 0, 0, 0, 0),
+  (3, 'B-203', 'DEV-B-203', NULL,                             40.0000,  9.0000, 1, 1, 0, 0),
+  (3, 'B-301', 'DEV-B-301', 'cubloxithirteen@gmail.com',     93.0000, 18.0000, 1, 1, 0, 0),
   -- Tower C
-  (4, 'C-101', 'DEV-C-101', 'cubloxifourteen@gmail.com',     70000.00, 1, 1, 0, 0),
-  (4, 'C-102', 'DEV-C-102', 'cubloxififteen@gmail.com',     100000.00, 1, 1, 0, 0),
-  (4, 'C-103', 'DEV-C-103', 'cubloxisixteen@gmail.com',      35000.00, 1, 1, 0, 0),
-  (4, 'C-201', 'DEV-C-201', 'cubloxiseventeen@gmail.com',   180000.00, 1, 1, 0, 0),
-  (4, 'C-202', 'DEV-C-202', NULL,                             80000.00, 1, 1, 0, 0);
+  (4, 'C-101', 'DEV-C-101', 'cubloxifourteen@gmail.com',     46.0000, 10.0000, 1, 1, 0, 0),
+  (4, 'C-102', 'DEV-C-102', 'cubloxififteen@gmail.com',      66.0000, 14.0000, 1, 1, 0, 0),
+  (4, 'C-103', 'DEV-C-103', 'cubloxisixteen@gmail.com',      23.0000,  5.0000, 1, 1, 0, 0),
+  (4, 'C-201', 'DEV-C-201', 'cubloxiseventeen@gmail.com',   120.0000, 24.0000, 1, 1, 0, 0),
+  (4, 'C-202', 'DEV-C-202', NULL,                             53.0000, 11.0000, 1, 1, 0, 0);
 
 -- -----------------------------------------
 -- 5. METER READINGS (30 days × hourly per device, 5 devices)
@@ -181,31 +181,31 @@ FROM (
 -- 6. PAYMENT TRANSACTIONS
 -- -----------------------------------------
 
-INSERT IGNORE INTO transactions (id, unit_id, unit_no, amount_rp, method, status, gateway_reference, created_at, confirmed_at) VALUES
-  ('TRX-001', (SELECT id FROM units WHERE unit_no='A-101'), 'A-101', 200000.00, 'qris',     'success', 'PG-100001', DATE_SUB(NOW(), INTERVAL 88 DAY), DATE_SUB(NOW(), INTERVAL 88 DAY) + INTERVAL 5  MINUTE),
-  ('TRX-002', (SELECT id FROM units WHERE unit_no='A-101'), 'A-101', 150000.00, 'transfer', 'success', 'PG-100002', DATE_SUB(NOW(), INTERVAL 65 DAY), DATE_SUB(NOW(), INTERVAL 65 DAY) + INTERVAL 12 MINUTE),
-  ('TRX-003', (SELECT id FROM units WHERE unit_no='A-101'), 'A-101', 100000.00, 'ewallet',  'success', 'PG-100003', DATE_SUB(NOW(), INTERVAL 47 DAY), DATE_SUB(NOW(), INTERVAL 47 DAY) + INTERVAL 2  MINUTE),
-  ('TRX-004', (SELECT id FROM units WHERE unit_no='A-101'), 'A-101', 200000.00, 'qris',     'success', 'PG-100004', DATE_SUB(NOW(), INTERVAL 30 DAY), DATE_SUB(NOW(), INTERVAL 30 DAY) + INTERVAL 8  MINUTE),
-  ('TRX-005', (SELECT id FROM units WHERE unit_no='A-101'), 'A-101',  50000.00, 'ewallet',  'success', 'PG-100005', DATE_SUB(NOW(), INTERVAL 14 DAY), DATE_SUB(NOW(), INTERVAL 14 DAY) + INTERVAL 1  MINUTE),
-  ('TRX-006', (SELECT id FROM units WHERE unit_no='A-101'), 'A-101', 150000.00, 'transfer', 'success', 'PG-100006', DATE_SUB(NOW(), INTERVAL 3  DAY), DATE_SUB(NOW(), INTERVAL 3  DAY) + INTERVAL 9  MINUTE),
-  ('TRX-007', (SELECT id FROM units WHERE unit_no='A-102'), 'A-102', 100000.00, 'qris',     'success', 'PG-100007', DATE_SUB(NOW(), INTERVAL 75 DAY), DATE_SUB(NOW(), INTERVAL 75 DAY) + INTERVAL 4  MINUTE),
-  ('TRX-008', (SELECT id FROM units WHERE unit_no='A-102'), 'A-102',  50000.00, 'ewallet',  'success', 'PG-100008', DATE_SUB(NOW(), INTERVAL 42 DAY), DATE_SUB(NOW(), INTERVAL 42 DAY) + INTERVAL 3  MINUTE),
-  ('TRX-009', (SELECT id FROM units WHERE unit_no='A-102'), 'A-102', 100000.00, 'transfer', 'success', 'PG-100009', DATE_SUB(NOW(), INTERVAL 18 DAY), DATE_SUB(NOW(), INTERVAL 18 DAY) + INTERVAL 15 MINUTE),
-  ('TRX-010', (SELECT id FROM units WHERE unit_no='A-102'), 'A-102', 100000.00, 'qris',     'pending', 'PG-100010', DATE_SUB(NOW(), INTERVAL 2  HOUR), NULL),
-  ('TRX-011', (SELECT id FROM units WHERE unit_no='B-101'), 'B-101', 200000.00, 'qris',     'success', 'PG-100011', DATE_SUB(NOW(), INTERVAL 60 DAY), DATE_SUB(NOW(), INTERVAL 60 DAY) + INTERVAL 6  MINUTE),
-  ('TRX-012', (SELECT id FROM units WHERE unit_no='B-101'), 'B-101',  75000.00, 'ewallet',  'success', 'PG-100012', DATE_SUB(NOW(), INTERVAL 25 DAY), DATE_SUB(NOW(), INTERVAL 25 DAY) + INTERVAL 2  MINUTE),
-  ('TRX-013', (SELECT id FROM units WHERE unit_no='C-101'), 'C-101', 300000.00, 'transfer', 'success', 'PG-100013', DATE_SUB(NOW(), INTERVAL 45 DAY), DATE_SUB(NOW(), INTERVAL 45 DAY) + INTERVAL 10 MINUTE),
-  ('TRX-014', (SELECT id FROM units WHERE unit_no='C-101'), 'C-101', 150000.00, 'qris',     'success', 'PG-100014', DATE_SUB(NOW(), INTERVAL 10 DAY), DATE_SUB(NOW(), INTERVAL 10 DAY) + INTERVAL 3  MINUTE),
-  ('TRX-015', (SELECT id FROM units WHERE unit_no='A-201'), 'A-201', 250000.00, 'transfer', 'success', 'PG-100015', DATE_SUB(NOW(), INTERVAL 55 DAY), DATE_SUB(NOW(), INTERVAL 55 DAY) + INTERVAL 8  MINUTE);
+INSERT IGNORE INTO transactions (id, unit_id, unit_no, amount_rp, electricity_amount_rp, water_amount_rp, method, status, gateway_reference, created_at, confirmed_at) VALUES
+  ('TRX-001', (SELECT id FROM units WHERE unit_no='A-101'), 'A-101', 200000.00, 150000.00,  50000.00, 'qris',     'success', 'PG-100001', DATE_SUB(NOW(), INTERVAL 88 DAY), DATE_SUB(NOW(), INTERVAL 88 DAY) + INTERVAL 5  MINUTE),
+  ('TRX-002', (SELECT id FROM units WHERE unit_no='A-101'), 'A-101', 150000.00, 100000.00,  50000.00, 'transfer', 'success', 'PG-100002', DATE_SUB(NOW(), INTERVAL 65 DAY), DATE_SUB(NOW(), INTERVAL 65 DAY) + INTERVAL 12 MINUTE),
+  ('TRX-003', (SELECT id FROM units WHERE unit_no='A-101'), 'A-101', 100000.00, 100000.00,       0.00, 'ewallet',  'success', 'PG-100003', DATE_SUB(NOW(), INTERVAL 47 DAY), DATE_SUB(NOW(), INTERVAL 47 DAY) + INTERVAL 2  MINUTE),
+  ('TRX-004', (SELECT id FROM units WHERE unit_no='A-101'), 'A-101', 200000.00, 140000.00,  60000.00, 'qris',     'success', 'PG-100004', DATE_SUB(NOW(), INTERVAL 30 DAY), DATE_SUB(NOW(), INTERVAL 30 DAY) + INTERVAL 8  MINUTE),
+  ('TRX-005', (SELECT id FROM units WHERE unit_no='A-101'), 'A-101',  50000.00,  50000.00,       0.00, 'ewallet',  'success', 'PG-100005', DATE_SUB(NOW(), INTERVAL 14 DAY), DATE_SUB(NOW(), INTERVAL 14 DAY) + INTERVAL 1  MINUTE),
+  ('TRX-006', (SELECT id FROM units WHERE unit_no='A-101'), 'A-101', 150000.00, 100000.00,  50000.00, 'transfer', 'success', 'PG-100006', DATE_SUB(NOW(), INTERVAL 3  DAY), DATE_SUB(NOW(), INTERVAL 3  DAY) + INTERVAL 9  MINUTE),
+  ('TRX-007', (SELECT id FROM units WHERE unit_no='A-102'), 'A-102', 100000.00,  70000.00,  30000.00, 'qris',     'success', 'PG-100007', DATE_SUB(NOW(), INTERVAL 75 DAY), DATE_SUB(NOW(), INTERVAL 75 DAY) + INTERVAL 4  MINUTE),
+  ('TRX-008', (SELECT id FROM units WHERE unit_no='A-102'), 'A-102',  50000.00,  50000.00,       0.00, 'ewallet',  'success', 'PG-100008', DATE_SUB(NOW(), INTERVAL 42 DAY), DATE_SUB(NOW(), INTERVAL 42 DAY) + INTERVAL 3  MINUTE),
+  ('TRX-009', (SELECT id FROM units WHERE unit_no='A-102'), 'A-102', 100000.00,  70000.00,  30000.00, 'transfer', 'success', 'PG-100009', DATE_SUB(NOW(), INTERVAL 18 DAY), DATE_SUB(NOW(), INTERVAL 18 DAY) + INTERVAL 15 MINUTE),
+  ('TRX-010', (SELECT id FROM units WHERE unit_no='A-102'), 'A-102', 100000.00,  70000.00,  30000.00, 'qris',     'pending', 'PG-100010', DATE_SUB(NOW(), INTERVAL 2  HOUR), NULL),
+  ('TRX-011', (SELECT id FROM units WHERE unit_no='B-101'), 'B-101', 200000.00, 140000.00,  60000.00, 'qris',     'success', 'PG-100011', DATE_SUB(NOW(), INTERVAL 60 DAY), DATE_SUB(NOW(), INTERVAL 60 DAY) + INTERVAL 6  MINUTE),
+  ('TRX-012', (SELECT id FROM units WHERE unit_no='B-101'), 'B-101',  75000.00,  75000.00,       0.00, 'ewallet',  'success', 'PG-100012', DATE_SUB(NOW(), INTERVAL 25 DAY), DATE_SUB(NOW(), INTERVAL 25 DAY) + INTERVAL 2  MINUTE),
+  ('TRX-013', (SELECT id FROM units WHERE unit_no='C-101'), 'C-101', 300000.00, 200000.00, 100000.00, 'transfer', 'success', 'PG-100013', DATE_SUB(NOW(), INTERVAL 45 DAY), DATE_SUB(NOW(), INTERVAL 45 DAY) + INTERVAL 10 MINUTE),
+  ('TRX-014', (SELECT id FROM units WHERE unit_no='C-101'), 'C-101', 150000.00, 100000.00,  50000.00, 'qris',     'success', 'PG-100014', DATE_SUB(NOW(), INTERVAL 10 DAY), DATE_SUB(NOW(), INTERVAL 10 DAY) + INTERVAL 3  MINUTE),
+  ('TRX-015', (SELECT id FROM units WHERE unit_no='A-201'), 'A-201', 250000.00, 175000.00,  75000.00, 'transfer', 'success', 'PG-100015', DATE_SUB(NOW(), INTERVAL 55 DAY), DATE_SUB(NOW(), INTERVAL 55 DAY) + INTERVAL 8  MINUTE);
 
 -- -----------------------------------------
 -- 7. DEMO ANOMALIES (showcase all detection types)
 -- -----------------------------------------
 
 INSERT IGNORE INTO anomalies (device_id, type, severity, description, action_taken, ml_score, created_at) VALUES
-  ('DEV-B-202', 'low_balance',        'warning',  'Balance below Rp 10.000 threshold',              'Relay cut off automatically',         NULL,   DATE_SUB(NOW(), INTERVAL 2  DAY)),
+  ('DEV-B-202', 'low_balance',        'warning',  'Electricity token below 5 kWh threshold',        'Relay cut off automatically',         NULL,   DATE_SUB(NOW(), INTERVAL 2  DAY)),
   ('DEV-A-103', 'voltage_anomaly',    'warning',  'Voltage 198V - below ±10% of 220V nominal',      'Monitoring; no relay action taken',   NULL,   DATE_SUB(NOW(), INTERVAL 5  DAY)),
   ('DEV-B-101', 'usage_spike',        'warning',  'Energy 3× above 7-day average in 1 hour',        'Flagged for resident review',         NULL,   DATE_SUB(NOW(), INTERVAL 8  DAY)),
   ('DEV-C-101', 'ml_anomaly',         'warning',  'Isolation Forest score 0.82 - statistical outlier','Rule-based checks normal; ML flagged',0.8200, DATE_SUB(NOW(), INTERVAL 3  DAY)),
   ('DEV-A-201', 'sensor_malfunction', 'critical', 'Water flow sensor returning null for 15+ minutes','Device rebooted via MQTT command',    NULL,   DATE_SUB(NOW(), INTERVAL 12 DAY)),
-  ('DEV-A-102', 'low_balance',        'warning',  'Balance Rp 12.000 - approaching zero',           'Resident notified',                   NULL,   DATE_SUB(NOW(), INTERVAL 1  DAY));
+  ('DEV-A-102', 'low_balance',        'warning',  'Water token 1.0 m3 - approaching zero',          'Resident notified',                   NULL,   DATE_SUB(NOW(), INTERVAL 1  DAY));

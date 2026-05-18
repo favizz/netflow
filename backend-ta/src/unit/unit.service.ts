@@ -12,7 +12,7 @@ import { MeterReading } from '../device/entities/device.entity';
 import { TariffService } from '../tariff/tariff.service';
 import { AuditLogService } from '../audit-log/audit-log.service';
 
-const LOW_BALANCE_THRESHOLD_RP = 20_000;
+const LOW_TOKEN_THRESHOLD_KWH = 10;
 
 @Injectable()
 export class UnitService {
@@ -45,7 +45,8 @@ export class UnitService {
       building_id: createUnitDto.building_id ?? 1,
       unit_no: createUnitDto.unit_no,
       device_id: createUnitDto.device_id,
-      balance: createUnitDto.balance ?? 0,
+      token_electricity: 0,
+      token_water: 0,
       relay_status: true,
       last_energy_reading: 0,
       last_water_reading: 0,
@@ -109,9 +110,17 @@ export class UnitService {
     return { deleted: true, id };
   }
 
-  async creditBalanceByUnitNo(unitNo: string, amount: number) {
+  async creditTokensByUnitNo(
+    unitNo: string,
+    amount: number,
+    type: 'electricity' | 'water',
+  ) {
     const unit = await this.findByUnitNo(unitNo);
-    unit.balance = Number(unit.balance) + Number(amount);
+    if (type === 'electricity') {
+      unit.token_electricity = Number(unit.token_electricity) + Number(amount);
+    } else {
+      unit.token_water = Number(unit.token_water) + Number(amount);
+    }
     return this.unitRepo.save(unit);
   }
 
@@ -200,11 +209,11 @@ export class UnitService {
       this.tariffService.findCurrent('water'),
     ]);
 
-    const remainingKwh =
-      energyTariff > 0 ? Number(unit.balance) / energyTariff : 0;
     const averageKwhPerHour = 0.85;
     const estimateHours =
-      averageKwhPerHour > 0 ? remainingKwh / averageKwhPerHour : 0;
+      averageKwhPerHour > 0
+        ? Number(unit.token_electricity) / averageKwhPerHour
+        : 0;
 
     const latest = await this.meterRepo.findOne({
       where: { device_id: unit.device_id },
@@ -222,13 +231,14 @@ export class UnitService {
     return {
       id: unit.id,
       unitNo: unit.unit_no,
-      balance: Number(unit.balance),
+      tokenElectricity: Number(unit.token_electricity),
+      tokenWater: Number(unit.token_water),
       energyTariff,
       waterTariff,
       relayStatus: unit.relay_status,
       valveStatus: unit.valve_status,
       remainingEstimate: {
-        kwh: Number(remainingKwh.toFixed(2)),
+        kwh: Number(unit.token_electricity),
         hours: Number(estimateHours.toFixed(1)),
       },
       connectivity: {
@@ -300,11 +310,11 @@ export class UnitService {
       timestamp: string;
     }> = [];
 
-    if (Number(unit.balance) <= LOW_BALANCE_THRESHOLD_RP) {
+    if (Number(unit.token_electricity) <= LOW_TOKEN_THRESHOLD_KWH) {
       notifications.push({
         type: 'warning',
         message:
-          'Saldo hampir habis. Lakukan top-up untuk menghindari cut-off.',
+          'Token listrik hampir habis. Lakukan top-up untuk menghindari cut-off.',
         timestamp: new Date().toISOString(),
       });
     }
@@ -346,3 +356,4 @@ export class UnitService {
     return notifications;
   }
 }
+

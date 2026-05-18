@@ -23,24 +23,12 @@ async function bootstrap() {
 
   app.setGlobalPrefix('api');
 
-  // ── Bull-board: mount directly on Express at the base path ───────────────────
-  // We use the BullBoard adapter to set the base path correctly for assets.
-  const bullAdapter = app.get<{
-    setBasePath(p: string): void;
-    getRouter(): import('express').RequestHandler;
-  }>('bull_board_adapter');
-  bullAdapter.setBasePath('/api/admin/queues');
-
-  // Security: Ensure BullBoard is mounted AFTER global prefix but via direct Express
-  // to handle the sub-paths (/static, /api) correctly.
-  app.use('/api/admin/queues', bullAdapter.getRouter());
-
   // ── Security headers ────────────────────────────────────────────────────────
   app.use(
     helmet({
       crossOriginEmbedderPolicy: false, // allow WebSocket MQTT from browser
       contentSecurityPolicy: false, // configured per-environment in Nginx
-      crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' }, // allow Google OAuth popup postMessage
+      crossOriginOpenerPolicy: { policy: 'unsafe-none' }, // allow postMessage for OAuth/Popups
     }),
   );
 

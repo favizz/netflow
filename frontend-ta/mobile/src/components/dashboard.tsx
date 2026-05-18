@@ -86,8 +86,8 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
       try {
         const d = await api.getDashboard(unitId)
         if (!active) return
-        setKwh(d.summary.remainingEstimate.kwh)
-        setWater(Math.max(0, d.summary.remainingEstimate.kwh / 2.5))
+        setKwh(d.summary.tokenElectricity)
+        setWater(d.summary.tokenWater)
         setRelayOn(d.summary.relayStatus)
         setValveOpen(d.summary.valveStatus)
         setIsDeviceOnline(d.summary.connectivity?.online ?? false)
