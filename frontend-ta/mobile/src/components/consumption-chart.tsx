@@ -17,6 +17,7 @@ interface ConsumptionChartProps {
   unit: string
   period: "daily" | "weekly" | "monthly"
   color: string
+  isLive?: boolean
 }
 
 // Persistent label that shows on tap/touch instead of hover
@@ -56,6 +57,7 @@ export default function ConsumptionChart({
   dataKey,
   unit,
   color,
+  isLive = false,
 }: ConsumptionChartProps) {
   const [activePoint, setActivePoint] = useState<{ value: number; label: string } | null>(null)
 
@@ -137,7 +139,8 @@ export default function ConsumptionChart({
             strokeWidth={2}
             fill={`url(#fill-${dataKey})`}
             dot={false}
-            activeDot={{ r: 5, fill: color, strokeWidth: 2, stroke: "var(--card)" }}
+            activeDot={isLive ? false : { r: 5, fill: color, strokeWidth: 2, stroke: "var(--card)" }}
+            isAnimationActive={!isLive}
           />
         </AreaChart>
       </ResponsiveContainer>

@@ -222,8 +222,7 @@ export default function ControlCenterPage() {
     // ── Subscribe to ACKs from devices ──────────────────────────────────────
     useEffect(() => {
         if (!MQTT_CONFIG.brokerUrl) return;
-        console.log(`[MQTT] Attempting to connect to ${MQTT_CONFIG.brokerUrl}...`);
-        
+
         let active = true;
         const client = mqtt.connect(MQTT_CONFIG.brokerUrl, {
             ...MQTT_CONFIG.options,
@@ -232,7 +231,6 @@ export default function ControlCenterPage() {
 
         client.on('connect', () => {
             if (!active) return;
-            console.log(`[MQTT] Connected successfully to ${MQTT_CONFIG.brokerUrl}`);
             client.subscribe('device/+/ota_ack');
             client.subscribe('device/+/config_ack');
             client.subscribe('device/+/command_ack');

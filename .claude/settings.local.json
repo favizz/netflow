@@ -10,7 +10,11 @@
       "Bash(npm run *)",
       "Bash(entity)",
       "Bash(grep -E \"^CREATE TABLE|FOREIGN KEY|unit_id|amount_rp|ml_score|admin_email|`entity`|entity_id|device_id\" backup_iot.sql)",
-      "Bash(dir /s /b \"C:\\\\Users\\\\Lenovo\\\\Documents\\\\GitHub\\\\TA-Flowmeter\\\\backend-ta\\\\src\\\\*.entity.ts\")"
+      "Bash(dir /s /b \"C:\\\\Users\\\\Lenovo\\\\Documents\\\\GitHub\\\\TA-Flowmeter\\\\backend-ta\\\\src\\\\*.entity.ts\")",
+      "Bash(dir \"C:\\\\Users\\\\Lenovo\\\\Documents\\\\GitHub\\\\TA-Flowmeter\\\\frontend-ta\\\\dashboard\\\\scripts\")",
+      "Bash(xargs grep -l \"MQTT\\\\|mqtt\\\\|water\\\\|grey\\\\|gray\")",
+      "Bash(dir \"C:\\\\Users\\\\Lenovo\\\\Documents\\\\GitHub\\\\TA-Flowmeter\\\\frontend-ta\\\\mobile\\\\src\\\\assets\")",
+      "Bash(dir \"C:\\\\Users\\\\Lenovo\\\\Documents\\\\GitHub\\\\TA-Flowmeter\\\\frontend-ta\\\\mobile\\\\public\")"
     ]
   }
 }

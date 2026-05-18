@@ -7,7 +7,7 @@ import logoWhite from "@/assets/netflow-logo-white.png"
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string
 
-// Module-level flag: initialize() must only be called once per page load
+// GIS allows exactly one initialize() call per page lifecycle
 let gsiInitialized = false
 
 declare global {
@@ -33,11 +33,17 @@ export default function LoginForm({ onGoogleLogin }: LoginFormProps) {
   const { resolvedTheme } = useTheme()
   const buttonRef = useRef<HTMLDivElement>(null)
 
-  const handleCredential = async (response: { credential: string }) => {
+  // Keep prop ref current so the stable handler never goes stale
+  const onLoginRef = useRef(onGoogleLogin)
+  onLoginRef.current = onGoogleLogin
+
+  // Single stable function instance — GIS stores this reference from initialize().
+  // Reads from onLoginRef so theme/prop changes never require re-initialization.
+  const stableHandler = useRef(async (response: { credential: string }) => {
     setIsLoading(true)
     setError("")
     try {
-      await onGoogleLogin(response.credential)
+      await onLoginRef.current(response.credential)
     } catch (err) {
       const raw = err instanceof Error ? err.message : "Login gagal"
       const parsed = (() => { try { return JSON.parse(raw) as { message?: string } } catch { return null } })()
@@ -45,37 +51,41 @@ export default function LoginForm({ onGoogleLogin }: LoginFormProps) {
     } finally {
       setIsLoading(false)
     }
-  }
+  })
 
   useEffect(() => {
-    const init = () => {
+    const render = () => {
       if (!window.google || !buttonRef.current || !GOOGLE_CLIENT_ID) return
+
       if (!gsiInitialized) {
         gsiInitialized = true
         window.google.accounts.id.initialize({
           client_id: GOOGLE_CLIENT_ID,
-          callback: handleCredential,
+          callback: stableHandler.current,
         })
       }
+
+      // getBoundingClientRect is reliable post-layout; offsetWidth can be 0 on
+      // first paint and causes Google's button endpoint to return HTTP 400.
+      const w = Math.max(Math.round(buttonRef.current.getBoundingClientRect().width), 260)
       window.google.accounts.id.renderButton(buttonRef.current, {
         theme: resolvedTheme === "dark" ? "filled_black" : "outline",
         size: "large",
         shape: "pill",
         text: "continue_with",
-        width: buttonRef.current.offsetWidth || 320,
+        width: w,
         locale: "id",
       })
     }
 
     if (window.google) {
-      init()
+      render()
     } else {
       const interval = setInterval(() => {
-        if (window.google) { clearInterval(interval); init() }
+        if (window.google) { clearInterval(interval); render() }
       }, 100)
       return () => clearInterval(interval)
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resolvedTheme])
 
   return (

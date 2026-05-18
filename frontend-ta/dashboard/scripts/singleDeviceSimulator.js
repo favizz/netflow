@@ -1,3 +1,15 @@
+#!/usr/bin/env node
+/**
+ * Single Device Simulator
+ * Dev/QA tool: simulates one meter publishing 21-byte binary telemetry frames.
+ * Supports interactive anomaly injection (overvoltage, overcurrent, leakage,
+ * tamper, trip) and listens for relay/valve commands from the backend.
+ *
+ * Specs covered: 5 (relay actuation), 6 (valve actuation), 8 (anomaly triggers)
+ *
+ * Usage: node singleDeviceSimulator.js [UNIT_NO] [BROKER_URL]
+ * Example: node singleDeviceSimulator.js A-0001 mqtt://localhost:1883
+ */
 const mqtt = require('mqtt');
 const readline = require('readline');
 const fs = require('fs');
