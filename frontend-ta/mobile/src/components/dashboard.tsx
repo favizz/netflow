@@ -419,6 +419,7 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
             dataKey={chartDataKey}
             unit={chartUnit}
             color={chartUtility === "electricity" ? "var(--primary)" : "var(--chart-2)"}
+            isLive={isLive}
           />
         )}
 

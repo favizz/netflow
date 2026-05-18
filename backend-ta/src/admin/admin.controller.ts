@@ -13,7 +13,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import type { Request as ExpressRequest } from 'express';
-import { IsEmail, IsOptional, IsString } from 'class-validator';
+import { IsEmail, IsInt, IsOptional, IsString, Min } from 'class-validator';
 import { AdminJwtGuard } from '../common/guards/admin-jwt.guard';
 
 interface AdminRequest extends ExpressRequest {
@@ -37,15 +37,38 @@ class CreateResidentDto {
 }
 
 class CreateBuildingDto {
+  @IsString()
   code!: string;
+
+  @IsString()
   name!: string;
+
+  @IsOptional()
+  @IsString()
   address?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
   floors?: number;
 }
 
 class UpdateBuildingDto {
+  @IsOptional()
+  @IsString()
+  code?: string;
+
+  @IsOptional()
+  @IsString()
   name?: string;
+
+  @IsOptional()
+  @IsString()
   address?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
   floors?: number;
 }
 

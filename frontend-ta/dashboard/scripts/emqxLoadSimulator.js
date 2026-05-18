@@ -1,234 +1,175 @@
+#!/usr/bin/env node
+/**
+ * EMQX Load Simulator — Spec 3 (PLR & E2E Latency)
+ *
+ * Spawns N concurrent MQTT clients (default 2,444), each publishing one
+ * 21-byte binary telemetry frame every INTERVAL_MS at QoS 1.
+ * Tracks packet-loss ratio and reports stats every REPORT_INTERVAL_MS.
+ *
+ * Usage:
+ *   node emqxLoadSimulator.js [units] [intervalMs]
+ *
+ * Defaults:
+ *   units      = 2444
+ *   intervalMs = 60000  (1 frame/min — matches device firmware)
+ *
+ * Reads broker credentials from project-root .env (fallback: anonymous).
+ *
+ * Interactive commands (type + Enter):
+ *   stats    — print current PLR and connection count
+ *   stop     — graceful shutdown
+ */
+
+'use strict';
 const mqtt = require('mqtt');
 const readline = require('readline');
-const { encode } = require('@msgpack/msgpack');
+const path = require('path');
+const fs   = require('fs');
 
-// --- CONFIGURATION ---
-const BROKER_URL = 'mqtt://broker.emqx.io:1883'; // URL EMQX
-const TOTAL_UNITS = 2444;                        // Jumlah unit yang akan disimulasikan
-const BATCH_SIZE = 50;                           // Hubungkan 50 device per batch untuk menghindari limit rate
-const BATCH_DELAY_MS = 1000;                     // Jeda antar batch 1 detik
-const PUBLISH_INTERVAL_MS = 15000;               // Kirim telemetri setiap 15 detik untuk semua device
+// Load .env from repo root (3 levels up: scripts/ -> dashboard/ -> frontend-ta/ -> root)
+const envPath = path.resolve(__dirname, '../../../.env');
+if (fs.existsSync(envPath)) {
+  fs.readFileSync(envPath, 'utf8').split('\n').forEach((line) => {
+    const [k, ...rest] = line.split('=');
+    const key = (k || '').trim();
+    if (!key || key.startsWith('#') || process.env[key] !== undefined) return;
+    process.env[key] = rest.join('=').trim().replace(/^["']|["']$/g, '');
+  });
+}
 
-// State untuk menyimpan koneksi client dan anomali aktif
-const clients = new Map();
-const activeAnomalies = new Map();
+const TOTAL_UNITS    = parseInt(process.argv[2] || '2444', 10);
+const INTERVAL_MS    = parseInt(process.argv[3] || '60000', 10);
+const BATCH_SIZE     = 50;
+const BATCH_DELAY_MS = 500;
+const REPORT_MS      = 30_000;
 
-console.log(`====================================================`);
-console.log(`🚀 EMQX Load & Anomaly Simulator (v2 Binary Protocol)`);
-console.log(`====================================================`);
-console.log(`Broker   : ${BROKER_URL}`);
-console.log(`Target   : ${TOTAL_UNITS} Units`);
-console.log(`Interval : ${PUBLISH_INTERVAL_MS / 1000} seconds`);
-console.log(`----------------------------------------------------\n`);
+const BROKER_URL = process.env.MQTT_BROKER_URL || 'mqtt://localhost:1883';
+const USERNAME   = process.env.MQTT_USERNAME   || undefined;
+const PASSWORD   = process.env.MQTT_DEVICE_SECRET || process.env.MQTT_PASSWORD || undefined;
 
-// Helper function untuk memformat nama unit (misal 1 -> A-0001)
-const getUnitName = (index) => `A-${String(index).padStart(4, '0')}`;
-const getDeviceId = (index) => `SMART-METER-${String(index).padStart(4, '0')}`;
+// 21-byte binary frame — matches backend binary-codec.ts
+function encode(t) {
+  const b = Buffer.allocUnsafe(21);
+  b.writeUInt32BE(Math.round(t.et * 100),   0);
+  b.writeUInt16BE(Math.round(t.p  * 10),    4);
+  b.writeUInt16BE(Math.round(t.v  * 10),    6);
+  b.writeUInt16BE(Math.round(t.c  * 1000),  8);
+  b.writeUInt16BE(Math.round(t.wf * 100),  10);
+  b.writeUInt32BE(Math.round(t.wt * 1000), 12);
+  b.writeUInt32BE(Math.round(t.b),         16);
+  b[20] = (t.rs & 1) | ((t.vs & 1) << 1);
+  return b;
+}
 
-// Helper: Generate data telemetri normal atau anomali
-const generatePayload = (unitId, deviceId, state) => {
-    let power = Math.random() * 100 + 50; // 50 - 150 W (typical apartment)
-    let voltage = Math.random() * 5 + 220; // 220 - 225 V
-    let flowRate = Math.random() * 1.5 + 0.5; // 0.5 - 2 LPM (typical residential)
-    
-    // Anomali aktif
-    const anomaly = activeAnomalies.get(unitId);
-    let balance = undefined;
+function deviceId(i)  { return `SMART-METER-${String(i).padStart(4, '0')}`; }
+function unitNo(i)    { return `A-${String(i).padStart(4, '0')}`; }
 
-    if (anomaly) {
-        switch (anomaly) {
-            case 'overvoltage':
-                voltage = 260.5; // Contoh Overvoltage
-                break;
-            case 'undervoltage':
-                voltage = 160.0;
-                break;
-            case 'overcurrent':
-                power = 3000;
-                break;
-            case 'leakage':
-                flowRate = 50.0;
-                break;
-            case 'trip':
-                state.relayOn = false;
-                break;
-            case 'lowtoken':
-                balance = 100; // Rp 100
-                break;
-        }
-    }
+const clients = new Map();  // index -> { client, state }
+let sent = 0, acked = 0, connected = 0;
+let running = true;
 
-    // Jika relay mati, power = 0
-    if (!state.relayOn) power = 0;
-    // Jika valve tertutup, flow = 0
-    if (!state.valveOpen) flowRate = 0;
+function nextReading(s) {
+  const sec = INTERVAL_MS / 1000;
+  const p   = 50 + Math.random() * 100;
+  const wf  = 0.5 + Math.random() * 1.5;
+  s.et += p * sec / 3_600_000;
+  s.wt += wf * sec / 60_000;
+  return { et: s.et, p, v: 220 + (Math.random() * 5 - 2.5), c: p / 220,
+           wf, wt: s.wt, b: 50000, rs: 1, vs: 1 };
+}
 
-    state.energyTotal += (power / 3600); // KWh
-    state.waterTotal += (flowRate / 60); // M3
+function connectBatch(start) {
+  const end = Math.min(start + BATCH_SIZE, TOTAL_UNITS + 1);
+  for (let i = start; i < end; i++) {
+    const did   = deviceId(i);
+    const topic = `device/${did}/data`;
+    const state = { et: Math.random() * 500, wt: Math.random() * 100 };
 
-    const payload = {
-        et: parseFloat(state.energyTotal.toFixed(4)),
-        p: parseFloat(power.toFixed(2)),
-        v: parseFloat(voltage.toFixed(2)),
-        c: parseFloat((power / voltage).toFixed(2)),
-        rs: state.relayOn ? 1 : 0,
-        wt: parseFloat(state.waterTotal.toFixed(4)),
-        wf: parseFloat(flowRate.toFixed(2)),
-        vs: state.valveOpen ? 1 : 0
-    };
-
-    if (balance !== undefined) {
-        payload.b = balance;
-    }
-
-    return payload;
-};
-
-// Proses menghubungkan device secara bertahap (batching)
-let connectedCount = 0;
-const connectBatch = async (startIndex) => {
-    const endIndex = Math.min(startIndex + BATCH_SIZE, TOTAL_UNITS + 1);
-    
-    for (let i = startIndex; i < endIndex; i++) {
-        const unitId = getUnitName(i);
-        const deviceId = getDeviceId(i);
-        
-        const client = mqtt.connect(BROKER_URL, {
-            clientId: `sim-${deviceId}-${Math.random().toString(16).substr(2, 6)}`,
-            clean: true,
-            connectTimeout: 4000,
-            reconnectPeriod: 1000,
-        });
-
-        // State simulasi per device
-        const deviceState = {
-            energyTotal: 0, // Mulai dari 0 agar sinkron dengan database
-            waterTotal: 0,
-            relayOn: true,
-            valveOpen: true
-        };
-
-        client.on('connect', () => {
-            connectedCount++;
-            clients.set(unitId, { client, deviceId, state: deviceState });
-            
-            // Subscribe ke command topic sesuai v2 protocol
-            client.subscribe(`device/${deviceId}/command`);
-            client.subscribe(`device/${deviceId}/ota`);
-            client.subscribe(`device/${deviceId}/config`);
-            
-            if (connectedCount % 100 === 0 || connectedCount === TOTAL_UNITS) {
-                console.log(`[INFO] Connected ${connectedCount}/${TOTAL_UNITS} devices...`);
-            }
-        });
-
-        client.on('message', (topic, message) => {
-            if (topic === `device/${deviceId}/command`) {
-                if (message.length === 1) {
-                    const byte = message[0];
-                    const type = (byte >> 4) & 0x0F; // 1=relay, 2=valve
-                    const val = byte & 0x0F;        // 0=off, 1=on
-                    
-                    let typeStr = 'unknown';
-                    if (type === 1) {
-                        deviceState.relayOn = val === 1;
-                        typeStr = 'relay';
-                    } else if (type === 2) {
-                        deviceState.valveOpen = val === 1;
-                        typeStr = 'valve';
-                    }
-        
-                    console.log(`\n🚨 [COMMAND IN] ${deviceId} ${typeStr} -> ${val ? 'ON' : 'OFF'}`);
-                    
-                    // SEND ACK
-                    const ackTopic = `device/${deviceId}/command_ack`;
-                    const ackPayload = JSON.stringify({ status: 'ok', type: typeStr, value: val });
-                    client.publish(ackTopic, ackPayload);
-                }
-            }
-        });
-
-        client.on('error', (err) => {
-            // Abaikan log error jika terlalu banyak
-        });
-    }
-
-    if (endIndex <= TOTAL_UNITS) {
-        setTimeout(() => connectBatch(endIndex), BATCH_DELAY_MS);
-    } else {
-        console.log(`\n✅ Selesai menginisialisasi ${TOTAL_UNITS} koneksi.`);
-        startTelemetryLoop();
-        startInteractiveCLI();
-    }
-};
-
-// Loop untuk mengirim data telemetri
-const startTelemetryLoop = () => {
-    setInterval(() => {
-        let sentCount = 0;
-        clients.forEach(({ client, deviceId, state }, unitId) => {
-            if (client.connected) {
-                const topic = `device/${deviceId}/data`;
-                const payloadObj = generatePayload(unitId, deviceId, state);
-                const msgpackPayload = Buffer.from(encode(payloadObj));
-                
-                client.publish(topic, msgpackPayload, { qos: 0 });
-                sentCount++;
-            }
-        });
-        process.stdout.write(`\r[PUBLISH] Mem-publish telemetri ke ${sentCount} perangkat aktif (Binary Protocol)... `);
-    }, PUBLISH_INTERVAL_MS);
-};
-
-// CLI Interaktif untuk men-trigger anomali
-const startInteractiveCLI = () => {
-    console.log(`\n----------------------------------------------------`);
-    console.log(`🎮 Interactive Anomaly Trigger Aktif!`);
-    console.log(`Ketik perintah berikut untuk memicu anomali:`);
-    console.log(`- overvoltage <unit>   (Contoh: overvoltage A-0005)`);
-    console.log(`- undervoltage <unit>`);
-    console.log(`- overcurrent <unit>`);
-    console.log(`- lowtoken <unit>`);
-    console.log(`- leakage <unit>`);
-    console.log(`- trip <unit>`);
-    console.log(`- normal <unit>        (Untuk mengembalikan unit ke kondisi normal)`);
-    console.log(`----------------------------------------------------\n`);
-
-    const rl = readline.createInterface({
-        input: process.stdin,
-        output: process.stdout
+    const client = mqtt.connect(BROKER_URL, {
+      clientId: `load-${did}-${Date.now().toString(36)}`,
+      username: USERNAME,
+      password: PASSWORD,
+      clean: true,
+      reconnectPeriod: 5000,
+      connectTimeout: 10_000,
     });
 
-    rl.on('line', (input) => {
-        const [command, targetUnit] = input.trim().split(' ');
-        
-        if (!targetUnit) {
-            console.log(`❌ Error: Format salah. Harus: <anomali> <unit_id>`);
-            return;
-        }
-
-        const unitUpper = targetUnit.toUpperCase();
-
-        if (command === 'normal') {
-            activeAnomalies.delete(unitUpper);
-            console.log(`✅ [NORMAL] Unit ${unitUpper} dikembalikan ke kondisi normal.`);
-        } else if (['overvoltage', 'undervoltage', 'overcurrent', 'lowtoken', 'leakage', 'trip'].includes(command)) {
-            activeAnomalies.set(unitUpper, command);
-            console.log(`🚨 [ANOMALI] Men-trigger '${command}' pada unit ${unitUpper}.`);
-            
-            // Langsung kirim 1 data segera
-            const c = clients.get(unitUpper);
-            if(c && c.client.connected) {
-                const topic = `device/${c.deviceId}/data`;
-                const payloadObj = generatePayload(unitUpper, c.deviceId, c.state);
-                const msgpackPayload = Buffer.from(encode(payloadObj));
-                c.client.publish(topic, msgpackPayload);
-            }
-        } else {
-            console.log(`❌ Error: Perintah '${command}' tidak dikenali.`);
-        }
+    client.on('connect', () => {
+      connected++;
+      clients.set(i, { client, state });
+      if (connected % 200 === 0 || connected === TOTAL_UNITS) {
+        process.stdout.write(`\r[CONNECT] ${connected}/${TOTAL_UNITS} online`);
+      }
     });
-};
 
-// Mulai menghubungkan perangkat (Mulai dari indeks 1)
+    client.on('error', () => {});  // suppress per-client noise; track via PLR
+    client.on('offline', () => { connected = Math.max(0, connected - 1); });
+
+    clients.set(i, { client, state });
+  }
+  if (end <= TOTAL_UNITS) {
+    setTimeout(() => connectBatch(end), BATCH_DELAY_MS);
+  } else {
+    console.log(`\n[READY] All ${TOTAL_UNITS} clients initialized. Starting telemetry loop.`);
+    startLoop();
+    startReporter();
+    startCLI();
+  }
+}
+
+function startLoop() {
+  setInterval(() => {
+    if (!running) return;
+    for (const [i, { client, state }] of clients) {
+      if (!client.connected) continue;
+      const frame = encode(nextReading(state));
+      sent++;
+      client.publish(`device/${deviceId(i)}/data`, frame, { qos: 1 }, (err) => {
+        if (!err) acked++;
+      });
+    }
+  }, INTERVAL_MS);
+}
+
+function startReporter() {
+  setInterval(() => {
+    const plr = sent === 0 ? 0 : ((sent - acked) / sent * 100).toFixed(2);
+    const conn = [...clients.values()].filter(c => c.client.connected).length;
+    console.log(`\n[STATS] Connected: ${conn}/${TOTAL_UNITS} | Sent: ${sent} | Acked: ${acked} | PLR: ${plr}% (limit <1%)`);
+  }, REPORT_MS);
+}
+
+function printStats() {
+  const plr  = sent === 0 ? 0 : ((sent - acked) / sent * 100).toFixed(2);
+  const conn = [...clients.values()].filter(c => c.client.connected).length;
+  console.log(`\n[STATS] Connected: ${conn}/${TOTAL_UNITS} | Sent: ${sent} | Acked: ${acked} | PLR: ${plr}% (spec limit <1.00%)`);
+}
+
+function startCLI() {
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  console.log('\nCommands: stats | stop\n');
+  rl.on('line', (line) => {
+    switch (line.trim()) {
+      case 'stats': printStats(); break;
+      case 'stop':
+        running = false;
+        printStats();
+        console.log('[STOP] Disconnecting all clients...');
+        clients.forEach(({ client }) => { try { client.end(true); } catch {} });
+        process.exit(0);
+      default:
+        console.log('Unknown command. Use: stats | stop');
+    }
+  });
+}
+
+console.log('────────────────────────────────────────────────────────────');
+console.log(` Load Simulator  |  Spec 3: PLR < 1%, E2E latency < 60s`);
+console.log(`────────────────────────────────────────────────────────────`);
+console.log(` Broker   : ${BROKER_URL}`);
+console.log(` Units    : ${TOTAL_UNITS}`);
+console.log(` Interval : ${INTERVAL_MS / 1000}s  |  QoS 1  |  21-byte binary`);
+console.log(` Report   : every ${REPORT_MS / 1000}s`);
+console.log('────────────────────────────────────────────────────────────\n');
+
 connectBatch(1);
