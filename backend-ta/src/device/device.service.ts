@@ -81,10 +81,7 @@ export class DeviceService {
         }
 
         if (deltaWater > 0) {
-          unit.token_water = Math.max(
-            0,
-            Number(unit.token_water) - deltaWater,
-          );
+          unit.token_water = Math.max(0, Number(unit.token_water) - deltaWater);
           unit.last_water_reading = incomingWaterTotal;
         }
 

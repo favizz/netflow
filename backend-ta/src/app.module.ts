@@ -112,7 +112,6 @@ import { AppService } from './app.service';
       inject: [ConfigService],
     }),
 
-
     // ── Domain modules ────────────────────────────────────────────────────────
     UnitModule,
     DeviceModule,

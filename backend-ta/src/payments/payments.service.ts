@@ -195,7 +195,8 @@ export class PaymentsService {
         tx.confirmed_at = new Date();
 
         if (tx.electricity_amount_rp > 0) {
-          const elecTariff = await this.tariffService.findCurrent('electricity');
+          const elecTariff =
+            await this.tariffService.findCurrent('electricity');
           await this.unitService.creditTokensByUnitNo(
             tx.unit_no,
             tx.electricity_amount_rp / elecTariff,
@@ -223,14 +224,24 @@ export class PaymentsService {
           this.logger.log(
             `Pushing top-up to device [${updatedUnit.device_id}]: elec=Rp${Number(tx.electricity_amount_rp)} water=Rp${Number(tx.water_amount_rp)}`,
           );
-          this.mqttClient.emit(`device/${updatedUnit.device_id}/topup`, payload);
+          this.mqttClient.emit(
+            `device/${updatedUnit.device_id}/topup`,
+            payload,
+          );
           // Re-enable relay/valve on device (it was cut off when balance hit zero)
           if (tx.electricity_amount_rp > 0)
-            this.mqttClient.emit(`device/${updatedUnit.device_id}/command`, encodeCommand('relay', 1));
+            this.mqttClient.emit(
+              `device/${updatedUnit.device_id}/command`,
+              encodeCommand('relay', 1),
+            );
           if (tx.water_amount_rp > 0)
-            this.mqttClient.emit(`device/${updatedUnit.device_id}/command`, encodeCommand('valve', 1));
+            this.mqttClient.emit(
+              `device/${updatedUnit.device_id}/command`,
+              encodeCommand('valve', 1),
+            );
         }
-        const totalRp = Number(tx.electricity_amount_rp) + Number(tx.water_amount_rp);
+        const totalRp =
+          Number(tx.electricity_amount_rp) + Number(tx.water_amount_rp);
         if (updatedUnit.resident_email) {
           void this.notificationService
             .sendResidentNotification(
@@ -244,7 +255,8 @@ export class PaymentsService {
       await this.txRepo.save(tx);
 
       if (finalStatus !== 'pending') {
-        const totalRp = Number(tx.electricity_amount_rp) + Number(tx.water_amount_rp);
+        const totalRp =
+          Number(tx.electricity_amount_rp) + Number(tx.water_amount_rp);
         void this.auditLogService.log(
           'midtrans',
           'TOKEN_PURCHASE',
@@ -303,11 +315,18 @@ export class PaymentsService {
       );
       this.mqttClient.emit(`device/${updatedUnit.device_id}/topup`, payload);
       if (tx.electricity_amount_rp > 0)
-        this.mqttClient.emit(`device/${updatedUnit.device_id}/command`, encodeCommand('relay', 1));
+        this.mqttClient.emit(
+          `device/${updatedUnit.device_id}/command`,
+          encodeCommand('relay', 1),
+        );
       if (tx.water_amount_rp > 0)
-        this.mqttClient.emit(`device/${updatedUnit.device_id}/command`, encodeCommand('valve', 1));
+        this.mqttClient.emit(
+          `device/${updatedUnit.device_id}/command`,
+          encodeCommand('valve', 1),
+        );
     }
-    const totalRp = Number(tx.electricity_amount_rp) + Number(tx.water_amount_rp);
+    const totalRp =
+      Number(tx.electricity_amount_rp) + Number(tx.water_amount_rp);
     if (updatedUnit.resident_email) {
       void this.notificationService
         .sendResidentNotification(

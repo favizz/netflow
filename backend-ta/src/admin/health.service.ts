@@ -4,7 +4,6 @@ import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 import * as net from 'net';
 
-
 export type ServiceStatus = 'ok' | 'error' | 'configured' | 'not_configured';
 
 export interface ServiceHealth {

@@ -69,7 +69,8 @@ export class GatewayService {
 
   async setRelayByUnitNo(unitNo: string, on: boolean, actorEmail?: string) {
     const unit = await this.unitService.findByUnitNo(unitNo);
-    if (!unit.device_id) throw new BadRequestException('No device assigned to this unit');
+    if (!unit.device_id)
+      throw new BadRequestException('No device assigned to this unit');
     await this.unitService.checkDeviceOnline(unit.device_id);
     await this.unitService.setRelayStatus(unit.id, on, actorEmail);
     this.publishRetained(
@@ -81,7 +82,8 @@ export class GatewayService {
 
   async setValveByUnitNo(unitNo: string, open: boolean, actorEmail?: string) {
     const unit = await this.unitService.findByUnitNo(unitNo);
-    if (!unit.device_id) throw new BadRequestException('No device assigned to this unit');
+    if (!unit.device_id)
+      throw new BadRequestException('No device assigned to this unit');
     await this.unitService.checkDeviceOnline(unit.device_id);
     await this.unitService.setValveStatus(unit.id, open, actorEmail);
     this.publishRetained(

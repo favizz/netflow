@@ -366,4 +366,3 @@ export class UnitService {
     return notifications;
   }
 }
-
