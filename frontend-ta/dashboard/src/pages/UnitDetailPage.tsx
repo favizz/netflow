@@ -29,12 +29,12 @@ function decodeTelemetry(buf: Uint8Array): IoTPayload | null {
     };
 }
 
-type TimePeriod = "live" | "daily" | "weekly" | "monthly";
+type TimePeriod = "live" | "daily" | "yearly" | "monthly";
 
 const PERIODS: { id: TimePeriod; label: string }[] = [
     { id: "live",    label: "Live"     },
     { id: "daily",   label: "Harian"   },
-    { id: "weekly",  label: "Mingguan" },
+    { id: "yearly",  label: "Tahunan"  },
     { id: "monthly", label: "Bulanan"  },
 ];
 
@@ -218,17 +218,23 @@ export default function UnitDetailPage() {
     useEffect(() => {
         if (!unitInfo?.unit || period === "live") return;
         setTrendLoading(true);
-        const apiPeriod = period === "monthly" ? "monthly" : "daily";
+        const apiPeriod = (period === "monthly" || period === "yearly") ? "monthly" : "daily";
         fetchApi(`/reporting/trends/${encodeURIComponent(unitInfo.unit)}?period=${apiPeriod}`)
-            .then(data => {
-                let mapped = (data || []).map((t: { bucket: string; kwh?: string; waterM3?: string; water_m3?: string; }) => ({
+            .then(raw => {
+                const currentYear = new Date().getFullYear();
+                let items = (raw || []) as { bucket: string; kwh?: string; waterM3?: string; water_m3?: string; }[];
+                if (period === "yearly") {
+                    items = items.filter(t => new Date(t.bucket).getFullYear() === currentYear);
+                }
+                const mapped = items.map(t => ({
                     time: period === "monthly"
-                        ? new Date(t.bucket).toLocaleDateString('id-ID', { month: 'short', year: '2-digit' })
+                        ? new Date(t.bucket).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })
+                        : period === "yearly"
+                        ? new Date(t.bucket).toLocaleDateString('id-ID', { month: 'short' })
                         : new Date(t.bucket).toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric' }),
                     powerVal: parseFloat(t.kwh || "0"),
                     waterVal: parseFloat(t.waterM3 || t.water_m3 || "0"),
                 }));
-                if (period === "weekly") mapped = mapped.slice(-7);
                 setHistoricalTrends(mapped);
             })
             .catch(() => setHistoricalTrends([]))
@@ -626,7 +632,7 @@ export default function UnitDetailPage() {
                         <div className="flex items-center justify-between mb-6">
                             <h3 className="font-semibold text-gray-900 dark:text-gray-100">Power Consumption</h3>
                             <span className="text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
-                                {isLive ? "Live (W)" : period === "daily" ? "Harian (KWh)" : period === "weekly" ? "Mingguan (KWh)" : "Bulanan (KWh)"}
+                                {isLive ? "Live (W)" : period === "daily" ? "Harian (KWh)" : period === "yearly" ? "Tahunan (KWh)" : "Bulanan (KWh)"}
                             </span>
                         </div>
                         {trendLoading ? (
@@ -645,7 +651,7 @@ export default function UnitDetailPage() {
                                         <XAxis dataKey="time" axisLine={false} tickLine={false} tick={{ fill: tickColor, fontSize: 11 }} />
                                         <YAxis axisLine={false} tickLine={false} tick={{ fill: tickColor, fontSize: 11 }} width={36} />
                                         <RechartsTooltip contentStyle={tooltipStyle} />
-                                        <Area type="stepAfter" dataKey="value" stroke="#3b82f6" strokeWidth={2} fillOpacity={1} fill="url(#colorPower)" dot={false} activeDot={{ r: 4 }} />
+                                        <Area type="stepAfter" dataKey="value" stroke="#3b82f6" strokeWidth={2} fillOpacity={1} fill="url(#colorPower)" dot={false} activeDot={isLive ? false : { r: 4 }} isAnimationActive={!isLive} />
                                     </AreaChart>
                                 </ResponsiveContainer>
                             </div>
@@ -657,7 +663,7 @@ export default function UnitDetailPage() {
                         <div className="flex items-center justify-between mb-6">
                             <h3 className="font-semibold text-gray-900 dark:text-gray-100">Water Consumption</h3>
                             <span className="text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
-                                {isLive ? "Live (L/min)" : period === "daily" ? "Harian (m³)" : period === "weekly" ? "Mingguan (m³)" : "Bulanan (m³)"}
+                                {isLive ? "Live (L/min)" : period === "daily" ? "Harian (m³)" : period === "yearly" ? "Tahunan (m³)" : "Bulanan (m³)"}
                             </span>
                         </div>
                         {trendLoading ? (
@@ -670,7 +676,7 @@ export default function UnitDetailPage() {
                                         <XAxis dataKey="time" axisLine={false} tickLine={false} tick={{ fill: tickColor, fontSize: 11 }} />
                                         <YAxis axisLine={false} tickLine={false} tick={{ fill: tickColor, fontSize: 11 }} width={36} />
                                         <RechartsTooltip contentStyle={tooltipStyle} />
-                                        <Line type="stepAfter" dataKey="value" stroke="#06b6d4" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
+                                        <Line type="stepAfter" dataKey="value" stroke="#06b6d4" strokeWidth={2} dot={false} activeDot={isLive ? false : { r: 4 }} isAnimationActive={!isLive} />
                                     </LineChart>
                                 </ResponsiveContainer>
                             </div>

@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef } from "react"
 import { Card } from "@/components/ui/card"
-import { useTheme } from "next-themes"
 import logoWhite from "@/assets/netflow-logo-white.png"
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string
@@ -30,7 +29,6 @@ interface LoginFormProps {
 export default function LoginForm({ onGoogleLogin }: LoginFormProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
-  const { resolvedTheme } = useTheme()
   const buttonRef = useRef<HTMLDivElement>(null)
 
   // Keep prop ref current so the stable handler never goes stale
@@ -69,7 +67,7 @@ export default function LoginForm({ onGoogleLogin }: LoginFormProps) {
       // first paint and causes Google's button endpoint to return HTTP 400.
       const w = Math.max(Math.round(buttonRef.current.getBoundingClientRect().width), 260)
       window.google.accounts.id.renderButton(buttonRef.current, {
-        theme: resolvedTheme === "dark" ? "filled_black" : "outline",
+        theme: "outline",
         size: "large",
         shape: "pill",
         text: "continue_with",
@@ -86,7 +84,7 @@ export default function LoginForm({ onGoogleLogin }: LoginFormProps) {
       }, 100)
       return () => clearInterval(interval)
     }
-  }, [resolvedTheme])
+  }, [])
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-secondary/5 flex items-center justify-center p-4">

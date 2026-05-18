@@ -3,7 +3,7 @@
 // ── Domain types ──────────────────────────────────────────────────────────────
 export type BalanceStatus = "aman" | "kurang" | "kritis" | "terputus"
 export type UtilityType   = "electricity" | "water"
-export type TimePeriod    = "daily" | "weekly" | "monthly" | "live"
+export type TimePeriod    = "daily" | "yearly" | "monthly" | "live"
 export type TxStatus      = "pending" | "success" | "failed"
 export type Page          = "home" | "purchase" | "notifications"
 export type PaymentMethod = "qris" | "transfer" | "ewallet"

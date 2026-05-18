@@ -15,7 +15,7 @@ interface ConsumptionChartProps {
   data: { [key: string]: string | number }[]
   dataKey: string
   unit: string
-  period: "daily" | "weekly" | "monthly"
+  period: "daily" | "yearly" | "monthly"
   color: string
   isLive?: boolean
 }
