@@ -156,7 +156,7 @@ export class AdminService implements OnModuleInit {
     return { ...this.cached };
   }
 
-  async pushConfigToDevice(deviceId: string): Promise<void> {
+  pushConfigToDevice(deviceId: string): void {
     const payload = encodeCalibration({
       cf: this.cached.CAL_FACTOR_FLOWRATE,
       cp: this.cached.CAL_FACTOR_POWER,
