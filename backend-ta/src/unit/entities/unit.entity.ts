@@ -33,11 +33,19 @@ export class Unit {
 
   @Column('decimal', {
     precision: 15,
-    scale: 2,
+    scale: 4,
     default: 0,
     transformer: new NumericTransformer(),
   })
-  balance!: number;
+  token_electricity!: number;
+
+  @Column('decimal', {
+    precision: 15,
+    scale: 4,
+    default: 0,
+    transformer: new NumericTransformer(),
+  })
+  token_water!: number;
 
   @Column({ default: true })
   relay_status!: boolean;

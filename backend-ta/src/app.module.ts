@@ -3,7 +3,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { BullModule } from '@nestjs/bullmq';
 import { ThrottlerModule } from '@nestjs/throttler';
-import { HttpModule } from '@nestjs/axios';
+
 import { BullBoardModule } from '@bull-board/nestjs';
 import { ExpressAdapter } from '@bull-board/express';
 import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
@@ -113,15 +113,6 @@ import { AppService } from './app.service';
       inject: [ConfigService],
     }),
 
-    // ── HTTP client (ML service calls) ────────────────────────────────────────
-    HttpModule.registerAsync({
-      imports: [ConfigModule],
-      useFactory: (cfg: ConfigService) => ({
-        baseURL: cfg.get('ML_SERVICE_URL'),
-        timeout: 5_000,
-      }),
-      inject: [ConfigService],
-    }),
 
     // ── Domain modules ────────────────────────────────────────────────────────
     UnitModule,

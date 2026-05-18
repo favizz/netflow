@@ -13,6 +13,7 @@ import { ConfigService } from '@nestjs/config';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { UnitService } from '../unit/unit.service';
+import { TariffService } from '../tariff/tariff.service';
 import { AuditLogService } from '../audit-log/audit-log.service';
 import { NotificationService } from '../notification/notification.service';
 import { Transaction } from './entities/transaction.entity';
@@ -38,6 +39,7 @@ export class PaymentsService {
     private readonly expiryQueue: Queue,
     @Inject('MQTT_CLIENT') private readonly mqttClient: ClientProxy,
     private readonly notificationService: NotificationService,
+    private readonly tariffService: TariffService,
   ) {}
 
   async initiateTopup(dto: InitiateTopupDto) {
@@ -191,22 +193,26 @@ export class PaymentsService {
 
       if (finalStatus === 'success') {
         tx.confirmed_at = new Date();
-        const updatedUnit = await this.unitService.creditBalanceByUnitNo(
+
+        // Convert currency to tokens
+        const tariff = await this.tariffService.findCurrent('electricity');
+        const tokensAdded = Number(tx.amount_rp) / tariff;
+
+        const updatedUnit = await this.unitService.creditTokensByUnitNo(
           tx.unit_no,
-          Number(tx.amount_rp),
+          tokensAdded,
+          'electricity',
         );
+
         if (updatedUnit.device_id) {
-          // Note: V2 schema only stores total amount_rp in DB.
-          // However, the device protocol (12 bytes) expects a split.
-          // We default to 100% electricity if we don't have the original split here.
-          // In handleWebhook, we might not have the original DTO, so we use amount_rp.
+          // Send to device
           const payload = encodeTopup({
-            electricAmount: Number(tx.amount_rp),
+            electricAmount: tokensAdded,
             waterAmount: 0,
             timestamp: Math.floor(Date.now() / 1000),
           });
           this.logger.log(
-            `Pushing top-up to device [${updatedUnit.device_id}]: elec=Rp${tx.amount_rp} water=Rp0`,
+            `Pushing top-up to device [${updatedUnit.device_id}]: elec=${tokensAdded.toFixed(2)} kWh water=0`,
           );
           this.mqttClient.emit(
             `device/${updatedUnit.device_id}/topup`,
@@ -218,7 +224,7 @@ export class PaymentsService {
             .sendResidentNotification(
               updatedUnit.resident_email,
               `[NetFlow] Top-up Berhasil — Unit ${tx.unit_no}`,
-              `✅ Pembayaran Rp ${Number(tx.amount_rp).toLocaleString('id-ID')} berhasil dikonfirmasi.\n\nUnit: ${tx.unit_no}\nMetode: ${tx.method}\nID Transaksi: ${tx.id}\n\nSaldo akan segera diperbarui.`,
+              `✅ Pembayaran Rp ${Number(tx.amount_rp).toLocaleString('id-ID')} berhasil dikonfirmasi.\n\nUnit: ${tx.unit_no}\nToken: ${tokensAdded.toFixed(2)} kWh\nID Transaksi: ${tx.id}\n\nSaldo akan segera diperbarui.`,
             )
             .catch(() => {});
         }
@@ -253,19 +259,25 @@ export class PaymentsService {
 
     tx.status = 'success';
     tx.confirmed_at = new Date();
-    const updatedUnit = await this.unitService.creditBalanceByUnitNo(
+
+    // Convert currency to tokens
+    const tariff = await this.tariffService.findCurrent('electricity');
+    const tokensAdded = Number(tx.amount_rp) / tariff;
+
+    const updatedUnit = await this.unitService.creditTokensByUnitNo(
       tx.unit_no,
-      Number(tx.amount_rp),
+      tokensAdded,
+      'electricity',
     );
+
     if (updatedUnit.device_id) {
-      // Note: V2 schema only stores total amount_rp.
       const payload = encodeTopup({
-        electricAmount: Number(tx.amount_rp),
+        electricAmount: tokensAdded,
         waterAmount: 0,
         timestamp: Math.floor(Date.now() / 1000),
       });
       this.logger.log(
-        `Pushing top-up to device [${updatedUnit.device_id}]: total=Rp${tx.amount_rp}`,
+        `Pushing top-up to device [${updatedUnit.device_id}]: elec=${tokensAdded.toFixed(2)} kWh`,
       );
       this.mqttClient.emit(`device/${updatedUnit.device_id}/topup`, payload);
     }
@@ -274,7 +286,7 @@ export class PaymentsService {
         .sendResidentNotification(
           updatedUnit.resident_email,
           `[NetFlow] Top-up Berhasil — Unit ${tx.unit_no}`,
-          `✅ Pembayaran Rp ${Number(tx.amount_rp).toLocaleString('id-ID')} berhasil dikonfirmasi.\n\nUnit: ${tx.unit_no}\nMetode: ${tx.method}\nID Transaksi: ${tx.id}\n\nSaldo akan segera diperbarui.`,
+          `✅ Pembayaran Rp ${Number(tx.amount_rp).toLocaleString('id-ID')} berhasil dikonfirmasi.\n\nUnit: ${tx.unit_no}\nToken: ${tokensAdded.toFixed(2)} kWh\nID Transaksi: ${tx.id}\n\nSaldo akan segera diperbarui.`,
         )
         .catch(() => {});
     }

@@ -81,41 +81,46 @@ export class DeviceService {
           deltaWater = incomingWaterTotal - Number(unit.last_water_reading);
         }
 
-        const cost = deltaEnergy * energyTariff + deltaWater * waterTariff;
-
-        if (cost > 0) {
-          unit.balance = Number(unit.balance) - cost;
+        // Direct token deduction
+        if (deltaEnergy > 0) {
+          unit.token_electricity = Math.max(
+            0,
+            Number(unit.token_electricity) - deltaEnergy,
+          );
           unit.last_energy_reading = incomingEnergyTotal;
-          unit.last_water_reading = incomingWaterTotal;
-
-          if (Number(unit.balance) <= 0) {
-            unit.balance = 0;
-            if (unit.relay_status) {
-              unit.relay_status = false;
-              this.mqttClient.emit(
-                `device/${deviceId}/command`,
-                encodeCommand('relay', 0),
-              );
-            }
-            if (unit.valve_status) {
-              unit.valve_status = false;
-              this.mqttClient.emit(
-                `device/${deviceId}/command`,
-                encodeCommand('valve', 0),
-              );
-            }
-          }
         }
 
+        if (deltaWater > 0) {
+          unit.token_water = Math.max(
+            0,
+            Number(unit.token_water) - deltaWater,
+          );
+          unit.last_water_reading = incomingWaterTotal;
+        }
+
+        // Independent safety cutoffs
+        if (Number(unit.token_electricity) <= 0 && unit.relay_status) {
+          unit.relay_status = false;
+          this.mqttClient.emit(
+            `device/${deviceId}/command`,
+            encodeCommand('relay', 0),
+          );
+        }
+        if (Number(unit.token_water) <= 0 && unit.valve_status) {
+          unit.valve_status = false;
+          this.mqttClient.emit(
+            `device/${deviceId}/command`,
+            encodeCommand('valve', 0),
+          );
+        }
+
+        // For now, treat incoming 'balance' from device as electricity tokens if present
         if (incomingBalance !== null) {
-          const cloudBalance = Number(unit.balance);
-          const diff = Math.abs(cloudBalance - incomingBalance);
-          if (diff > 500) {
-            this.logger.warn(
-              `Balance mismatch on ${deviceId}: edge Rp ${incomingBalance} vs cloud Rp ${cloudBalance}`,
-            );
-          } else {
-            unit.balance = incomingBalance;
+          const cloudTokens = Number(unit.token_electricity);
+          const diff = Math.abs(cloudTokens - incomingBalance);
+          // If mismatch is small, trust the edge (standard STS practice)
+          if (diff < 10) {
+            unit.token_electricity = incomingBalance;
           }
         }
 
@@ -162,7 +167,8 @@ export class DeviceService {
         power,
         waterFlow,
         voltage,
-        Number(savedUnit.balance),
+        Number(savedUnit.token_electricity),
+        Number(savedUnit.token_water),
         savedUnit.relay_status,
       );
     }

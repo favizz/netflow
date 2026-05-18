@@ -130,7 +130,8 @@ export type SelectUnitResponse = TokenPair & {
 export type DashboardSummary = {
   id: number;
   unitNo: string;
-  balance: number;
+  tokenElectricity: number;
+  tokenWater: number;
   energyTariff: number;
   waterTariff: number;
   relayStatus: boolean;
@@ -287,13 +288,13 @@ export const api = {
   },
 
   getDashboard(unitNo: string) {
-    return request<{ unitNo: string; summary: DashboardSummary; notifications: NotificationItem[] }>(
+    return request<{ unitNo: string; summary: DashboardSummary }>(
       `/gateway/mobile/${encodeURIComponent(unitNo)}/dashboard`,
     );
   },
 
   getNotifications(unitNo: string) {
-    return request<NotificationItem[]>(`/gateway/mobile/${encodeURIComponent(unitNo)}/notifications`);
+    return request<AnomalyItem[]>(`/gateway/mobile/${encodeURIComponent(unitNo)}/notifications`);
   },
 
   getAnomalies(unitNo: string) {
@@ -372,11 +373,12 @@ export const api = {
   getForecast(unitNo: string) {
     return request<{
       unitNo: string;
-      balanceRp: number;
-      estimatedDaysRemaining: number;
+      tokenElec: number;
+      tokenWater: number;
+      estimatedDaysElec: number;
+      estimatedDaysWater: number;
       avgDailyKwh: number;
       avgDailyM3: number;
-      dailyCostRp: number;
       confidence: 'high' | 'medium' | 'low';
       forecastAt: string;
     }>(`/gateway/mobile/${encodeURIComponent(unitNo)}/forecast`);

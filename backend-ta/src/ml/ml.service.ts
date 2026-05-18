@@ -17,11 +17,12 @@ export interface AnomalyScore {
 
 export interface DepletionForecast {
   unitNo: string;
-  balanceRp: number;
-  estimatedDaysRemaining: number;
+  tokenElec: number;
+  tokenWater: number;
+  estimatedDaysElec: number;
+  estimatedDaysWater: number;
   avgDailyKwh: number;
   avgDailyM3: number;
-  dailyCostRp: number;
   confidence: 'high' | 'medium' | 'low';
   forecastAt: string;
 }
@@ -185,36 +186,36 @@ export class MlService implements OnModuleInit {
 
   async getDepletionForecast(unitNo: string): Promise<DepletionForecast> {
     const unit = await this.unitService.findByUnitNo(unitNo);
-    const [elecTariff, waterTariff] = await Promise.all([
-      this.tariffService.findCurrent('electricity'),
-      this.tariffService.findCurrent('water'),
-    ]);
-
     const stats = await this.get7DayStats(unit.device_id);
-    const dailyCostRp =
-      stats.avgDailyKwh * elecTariff + stats.avgDailyM3 * waterTariff;
-    const balance = Number(unit.balance);
 
-    let estimatedDaysRemaining = 0;
-    let confidence: DepletionForecast['confidence'] = 'low';
+    const tokenElec = Number(unit.token_electricity);
+    const tokenWater = Number(unit.token_water);
 
-    if (dailyCostRp > 0) {
-      estimatedDaysRemaining = balance / dailyCostRp;
-      confidence =
-        stats.readingDays >= 7
-          ? 'high'
-          : stats.readingDays >= 3
-            ? 'medium'
-            : 'low';
+    let estimatedDaysElec = 0;
+    let estimatedDaysWater = 0;
+
+    if (stats.avgDailyKwh > 0) {
+      estimatedDaysElec = tokenElec / stats.avgDailyKwh;
     }
+    if (stats.avgDailyM3 > 0) {
+      estimatedDaysWater = tokenWater / stats.avgDailyM3;
+    }
+
+    const confidence: DepletionForecast['confidence'] =
+      stats.readingDays >= 7
+        ? 'high'
+        : stats.readingDays >= 3
+          ? 'medium'
+          : 'low';
 
     return {
       unitNo,
-      balanceRp: balance,
-      estimatedDaysRemaining: parseFloat(estimatedDaysRemaining.toFixed(1)),
+      tokenElec,
+      tokenWater,
+      estimatedDaysElec: parseFloat(estimatedDaysElec.toFixed(1)),
+      estimatedDaysWater: parseFloat(estimatedDaysWater.toFixed(1)),
       avgDailyKwh: parseFloat(stats.avgDailyKwh.toFixed(3)),
       avgDailyM3: parseFloat(stats.avgDailyM3.toFixed(3)),
-      dailyCostRp: parseFloat(dailyCostRp.toFixed(2)),
       confidence,
       forecastAt: new Date().toISOString(),
     };
