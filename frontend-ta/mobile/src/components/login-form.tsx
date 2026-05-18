@@ -1,26 +1,7 @@
-"use client"
-
-import { useState, useEffect, useRef } from "react"
+import { useState } from "react"
+import { GoogleLogin } from "@react-oauth/google"
 import { Card } from "@/components/ui/card"
 import logoWhite from "@/assets/netflow-logo-white.png"
-
-const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string
-
-// GIS allows exactly one initialize() call per page lifecycle
-let gsiInitialized = false
-
-declare global {
-  interface Window {
-    google?: {
-      accounts: {
-        id: {
-          initialize: (config: object) => void
-          renderButton: (element: HTMLElement, config: object) => void
-        }
-      }
-    }
-  }
-}
 
 interface LoginFormProps {
   onGoogleLogin: (credential: string) => Promise<void>
@@ -29,19 +10,13 @@ interface LoginFormProps {
 export default function LoginForm({ onGoogleLogin }: LoginFormProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
-  const buttonRef = useRef<HTMLDivElement>(null)
 
-  // Keep prop ref current so the stable handler never goes stale
-  const onLoginRef = useRef(onGoogleLogin)
-  onLoginRef.current = onGoogleLogin
-
-  // Single stable function instance — GIS stores this reference from initialize().
-  // Reads from onLoginRef so theme/prop changes never require re-initialization.
-  const stableHandler = useRef(async (response: { credential: string }) => {
+  const handleSuccess = async (response: { credential?: string }) => {
+    if (!response.credential) return
     setIsLoading(true)
     setError("")
     try {
-      await onLoginRef.current(response.credential)
+      await onGoogleLogin(response.credential)
     } catch (err) {
       const raw = err instanceof Error ? err.message : "Login gagal"
       const parsed = (() => { try { return JSON.parse(raw) as { message?: string } } catch { return null } })()
@@ -49,42 +24,7 @@ export default function LoginForm({ onGoogleLogin }: LoginFormProps) {
     } finally {
       setIsLoading(false)
     }
-  })
-
-  useEffect(() => {
-    const render = () => {
-      if (!window.google || !buttonRef.current || !GOOGLE_CLIENT_ID) return
-
-      if (!gsiInitialized) {
-        gsiInitialized = true
-        window.google.accounts.id.initialize({
-          client_id: GOOGLE_CLIENT_ID,
-          callback: stableHandler.current,
-        })
-      }
-
-      // getBoundingClientRect is reliable post-layout; offsetWidth can be 0 on
-      // first paint and causes Google's button endpoint to return HTTP 400.
-      const w = Math.max(Math.round(buttonRef.current.getBoundingClientRect().width), 260)
-      window.google.accounts.id.renderButton(buttonRef.current, {
-        theme: "outline",
-        size: "large",
-        shape: "pill",
-        text: "continue_with",
-        width: w,
-        locale: "id",
-      })
-    }
-
-    if (window.google) {
-      render()
-    } else {
-      const interval = setInterval(() => {
-        if (window.google) { clearInterval(interval); render() }
-      }, 100)
-      return () => clearInterval(interval)
-    }
-  }, [])
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-secondary/5 flex items-center justify-center p-4">
@@ -108,7 +48,17 @@ export default function LoginForm({ onGoogleLogin }: LoginFormProps) {
                 <div className="h-10 w-10 animate-spin rounded-full border-4 border-white border-t-transparent" />
               </div>
             )}
-            <div ref={buttonRef} className="flex justify-center w-full max-w-xs" />
+
+            <GoogleLogin
+              onSuccess={handleSuccess}
+              onError={() => setError("Login gagal. Coba lagi.")}
+              theme="outline"
+              size="large"
+              shape="pill"
+              text="continue_with"
+              locale="id"
+              width="320"
+            />
 
             {error && (
               <p className="text-sm text-destructive text-center mt-2 font-medium">{error}</p>

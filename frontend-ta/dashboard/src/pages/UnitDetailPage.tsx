@@ -638,8 +638,8 @@ export default function UnitDetailPage() {
                         {trendLoading ? (
                             <div className="h-[250px] flex items-center justify-center text-sm text-gray-400">Loading...</div>
                         ) : (
-                            <div className="h-[250px] w-full min-w-0 min-h-0">
-                                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+                            <div className="w-full">
+                                <ResponsiveContainer width="100%" height={250}>
                                     <AreaChart data={displayPowerData}>
                                         <defs>
                                             <linearGradient id="colorPower" x1="0" y1="0" x2="0" y2="1">
@@ -669,8 +669,8 @@ export default function UnitDetailPage() {
                         {trendLoading ? (
                             <div className="h-[250px] flex items-center justify-center text-sm text-gray-400">Loading...</div>
                         ) : (
-                            <div className="h-[250px] w-full min-w-0 min-h-0">
-                                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+                            <div className="w-full">
+                                <ResponsiveContainer width="100%" height={250}>
                                     <LineChart data={displayWaterData}>
                                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
                                         <XAxis dataKey="time" axisLine={false} tickLine={false} tick={{ fill: tickColor, fontSize: 11 }} />
