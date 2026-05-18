@@ -11,16 +11,16 @@ export class AuditLog {
   id!: number;
 
   @Column({ type: 'varchar', length: 255 })
-  admin_email!: string;
+  actor!: string;
 
   @Column({ type: 'varchar', length: 50 })
   action!: string;
 
   @Column({ type: 'varchar', length: 100 })
-  entity!: string;
+  target_type!: string;
 
   @Column({ type: 'varchar', length: 255, nullable: true })
-  entity_id!: string | null;
+  target!: string | null;
 
   @Column({ type: 'text', nullable: true })
   details!: string | null;

@@ -10,10 +10,6 @@ export class CalibrationSetting {
   @PrimaryGeneratedColumn()
   id!: number;
 
-  /** NULL = global default applied to all devices without a per-device override. */
-  @Column({ type: 'varchar', length: 100, nullable: true, unique: true })
-  device_id!: string | null;
-
   @Column({ type: 'decimal', precision: 8, scale: 4, default: 4.55 })
   flowrate_factor!: number;
 

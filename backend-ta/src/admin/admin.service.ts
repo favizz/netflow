@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, IsNull } from 'typeorm';
+import { Repository } from 'typeorm';
 import { ClientProxy } from '@nestjs/microservices';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
@@ -121,7 +121,6 @@ export class AdminService implements OnModuleInit {
       ...tx,
       user: unitMap.get(tx.unitNo) || 'Unassigned',
       date: tx.createdAt,
-      type: 'Token Purchase',
     }));
   }
 
@@ -152,37 +151,16 @@ export class AdminService implements OnModuleInit {
         Math.max(1, Math.round(Number(patch.SENSOR_SAMPLING_TIME))),
       );
     }
-    await this.persistToDb(null);
+    await this.persistToDb();
     this.syncOnlineThreshold();
     return { ...this.cached };
   }
 
-  async getDeviceSettings(deviceId: string): Promise<CalibrationSettings> {
-    const override = await this.calRepo.findOne({
-      where: { device_id: deviceId },
-    });
-    if (!override) return { ...this.cached };
-    return {
-      CAL_FACTOR_FLOWRATE: Number(override.flowrate_factor),
-      CAL_FACTOR_POWER: Number(override.power_factor),
-      SENSOR_SAMPLING_TIME: override.sampling_time,
-    };
-  }
-
-  async pushConfigToDevice(
-    deviceId: string,
-    overrides?: Partial<CalibrationSettings>,
-  ): Promise<void> {
-    const base = overrides ? { ...this.cached, ...overrides } : this.cached;
-
-    if (overrides) {
-      await this.persistToDb(deviceId, overrides);
-    }
-
+  async pushConfigToDevice(deviceId: string): Promise<void> {
     const payload = encodeCalibration({
-      cf: base.CAL_FACTOR_FLOWRATE,
-      cp: base.CAL_FACTOR_POWER,
-      st: base.SENSOR_SAMPLING_TIME,
+      cf: this.cached.CAL_FACTOR_FLOWRATE,
+      cp: this.cached.CAL_FACTOR_POWER,
+      st: this.cached.SENSOR_SAMPLING_TIME,
     });
 
     this.logger.log(
@@ -198,7 +176,7 @@ export class AdminService implements OnModuleInit {
       `Queuing config broadcast for [${withDevice.length}] units (job)`,
     );
     await this.broadcastQueue.add('config', {});
-    return { pushed: withDevice.map((u) => u.device_id) };
+    return { pushed: withDevice.map((u) => u.device_id as string) };
   }
 
   // ── OTA firmware update ───────────────────────────────────────────────────
@@ -236,7 +214,7 @@ export class AdminService implements OnModuleInit {
       `Queuing command broadcast [${type}=${value}] for [${withDevice.length}] units (job)`,
     );
     await this.broadcastQueue.add('command', { commandType: type, value });
-    return { pushed: withDevice.map((u) => u.device_id) };
+    return { pushed: withDevice.map((u) => u.device_id as string) };
   }
 
   async pushOtaToAll(
@@ -250,16 +228,14 @@ export class AdminService implements OnModuleInit {
       `Queuing OTA broadcast v${version} for [${withDevice.length}] units (job)`,
     );
     await this.broadcastQueue.add('ota', { version, binaryLink, updateNow });
-    return { pushed: withDevice.map((u) => u.device_id) };
+    return { pushed: withDevice.map((u) => u.device_id as string) };
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
 
   private async loadFromDb(): Promise<void> {
     try {
-      const global = await this.calRepo.findOne({
-        where: { device_id: IsNull() },
-      });
+      const global = await this.calRepo.findOne({ where: {} });
       if (global) {
         this.cached = {
           CAL_FACTOR_FLOWRATE: Number(global.flowrate_factor),
@@ -272,22 +248,15 @@ export class AdminService implements OnModuleInit {
     }
   }
 
-  private async persistToDb(
-    deviceId: string | null,
-    overrides?: Partial<CalibrationSettings>,
-  ): Promise<void> {
-    const settings = overrides ? { ...this.cached, ...overrides } : this.cached;
-
+  private async persistToDb(): Promise<void> {
     try {
-      const whereClause =
-        deviceId === null ? { device_id: IsNull() } : { device_id: deviceId };
-      let row = await this.calRepo.findOne({ where: whereClause });
+      let row = await this.calRepo.findOne({ where: {} });
       if (!row) {
-        row = this.calRepo.create({ device_id: deviceId });
+        row = this.calRepo.create();
       }
-      row.flowrate_factor = settings.CAL_FACTOR_FLOWRATE;
-      row.power_factor = settings.CAL_FACTOR_POWER;
-      row.sampling_time = settings.SENSOR_SAMPLING_TIME;
+      row.flowrate_factor = this.cached.CAL_FACTOR_FLOWRATE;
+      row.power_factor = this.cached.CAL_FACTOR_POWER;
+      row.sampling_time = this.cached.SENSOR_SAMPLING_TIME;
       await this.calRepo.save(row);
     } catch {
       // Non-fatal - in-memory value is still updated

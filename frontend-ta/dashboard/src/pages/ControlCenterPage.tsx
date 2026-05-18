@@ -283,7 +283,7 @@ export default function ControlCenterPage() {
         });
         return () => {
             active = false;
-            client.end();
+            try { client.end(true); } catch { /* ignore close race */ }
         };
     }, []);
 

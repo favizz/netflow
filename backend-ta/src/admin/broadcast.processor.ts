@@ -59,7 +59,7 @@ export class BroadcastProcessor extends WorkerHost {
           await Promise.all(
             chunk
               .slice(i, i + PARALLEL)
-              .map((u) => this.adminService.pushConfigToDevice(u.device_id)),
+              .map((u) => this.adminService.pushConfigToDevice(u.device_id!)),
           );
         }
         processed += chunk.length;
@@ -70,7 +70,7 @@ export class BroadcastProcessor extends WorkerHost {
       for await (const chunk of this.unitService.streamAllWithDevice()) {
         for (const unit of chunk) {
           this.adminService.pushOtaToDevice(
-            unit.device_id,
+            unit.device_id!,
             version,
             binaryLink,
             updateNow,

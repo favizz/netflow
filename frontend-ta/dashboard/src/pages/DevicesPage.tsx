@@ -29,14 +29,14 @@ export default function DevicesPage() {
                 const onlineIds = new Set(
                     ((conn.units || []) as { online: boolean; deviceId: string }[]).filter(u => u.online).map(u => u.deviceId)
                 );
-                const mapped: InventoryItem[] = units.map((u: { id: number; building_id: number; balance: string | number; resident_email: string | null; unit_no: string; device_id: string; relay_status: number; valve_status: number }) => ({
+                const mapped: InventoryItem[] = units.map((u: { id: number; building_id: number; token_electricity: string | number; resident_email: string | null; unit_no: string; device_id: string; relay_status: number; valve_status: number }) => ({
                     id: String(u.id),
                     buildingId: u.building_id,
                     buildingName: bldgMap.get(u.building_id) || "Unknown Building",
                     tenant: u.resident_email || "Unassigned",
                     unit: u.unit_no,
                     meterSerial: u.device_id,
-                    balance: Number(u.balance),
+                    balance: Number(u.token_electricity),
                     status: onlineIds.has(u.device_id) ? "Online" : "Offline",
                     power: !!u.relay_status,
                     water: !!u.valve_status,
@@ -74,7 +74,7 @@ export default function DevicesPage() {
                 return next;
             });
         });
-        return () => { client.end(); };
+        return () => { try { client.end(true); } catch { /* ignore close race */ } };
     }, []);
 
     return (

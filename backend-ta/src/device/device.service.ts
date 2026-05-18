@@ -41,9 +41,6 @@ export class DeviceService {
     const current = this.toNumber(data.c);
     const power = this.toNumber(data.p);
     const waterFlow = this.toNumber(data.wf);
-    const incomingBalance = data.b !== undefined ? Number(data.b) : null;
-
-
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -107,16 +104,6 @@ export class DeviceService {
           );
         }
 
-        // For now, treat incoming 'balance' from device as electricity tokens if present
-        if (incomingBalance !== null) {
-          const cloudTokens = Number(unit.token_electricity);
-          const diff = Math.abs(cloudTokens - incomingBalance);
-          // If mismatch is small, trust the edge (standard STS practice)
-          if (diff < 10) {
-            unit.token_electricity = incomingBalance;
-          }
-        }
-
         await queryRunner.manager.save(unit);
         savedUnit = unit;
 
@@ -139,7 +126,7 @@ export class DeviceService {
           await queryRunner.manager.save(row);
         } catch (dupErr: unknown) {
           // Two telemetry packets within the same MySQL-second share a PK —
-          // skip the duplicate row but keep the balance update in this transaction.
+          // skip the duplicate row but keep the token update in this transaction.
           if ((dupErr as { code?: string })?.code !== 'ER_DUP_ENTRY')
             throw dupErr;
         }

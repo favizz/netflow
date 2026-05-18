@@ -19,10 +19,10 @@ export class AuditLogService {
     result: 'success' | 'failure' | 'info' = 'success',
   ): Promise<AuditLog> {
     const entry = this.repo.create({
-      admin_email: adminEmail,
+      actor: adminEmail,
       action,
-      entity,
-      entity_id: entityId != null ? String(entityId) : null,
+      target_type: entity,
+      target: entityId != null ? String(entityId) : null,
       details: details ? JSON.stringify(details) : null,
       result,
     });

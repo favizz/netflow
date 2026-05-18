@@ -157,12 +157,11 @@ export type AnomalyType =
   | 'water_leak'
   | 'device_offline'
   | 'mcb_trip'
-  | 'low_balance'
+  | 'low_token'
   | 'voltage_anomaly'
   | 'sensor_malfunction'
   | 'low_power_factor'
-  | 'usage_spike'
-  | 'topup_success';
+  | 'usage_spike';
 
 export type AnomalySeverity = 'critical' | 'warning' | 'info';
 

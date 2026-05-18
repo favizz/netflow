@@ -7,6 +7,9 @@ import logoWhite from "@/assets/netflow-logo-white.png"
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string
 
+// Module-level flag: initialize() must only be called once per page load
+let gsiInitialized = false
+
 declare global {
   interface Window {
     google?: {
@@ -29,7 +32,6 @@ export default function LoginForm({ onGoogleLogin }: LoginFormProps) {
   const [error, setError] = useState("")
   const { resolvedTheme } = useTheme()
   const buttonRef = useRef<HTMLDivElement>(null)
-  const initializedRef = useRef(false)
 
   const handleCredential = async (response: { credential: string }) => {
     setIsLoading(true)
@@ -47,12 +49,14 @@ export default function LoginForm({ onGoogleLogin }: LoginFormProps) {
 
   useEffect(() => {
     const init = () => {
-      if (!window.google || !buttonRef.current || !GOOGLE_CLIENT_ID || initializedRef.current) return
-      initializedRef.current = true
-      window.google.accounts.id.initialize({
-        client_id: GOOGLE_CLIENT_ID,
-        callback: handleCredential,
-      })
+      if (!window.google || !buttonRef.current || !GOOGLE_CLIENT_ID) return
+      if (!gsiInitialized) {
+        gsiInitialized = true
+        window.google.accounts.id.initialize({
+          client_id: GOOGLE_CLIENT_ID,
+          callback: handleCredential,
+        })
+      }
       window.google.accounts.id.renderButton(buttonRef.current, {
         theme: resolvedTheme === "dark" ? "filled_black" : "outline",
         size: "large",

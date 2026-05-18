@@ -25,8 +25,8 @@ export class Unit {
   @Column({ unique: true })
   unit_no!: string;
 
-  @Column({ unique: true })
-  device_id!: string;
+  @Column({ unique: true, nullable: true })
+  device_id!: string | null;
 
   @Column({ type: 'varchar', nullable: true })
   resident_email!: string | null;

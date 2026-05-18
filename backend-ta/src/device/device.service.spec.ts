@@ -131,21 +131,5 @@ describe('DeviceService.saveSensorData', () => {
     });
   });
 
-  describe('edge balance reconciliation', () => {
-    it('updates token_electricity from edge device when difference is within tolerance', async () => {
-      const unit = makeUnit({ token_electricity: 50, last_energy_reading: 100 });
-      const { qr } = await buildModule(unit);
 
-      // Edge reports 49.8 kWh (diff = 0.2, within 10 kWh tolerance)
-      await service.saveSensorData({
-        _deviceId: 'DEV-A-101',
-        et: 100, wt: 10, p: 0, v: 220, c: 0, wf: 0, b: 49.8,
-      });
-
-      const savedCall = qr.manager.save.mock.calls.find(
-        ([arg]: [any]) => arg && typeof arg.token_electricity !== 'undefined',
-      );
-      expect(Number(savedCall[0].token_electricity)).toBe(49.8);
-    });
-  });
 });

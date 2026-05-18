@@ -45,7 +45,7 @@
 //   bytes  [8:9]  uint16 BE  c  × 1000    current      (A,   0.001 precision)
 //   bytes [10:11] uint16 BE  wf × 100     water_flow   (L/min, 0.01 precision)
 //   bytes [12:15] uint32 BE  wt × 1000    water_total  (m³,  0.001 precision)
-//   bytes [16:19] uint32 BE  b            balance      (Rp, integer)
+//   bytes [16:19] uint32 BE  t            tokens       (kWh, integer portion or combined)
 //   byte  [20]    uint8      flags        bit0=relay_status, bit1=valve_status
 
 export interface TelemetryPayload {
@@ -55,7 +55,7 @@ export interface TelemetryPayload {
   c: number; // current      A
   wf: number; // water_flow   L/min
   wt: number; // water_total  m³
-  b: number; // balance      Rp
+  t: number; // tokens       kWh
   rs: number; // relay_status 0|1
   vs: number; // valve_status 0|1
 }
@@ -68,7 +68,7 @@ export function decodeTelemetry(buf: Buffer): TelemetryPayload {
     c: buf.readUInt16BE(8) / 1000,
     wf: buf.readUInt16BE(10) / 100,
     wt: buf.readUInt32BE(12) / 1000,
-    b: buf.readUInt32BE(16),
+    t: buf.readUInt32BE(16),
     rs: buf[20] & 1,
     vs: (buf[20] >> 1) & 1,
   };
@@ -82,7 +82,7 @@ export function encodeTelemetry(t: TelemetryPayload): Buffer {
   buf.writeUInt16BE(Math.round(t.c * 1000), 8);
   buf.writeUInt16BE(Math.round(t.wf * 100), 10);
   buf.writeUInt32BE(Math.round(t.wt * 1000), 12);
-  buf.writeUInt32BE(Math.round(t.b), 16);
+  buf.writeUInt32BE(Math.round(t.t), 16);
   buf[20] = (t.rs & 1) | ((t.vs & 1) << 1);
   return buf;
 }

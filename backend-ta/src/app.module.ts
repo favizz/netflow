@@ -19,7 +19,6 @@ import { UnitModule } from './unit/unit.module';
 import { AuthModule } from './auth/auth.module';
 import { TariffModule } from './tariff/tariff.module';
 import { AuditLogModule } from './audit-log/audit-log.module';
-import { MlModule } from './ml/ml.module';
 import { RetentionModule } from './retention/retention.module';
 import { TelegramModule } from './telegram/telegram.module';
 import { AppController } from './app.controller';
@@ -125,7 +124,6 @@ import { AppService } from './app.service';
     AuthModule,
     TariffModule,
     AuditLogModule,
-    MlModule,
     RetentionModule,
     TelegramModule,
   ],

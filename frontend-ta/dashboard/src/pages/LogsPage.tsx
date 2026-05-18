@@ -82,21 +82,21 @@ type LogEntry = {
     actor: string;
     action: string;
     category: string;
-    entity: string;
-    entity_id: string | null;
+    target_type: string;
+    target: string | null;
     details: string | null;
     result: 'success' | 'failure' | 'info';
 };
 
-function mapAuditLog(entry: { id: number; created_at: string; admin_email: string | null; action: string | null; entity: string | null; entity_id: string | null; details: string | null; result: 'success' | 'failure' | 'info' | null; }): LogEntry {
+function mapAuditLog(entry: { id: number; created_at: string; actor: string | null; action: string | null; target_type: string | null; target: string | null; details: string | null; result: 'success' | 'failure' | 'info' | null; }): LogEntry {
     return {
         id: String(entry.id),
         timestamp: entry.created_at,
-        actor: entry.admin_email ?? 'system',
+        actor: entry.actor ?? 'system',
         action: entry.action ?? '',
         category: deriveCategory(entry.action ?? ''),
-        entity: entry.entity ?? '',
-        entity_id: entry.entity_id ?? null,
+        target_type: entry.target_type ?? '',
+        target: entry.target ?? null,
         details: entry.details,
         result: entry.result ?? 'success',
     };
@@ -178,7 +178,7 @@ export default function LogsPage() {
 
     const filtered = logs.filter(l => {
         const q = search.toLowerCase();
-        const matchSearch = !q || l.actor.toLowerCase().includes(q) || l.action.toLowerCase().includes(q) || l.entity.toLowerCase().includes(q) || (l.entity_id ?? '').toLowerCase().includes(q) || (l.details ?? '').toLowerCase().includes(q);
+        const matchSearch = !q || l.actor.toLowerCase().includes(q) || l.action.toLowerCase().includes(q) || l.target_type.toLowerCase().includes(q) || (l.target ?? '').toLowerCase().includes(q) || (l.details ?? '').toLowerCase().includes(q);
         const matchCat = filterCategory === 'All' || l.category === filterCategory;
         const matchResult = filterResult === 'All' || l.result === filterResult;
         return matchSearch && matchCat && matchResult;
@@ -243,7 +243,7 @@ export default function LogsPage() {
                                     <td className="px-4 py-3 font-mono text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">{log.action}</td>
                                     <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{log.category}</td>
                                     <td className="px-4 py-3 text-xs text-gray-900 dark:text-gray-300">
-                                        {log.entity}{log.entity_id ? ` #${log.entity_id}` : ''}
+                                        {log.target_type}{log.target ? ` #${log.target}` : ''}
                                     </td>
                                     <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400">
                                         {log.details ? (

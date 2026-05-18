@@ -105,13 +105,13 @@ export default function TransactionsPage() {
 
     useEffect(() => {
         fetchApi('/admin/transactions')
-            .then((data: { id: string; date?: string; createdAt?: string; created_at?: string; unitNo?: string; unit_no?: string; type?: string; method?: string; amount?: number; amount_rp?: number; status: string; }[]) => {
+            .then((data: { id: string; date?: string; createdAt?: string; unitNo?: string; method?: string; amount?: number; status: string; }[]) => {
                 setTransactions(data.map((tx) => ({
                     id: tx.id,
-                    createdAt: tx.date ?? tx.createdAt ?? tx.created_at ?? '',
-                    unitNo: tx.unitNo ?? tx.unit_no ?? '',
-                    method: tx.type ?? tx.method ?? '',
-                    amount: Number(tx.amount ?? tx.amount_rp ?? 0),
+                    createdAt: tx.date ?? tx.createdAt ?? '',
+                    unitNo: tx.unitNo ?? '',
+                    method: tx.method ?? '',
+                    amount: Number(tx.amount ?? 0),
                     status: tx.status,
                 })));
             })
