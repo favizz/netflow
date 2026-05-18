@@ -4,6 +4,7 @@ import { BullModule } from '@nestjs/bullmq';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { UnitModule } from '../unit/unit.module';
+import { TariffModule } from '../tariff/tariff.module';
 import { AuditLogModule } from '../audit-log/audit-log.module';
 import { NotificationModule } from '../notification/notification.module';
 import { Transaction } from './entities/transaction.entity';
@@ -18,6 +19,7 @@ import {
   imports: [
     TypeOrmModule.forFeature([Transaction]),
     UnitModule,
+    TariffModule,
     AuditLogModule,
     NotificationModule,
     BullModule.registerQueue({ name: PAYMENT_EXPIRY_QUEUE }),
