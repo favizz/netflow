@@ -240,7 +240,7 @@ export class AnomalyService implements OnModuleInit {
   ): Promise<void> {
     try {
       const unit = await this.unitService.findByUnitNo(unitNo);
-      if (!unit) return;
+      if (!unit || !unit.device_id) return;
 
       const activeAnomalies = await this.anomalyRepo.find({
         where: { device_id: unit.device_id, resolved_at: IsNull() },
@@ -337,9 +337,12 @@ export class AnomalyService implements OnModuleInit {
 
     // No device assigned → cannot determine online status; skip device_offline.
     if (!unit.device_id) {
-      if (unit.token_electricity > 0 && unit.token_electricity < LOW_TOKEN_THRESHOLD_KWH) {
+      if (
+        unit.token_electricity > 0 &&
+        unit.token_electricity < LOW_TOKEN_THRESHOLD_KWH
+      ) {
         anomalies.push({
-          anomalyType: 'low_balance',
+          anomalyType: 'low_token',
           severity: 'warning',
           target: 'resident',
           message: `Token listrik hampir habis: ${Number(unit.token_electricity).toFixed(2)} kWh. Segera top-up.`,
@@ -364,11 +367,11 @@ export class AnomalyService implements OnModuleInit {
     const dbAgeMs = latest
       ? Date.now() - new Date(latest.time).getTime()
       : Infinity;
-    
-    // Logic fix: A device is truly offline ONLY if no MQTT has arrived recently 
+
+    // Logic fix: A device is truly offline ONLY if no MQTT has arrived recently
     // AND the DB readings are old. This handles timezone mismatches better.
     const isMqttRecent = Date.now() - arrivalMs < 60_000;
-    const isOnline = isMqttRecent || (dbAgeMs < OFFLINE_THRESHOLD_MS);
+    const isOnline = isMqttRecent || dbAgeMs < OFFLINE_THRESHOLD_MS;
 
     if (!isOnline) {
       anomalies.push({
@@ -386,7 +389,7 @@ export class AnomalyService implements OnModuleInit {
 
     if (unit.token_electricity > 0 && unit.token_electricity < 5) {
       anomalies.push({
-        anomalyType: 'low_balance',
+        anomalyType: 'low_token',
         severity: 'warning',
         target: 'resident',
         message: `Token listrik hampir habis: ${Number(unit.token_electricity).toFixed(2)} kWh. Segera top-up.`,
@@ -400,7 +403,7 @@ export class AnomalyService implements OnModuleInit {
 
     if (unit.token_water > 0 && unit.token_water < LOW_TOKEN_THRESHOLD_M3) {
       anomalies.push({
-        anomalyType: 'low_balance',
+        anomalyType: 'low_token',
         severity: 'warning',
         target: 'resident',
         message: `Token air hampir habis: ${Number(unit.token_water).toFixed(2)} m³. Segera top-up.`,
@@ -421,7 +424,8 @@ export class AnomalyService implements OnModuleInit {
       // Logic fix: 0 is a VALID reading (sensor is alive, just no load).
       // Sensor malfunction only fires if data is strictly NULL or NaN (missing).
       const allNull = last10.every((r) => {
-        const isNull = (v: unknown) => v === null || v === undefined || isNaN(Number(v));
+        const isNull = (v: unknown) =>
+          v === null || v === undefined || isNaN(Number(v));
         return isNull(r.power) && isNull(r.voltage) && isNull(r.water_flow);
       });
 

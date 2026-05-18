@@ -105,17 +105,17 @@ describe('AnomalyService', () => {
     jest.restoreAllMocks();
   });
 
-  describe('low_balance', () => {
+  describe('low_token', () => {
     it('triggers when token_electricity is < 5', async () => {
       mockUnitService.findByUnitNo.mockResolvedValue(makeUnit({ token_electricity: 3 }));
       const results = await service['computeAll']('A-101');
-      expect(results.some((a) => a.anomalyType === 'low_balance')).toBe(true);
+      expect(results.some((a) => a.anomalyType === 'low_token')).toBe(true);
     });
 
     it('triggers when token_water is < 1', async () => {
       mockUnitService.findByUnitNo.mockResolvedValue(makeUnit({ token_water: 0.5 }));
       const results = await service['computeAll']('A-101');
-      expect(results.some((a) => a.anomalyType === 'low_balance')).toBe(true);
+      expect(results.some((a) => a.anomalyType === 'low_token')).toBe(true);
     });
   });
 

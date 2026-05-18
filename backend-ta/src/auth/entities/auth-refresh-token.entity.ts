@@ -11,12 +11,6 @@ export class AuthRefreshToken {
   @Column({ type: 'varchar' })
   user_sub!: string; // resident email
 
-  @Column({ type: 'varchar', nullable: true })
-  unit_no!: string | null;
-
-  @Column({ type: 'int', nullable: true })
-  unit_id!: number | null;
-
   @Column({ type: 'datetime' })
   expires_at!: Date;
 

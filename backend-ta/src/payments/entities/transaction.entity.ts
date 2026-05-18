@@ -15,18 +15,8 @@ export class Transaction {
   @PrimaryColumn({ type: 'varchar', length: 100 })
   id!: string;
 
-  @Column({ type: 'int' })
-  unit_id!: number;
-
   @Column({ type: 'varchar', length: 50 })
   unit_no!: string;
-
-  @Column('decimal', {
-    precision: 12,
-    scale: 2,
-    transformer: new NumericTransformer(),
-  })
-  amount_rp!: number;
 
   @Column('decimal', {
     precision: 12,

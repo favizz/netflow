@@ -114,12 +114,16 @@ export class UnitService {
     unitNo: string,
     amount: number,
     type: 'electricity' | 'water',
-  ) {
+  ): Promise<Unit> {
     const unit = await this.findByUnitNo(unitNo);
     if (type === 'electricity') {
-      unit.token_electricity = Number(unit.token_electricity) + Number(amount);
+      const prev = Number(unit.token_electricity);
+      unit.token_electricity = prev + Number(amount);
+      if (prev <= 0 && unit.token_electricity > 0) unit.relay_status = true;
     } else {
-      unit.token_water = Number(unit.token_water) + Number(amount);
+      const prev = Number(unit.token_water);
+      unit.token_water = prev + Number(amount);
+      if (prev <= 0 && unit.token_water > 0) unit.valve_status = true;
     }
     return this.unitRepo.save(unit);
   }
@@ -215,10 +219,12 @@ export class UnitService {
         ? Number(unit.token_electricity) / averageKwhPerHour
         : 0;
 
-    const latest = await this.meterRepo.findOne({
-      where: { device_id: unit.device_id },
-      order: { time: 'DESC' },
-    });
+    const latest = unit.device_id
+      ? await this.meterRepo.findOne({
+          where: { device_id: unit.device_id },
+          order: { time: 'DESC' },
+        })
+      : null;
 
     const lastTelemetryAt = latest?.time
       ? new Date(latest.time).toISOString()
@@ -254,7 +260,9 @@ export class UnitService {
       ? units.filter((u) => u.unit_no.startsWith(`${tower.toUpperCase()}-`))
       : units;
 
-    const deviceIds = filtered.map((u) => u.device_id).filter(Boolean);
+    const deviceIds = filtered
+      .map((u) => u.device_id)
+      .filter((id): id is string => id !== null && id !== undefined);
 
     // Single query: latest telemetry timestamp per device (replaces N+1)
     const latestMap = new Map<string, Date>();
@@ -276,7 +284,7 @@ export class UnitService {
 
     const now = Date.now();
     const rows = filtered.map((u) => {
-      const lastTime = latestMap.get(u.device_id);
+      const lastTime = u.device_id ? latestMap.get(u.device_id) : undefined;
       const lastTelemetryAt = lastTime ? lastTime.toISOString() : null;
       const online = lastTime
         ? now - lastTime.getTime() <= this.onlineThresholdMs
@@ -328,10 +336,12 @@ export class UnitService {
       });
     }
 
-    const latest = await this.meterRepo.findOne({
-      where: { device_id: unit.device_id },
-      order: { time: 'DESC' },
-    });
+    const latest = unit.device_id
+      ? await this.meterRepo.findOne({
+          where: { device_id: unit.device_id },
+          order: { time: 'DESC' },
+        })
+      : null;
 
     const online = latest?.time
       ? Date.now() - new Date(latest.time).getTime() <= this.onlineThresholdMs
@@ -356,4 +366,3 @@ export class UnitService {
     return notifications;
   }
 }
-

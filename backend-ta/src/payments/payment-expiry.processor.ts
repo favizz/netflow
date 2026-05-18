@@ -42,12 +42,12 @@ export class PaymentExpiryProcessor
 
     this.logger.log(`Payment ${transactionId} auto-expired (30 min timeout)`);
     void this.auditLogService.log(
-      'system:expiry',
+      'expiry',
       'TOKEN_PURCHASE',
       'transaction',
       transactionId,
       {
-        amount: Number(tx.amount_rp),
+        amount: Number(tx.electricity_amount_rp) + Number(tx.water_amount_rp),
         method: tx.method,
         status: 'failed',
         reason: 'expired',

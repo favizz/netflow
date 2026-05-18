@@ -107,7 +107,6 @@ describe('PaymentsService', () => {
       const tx: Partial<Transaction> = {
         id: 'TRX-001',
         unit_no: 'A-101',
-        amount_rp: 30_000 as any,
         electricity_amount_rp: 15_000,
         water_amount_rp: 15_000,
         status: 'pending',
@@ -132,7 +131,8 @@ describe('PaymentsService', () => {
       const existingTx: Partial<Transaction> = {
         id: 'TRX-001',
         unit_no: 'A-101',
-        amount_rp: 50_000 as any,
+        electricity_amount_rp: 25_000,
+        water_amount_rp: 25_000,
         status: 'success',
         webhook_event_id: 'mdt-abc123-settlement',
         confirmed_at: new Date() as any,
@@ -151,7 +151,8 @@ describe('PaymentsService', () => {
       const tx: Partial<Transaction> = {
         id: 'TRX-002',
         unit_no: 'A-102',
-        amount_rp: 25_000 as any,
+        electricity_amount_rp: 15_000,
+        water_amount_rp: 10_000,
         status: 'pending',
         webhook_event_id: null as any,
         confirmed_at: null as any,
@@ -189,7 +190,6 @@ describe('PaymentsService', () => {
       const tx: Partial<Transaction> = {
         id: 'TRX-DEV-001',
         unit_no: 'A-101',
-        amount_rp: 15_000 as any,
         electricity_amount_rp: 15_000,
         water_amount_rp: 0,
         status: 'pending',
@@ -207,7 +207,8 @@ describe('PaymentsService', () => {
       const tx: Partial<Transaction> = {
         id: 'TRX-DONE',
         unit_no: 'A-101',
-        amount_rp: 50_000 as any,
+        electricity_amount_rp: 25_000,
+        water_amount_rp: 25_000,
         status: 'success',
         confirmed_at: new Date() as any,
         created_at: new Date(),

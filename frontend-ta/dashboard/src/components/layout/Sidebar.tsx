@@ -10,6 +10,7 @@ import {
     SlidersHorizontal,
     HelpCircle,
     LogOut,
+    Building2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getAdminName } from "@/lib/auth";
@@ -17,6 +18,7 @@ import { getAdminName } from "@/lib/auth";
 const navigation = [
     { name: "Overview", href: "/", icon: LayoutDashboard },
     { name: "Devices", href: "/devices", icon: Monitor },
+    { name: "Buildings", href: "/buildings", icon: Building2 },
     { name: "Transactions", href: "/transactions", icon: CreditCard },
     { name: "Users", href: "/users", icon: Users },
     { name: "Logs", href: "/logs", icon: ScrollText },

@@ -1,13 +1,14 @@
 export type AnomalyType =
-  | 'jailbreak' // balance=0 but sensors show consumption (admin)
+  | 'jailbreak' // tokens=0 but sensors show consumption (admin)
   | 'water_leak' // constant flow CoV test (both)
   | 'device_offline' // no telemetry > 10 min (admin)
   | 'mcb_trip' // power > 1300 W (both)
-  | 'low_balance' // balance < 20k Rp (resident)
+  | 'low_token' // tokens < threshold (resident)
   | 'voltage_anomaly' // voltage outside 198–242 V (both)
   | 'sensor_malfunction' // all sensor values null (both)
   | 'low_power_factor' // PF = P/(V×I) < 0.6 (both)
-  | 'usage_spike'; // power > 3× historical average (both)
+  | 'usage_spike' // power > 3× historical average (both)
+  | 'topup_success'; // topup confirmed (resident) — reserved for future use
 
 export type AnomalySeverity = 'critical' | 'warning';
 

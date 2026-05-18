@@ -9,6 +9,7 @@ import TransactionsPage from '@/pages/TransactionsPage';
 import LogsPage from '@/pages/LogsPage';
 import ControlCenterPage from '@/pages/ControlCenterPage';
 import FAQPage from '@/pages/FAQPage';
+import BuildingsPage from '@/pages/BuildingsPage';
 import LoginPage from '@/pages/LoginPage';
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -35,6 +36,7 @@ export default function App() {
           <Route index element={<DashboardPage />} />
           <Route path="devices" element={<DevicesPage />} />
           <Route path="devices/:id" element={<UnitDetailPage />} />
+          <Route path="buildings" element={<BuildingsPage />} />
           <Route path="transactions" element={<TransactionsPage />} />
           <Route path="users" element={<UsersPage />} />
           <Route path="logs" element={<LogsPage />} />

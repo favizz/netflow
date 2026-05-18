@@ -56,6 +56,7 @@ export class AuthService {
     const tokenPair = await this.issueTokenPair(payload);
     return {
       ...tokenPair,
+      name: resident.name ?? null,
       units: units.map((u) => ({ id: u.id, unitNo: u.unit_no })),
     };
   }
@@ -112,6 +113,7 @@ export class AuthService {
     const tokenPair = await this.issueTokenPair(payload);
     return {
       ...tokenPair,
+      name: googleName,
       units: units.map((u) => ({ id: u.id, unitNo: u.unit_no })),
     };
   }
@@ -135,6 +137,7 @@ export class AuthService {
     const tokenPair = await this.issueTokenPair(payload);
     return {
       ...tokenPair,
+      name: user.name ?? null,
       units: units.map((u) => ({ id: u.id, unitNo: u.unit_no })),
     };
   }
@@ -158,11 +161,16 @@ export class AuthService {
     await this.refreshTokenRepo.save(record);
 
     const resident = await this.residentsService.findByEmail(record.user_sub);
+    const units =
+      resident?.role !== 'admin'
+        ? await this.unitService.findByResidentEmail(record.user_sub)
+        : [];
+    const selectedUnit = units.length === 1 ? units[0] : null;
     const payload: JwtPayload = {
       sub: record.user_sub,
       role: resident?.role ?? 'resident',
-      unitId: record.unit_id,
-      unitNo: record.unit_no,
+      unitId: selectedUnit?.id ?? null,
+      unitNo: selectedUnit?.unit_no ?? null,
     };
 
     return this.issueTokenPair(payload);
@@ -273,8 +281,6 @@ export class AuthService {
     const refreshEntity = this.refreshTokenRepo.create({
       token_hash: refreshKey,
       user_sub: payload.sub,
-      unit_no: payload.unitNo ?? null,
-      unit_id: payload.unitId ?? null,
       expires_at: new Date(Date.now() + refreshExpiresInSeconds * 1000),
       revoked_at: null,
     });

@@ -84,12 +84,26 @@ describe('TariffService', () => {
   // ── create ────────────────────────────────────────────────────────────────────
 
   describe('create', () => {
-    it('creates and saves a new tariff', async () => {
+    it('creates and saves a new tariff when under the limit', async () => {
+      repo.find.mockResolvedValue([]);
       const dto = { utility_type: 'electricity' as const, price_per_unit: 1500, effective_date: '2026-01-01' };
       const result = await service.create(dto);
       expect(repo.create).toHaveBeenCalledWith(dto);
       expect(repo.save).toHaveBeenCalled();
       expect(result.price_per_unit).toBe(1500);
+    });
+
+    it('removes oldest tariff when at max (3) per type', async () => {
+      const existing = [
+        makeTariff({ id: 1, effective_date: '2025-01-01' }),
+        makeTariff({ id: 2, effective_date: '2025-06-01' }),
+        makeTariff({ id: 3, effective_date: '2026-01-01' }),
+      ];
+      repo.find.mockResolvedValue(existing);
+      const dto = { utility_type: 'electricity' as const, price_per_unit: 1600, effective_date: '2026-06-01' };
+      await service.create(dto);
+      expect(repo.remove).toHaveBeenCalledWith([existing[0]]);
+      expect(repo.save).toHaveBeenCalled();
     });
   });
 

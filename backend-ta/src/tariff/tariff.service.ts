@@ -44,7 +44,16 @@ export class TariffService {
     return Number(tariff.price_per_unit);
   }
 
-  create(dto: CreateTariffDto): Promise<Tariff> {
+  async create(dto: CreateTariffDto): Promise<Tariff> {
+    const MAX_PER_TYPE = 3;
+    const existing = await this.repo.find({
+      where: { utility_type: dto.utility_type },
+      order: { effective_date: 'ASC', created_at: 'ASC' },
+    });
+    if (existing.length >= MAX_PER_TYPE) {
+      const toDelete = existing.slice(0, existing.length - MAX_PER_TYPE + 1);
+      await this.repo.remove(toDelete);
+    }
     const entity = this.repo.create(dto);
     return this.repo.save(entity);
   }

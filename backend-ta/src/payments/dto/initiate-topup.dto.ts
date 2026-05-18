@@ -5,12 +5,12 @@ export class InitiateTopupDto {
   @IsNotEmpty()
   unitNo!: string;
 
-  /** Rp amount credited to the electricity sub-balance. May be 0. */
+  /** Rp amount allocated for electricity tokens. May be 0. */
   @IsNumber()
   @Min(0)
   electricityAmount!: number;
 
-  /** Rp amount credited to the water sub-balance. May be 0. */
+  /** Rp amount allocated for water tokens. May be 0. */
   @IsNumber()
   @Min(0)
   waterAmount!: number;

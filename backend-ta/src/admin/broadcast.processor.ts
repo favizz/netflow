@@ -56,11 +56,9 @@ export class BroadcastProcessor extends WorkerHost {
       const PARALLEL = 50;
       for await (const chunk of this.unitService.streamAllWithDevice()) {
         for (let i = 0; i < chunk.length; i += PARALLEL) {
-          await Promise.all(
-            chunk
-              .slice(i, i + PARALLEL)
-              .map((u) => this.adminService.pushConfigToDevice(u.device_id)),
-          );
+          chunk
+            .slice(i, i + PARALLEL)
+            .forEach((u) => this.adminService.pushConfigToDevice(u.device_id!));
         }
         processed += chunk.length;
         await job.updateProgress(processed);
@@ -70,7 +68,7 @@ export class BroadcastProcessor extends WorkerHost {
       for await (const chunk of this.unitService.streamAllWithDevice()) {
         for (const unit of chunk) {
           this.adminService.pushOtaToDevice(
-            unit.device_id,
+            unit.device_id!,
             version,
             binaryLink,
             updateNow,

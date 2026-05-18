@@ -21,8 +21,6 @@ function makeRefreshRecord(overrides: Partial<any> = {}) {
   return {
     token_hash: 'hashed',
     user_sub: 'user@test.com',
-    unit_id: 1,
-    unit_no: 'A-101',
     revoked_at: null,
     expires_at: new Date(Date.now() + 7 * 24 * 3600 * 1000),
     ...overrides,

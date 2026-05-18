@@ -506,7 +506,7 @@ function StatCard({ icon, label, value, unit, rate, percentage, status, controlO
         <div className={`p-2 rounded-xl bg-card/80 shadow-sm ${textColor}`}>{icon}</div>
         <Switch
           checked={controlOn}
-          disabled={controlPending || !deviceOnline}
+          disabled={controlPending}
           onCheckedChange={onControlToggle}
           className="data-[state=checked]:bg-primary scale-90"
         />
