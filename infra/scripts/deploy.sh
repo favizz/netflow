@@ -44,7 +44,9 @@ log "Rollback point: ${PREV_COMMIT:0:8}"
 start_backend() {
   cd "$REPO_DIR/backend-ta"
   pm2 delete netflow-backend 2>/dev/null || true
-  pm2 start "node -r ./dist/src/tracing dist/src/main" --name netflow-backend \
+  # Use explicit node path and arguments to avoid shell wrapper issues
+  pm2 start dist/src/main.js --name netflow-backend \
+    --node-args="-r ./dist/src/tracing.js" \
     --env production
   cd "$REPO_DIR"
 }
@@ -52,7 +54,10 @@ start_backend() {
 
 
 rollback() {
-  log "FAILED - rolling back to ${PREV_COMMIT:0:8}..."
+  log "FAILED - showing logs for netflow-backend:"
+  pm2 logs netflow-backend --lines 50 --no-daemon || true
+  
+  log "Rolling back to ${PREV_COMMIT:0:8}..."
   git -C "$REPO_DIR" checkout "$PREV_COMMIT" -- .
   cd "$REPO_DIR/backend-ta"
   npm install
@@ -116,12 +121,26 @@ pm2 save
 
 # ── Smoke test ──────────────────────────────────────────────────────────────
 log "Waiting for backend to initialize..."
-sleep 15
 
-HEALTH_JSON=$(curl -sf --max-time 10 "$HEALTH_URL" || true)
-OVERALL=$(echo "$HEALTH_JSON" \
-  | python3 -c "import sys,json; print(json.load(sys.stdin).get('overall',''))" \
-  2>/dev/null || echo "")
+MAX_RETRIES=6
+RETRY_INTERVAL=10
+OVERALL=""
+
+for ((i=1; i<=MAX_RETRIES; i++)); do
+  log "Health check attempt $i/$MAX_RETRIES..."
+  HEALTH_JSON=$(curl -sf --max-time 5 "$HEALTH_URL" || true)
+  OVERALL=$(echo "$HEALTH_JSON" \
+    | python3 -c "import sys,json; print(json.load(sys.stdin).get('overall',''))" \
+    2>/dev/null || echo "")
+  
+  if [[ "$OVERALL" == "healthy" || "$OVERALL" == "ok" ]]; then
+    break
+  fi
+  
+  if [ $i -lt $MAX_RETRIES ]; then
+    sleep $RETRY_INTERVAL
+  fi
+done
 
 if [[ -z "$OVERALL" || "$OVERALL" == "critical" ]]; then
   log "Smoke test failed (overall=${OVERALL:-unreachable})"
