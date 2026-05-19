@@ -189,7 +189,6 @@ export class PaymentsService {
     eventId: string,
   ) {
     if (tx.status !== 'pending') return tx;
-<<<<<<< HEAD
 
     let finalStatus: 'pending' | 'success' | 'failed' = 'pending';
 
@@ -295,118 +294,73 @@ export class PaymentsService {
     if (tx.status !== 'pending') {
       return { status: tx.status };
     }
-=======
 
-    let finalStatus: 'pending' | 'success' | 'failed' = 'pending';
->>>>>>> a31d07c1f20047b8988cf762eb8ce05b1f90b755
+    tx.status = 'success';
+    tx.confirmed_at = new Date();
 
-    if (mStatus === 'capture') {
-      finalStatus = fStatus === 'challenge' ? 'pending' : 'success';
-    } else if (mStatus === 'settlement') {
-      finalStatus = 'success';
-    } else if (
-      mStatus === 'cancel' ||
-      mStatus === 'deny' ||
-      mStatus === 'expire'
-    ) {
-      finalStatus = 'failed';
+    if (tx.electricity_amount_rp > 0) {
+      const elecTariff = await this.tariffService.findCurrent('electricity');
+      await this.unitService.creditTokensByUnitNo(
+        tx.unit_no,
+        tx.electricity_amount_rp / elecTariff,
+        'electricity',
+      );
     }
 
-<<<<<<< HEAD
+    let updatedUnit = await this.unitService.findByUnitNo(tx.unit_no);
     if (tx.water_amount_rp > 0) {
       const waterTariff = await this.tariffService.findCurrent('water');
-      await this.unitService.creditTokensByUnitNo(
+      updatedUnit = await this.unitService.creditTokensByUnitNo(
         tx.unit_no,
         tx.water_amount_rp / waterTariff,
         'water',
       );
     }
 
-    await this.txRepo.save(tx);
-    return { status: tx.status };
-=======
-    if (finalStatus === 'pending') return tx;
-
-    tx.status = finalStatus;
-    tx.webhook_event_id = eventId;
-
-    if (finalStatus === 'success') {
-      tx.confirmed_at = new Date();
-
-      if (tx.electricity_amount_rp > 0) {
-        const elecTariff = await this.tariffService.findCurrent('electricity');
-        await this.unitService.creditTokensByUnitNo(
-          tx.unit_no,
-          tx.electricity_amount_rp / elecTariff,
-          'electricity',
+    if (updatedUnit.device_id) {
+      const payload = encodeTopup({
+        electricAmount: Number(tx.electricity_amount_rp),
+        waterAmount: Number(tx.water_amount_rp),
+        timestamp: Math.floor(Date.now() / 1000),
+      });
+      this.logger.log(
+        `Pushing top-up to device [${updatedUnit.device_id}]: elec=Rp${Number(tx.electricity_amount_rp)} water=Rp${Number(tx.water_amount_rp)}`,
+      );
+      this.mqttClient.emit(`device/${updatedUnit.device_id}/topup`, payload);
+      if (tx.electricity_amount_rp > 0)
+        this.mqttClient.emit(
+          `device/${updatedUnit.device_id}/command`,
+          encodeCommand('relay', 1),
         );
-      }
-
-      let updatedUnit = await this.unitService.findByUnitNo(tx.unit_no);
-      if (tx.water_amount_rp > 0) {
-        const waterTariff = await this.tariffService.findCurrent('water');
-        updatedUnit = await this.unitService.creditTokensByUnitNo(
-          tx.unit_no,
-          tx.water_amount_rp / waterTariff,
-          'water',
+      if (tx.water_amount_rp > 0)
+        this.mqttClient.emit(
+          `device/${updatedUnit.device_id}/command`,
+          encodeCommand('valve', 1),
         );
-      }
-
-      if (updatedUnit.device_id) {
-        const payload = encodeTopup({
-          electricAmount: Number(tx.electricity_amount_rp),
-          waterAmount: Number(tx.water_amount_rp),
-          timestamp: Math.floor(Date.now() / 1000),
-        });
-        this.logger.log(
-          `Pushing top-up to device [${updatedUnit.device_id}]: elec=Rp${Number(tx.electricity_amount_rp)} water=Rp${Number(tx.water_amount_rp)}`,
-        );
-        this.mqttClient.emit(`device/${updatedUnit.device_id}/topup`, payload);
-        if (tx.electricity_amount_rp > 0)
-          this.mqttClient.emit(
-            `device/${updatedUnit.device_id}/command`,
-            encodeCommand('relay', 1),
-          );
-        if (tx.water_amount_rp > 0)
-          this.mqttClient.emit(
-            `device/${updatedUnit.device_id}/command`,
-            encodeCommand('valve', 1),
-          );
-      }
-
-      const totalRp =
-        Number(tx.electricity_amount_rp) + Number(tx.water_amount_rp);
-      if (updatedUnit.resident_email) {
-        void this.notificationService
-          .sendResidentNotification(
-            updatedUnit.resident_email,
-            `[NetFlow] Top-up Berhasil — Unit ${tx.unit_no}`,
-            `✅ Pembayaran Rp ${totalRp.toLocaleString('id-ID')} berhasil dikonfirmasi.\n\nUnit: ${tx.unit_no}\nListrik: Rp ${Number(tx.electricity_amount_rp).toLocaleString('id-ID')}\nAir: Rp ${Number(tx.water_amount_rp).toLocaleString('id-ID')}\nID Transaksi: ${tx.id}\n\nToken Anda akan segera diperbarui.`,
-          )
-          .catch(() => {});
-      }
     }
-
-    await this.txRepo.save(tx);
-
     const totalRp =
       Number(tx.electricity_amount_rp) + Number(tx.water_amount_rp);
+    if (updatedUnit.resident_email) {
+      void this.notificationService
+        .sendResidentNotification(
+          updatedUnit.resident_email,
+          `[NetFlow] Top-up Berhasil — Unit ${tx.unit_no}`,
+          `✅ Pembayaran Rp ${totalRp.toLocaleString('id-ID')} berhasil dikonfirmasi.\n\nUnit: ${tx.unit_no}\nListrik: Rp ${Number(tx.electricity_amount_rp).toLocaleString('id-ID')}\nAir: Rp ${Number(tx.water_amount_rp).toLocaleString('id-ID')}\nID Transaksi: ${tx.id}\n\nToken Anda akan segera diperbarui.`,
+        )
+        .catch(() => {});
+    }
+    await this.txRepo.save(tx);
+
     void this.auditLogService.log(
-      'midtrans',
+      tx.unit_no,
       'TOKEN_PURCHASE',
       'transaction',
       tx.id,
-      {
-        amount: totalRp,
-        method: tx.method,
-        status: finalStatus,
-        gateway_status: mStatus,
-      },
-      finalStatus === 'success' ? 'success' : 'failure',
+      { amount: totalRp, method: tx.method, status: 'success' },
+      'success',
     );
 
-    return tx;
->>>>>>> a31d07c1f20047b8988cf762eb8ce05b1f90b755
+    return { status: tx.status };
   }
 
   async getTopupStatus(unitNo: string, transactionId: string) {
