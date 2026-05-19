@@ -62,15 +62,38 @@ export default function DevicesPage() {
             clientId: `dashboard-devices-${Math.random().toString(16).slice(2, 8)}`,
         });
         client.on('connect', () => { client.subscribe('device/+/data'); });
-        client.on('message', (topic) => {
+        client.on('message', (topic, message) => {
             const m = topic.match(/^device\/([^/]+)\/data$/);
             if (!m) return;
             const deviceId = m[1];
+
+            let relayOn: boolean | null = null;
+            let valveOn: boolean | null = null;
+
+            const uint8 = new Uint8Array(message.buffer, message.byteOffset, message.byteLength);
+            if (uint8.length >= 21) {
+                relayOn = (uint8[20] & 1) === 1;
+                valveOn = ((uint8[20] >> 1) & 1) === 1;
+            }
+
             setData(prev => {
                 const idx = prev.findIndex(item => item.meterSerial === deviceId);
-                if (idx === -1 || prev[idx].status === "Online") return prev;
+                if (idx === -1) return prev;
+                const cur = prev[idx];
+                const updated: InventoryItem = {
+                    ...cur,
+                    status: "Online",
+                    lastUpdate: "Live",
+                    ...(relayOn !== null && { power: relayOn }),
+                    ...(valveOn !== null && { water: valveOn }),
+                };
+                if (
+                    cur.status === updated.status &&
+                    cur.power === updated.power &&
+                    cur.water === updated.water
+                ) return prev;
                 const next = [...prev];
-                next[idx] = { ...next[idx], status: "Online", lastUpdate: "Live" };
+                next[idx] = updated;
                 return next;
             });
         });
