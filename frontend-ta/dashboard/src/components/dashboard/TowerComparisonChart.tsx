@@ -22,8 +22,8 @@ export function TowerComparisonChart() {
     return (
         <div className="rounded-lg bg-white p-6 shadow-sm ring-1 ring-gray-900/5">
             <h3 className="mb-4 text-base font-semibold text-gray-900">Tower Benchmarking</h3>
-            <div className="h-80 w-full">
-                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+            <div className="w-full">
+                <ResponsiveContainer width="100%" height={320}>
                     <BarChart
                         data={data}
                         margin={{

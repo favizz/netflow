@@ -75,7 +75,7 @@ export default function LoginPage({ onSuccess }: LoginPageProps) {
       window.google.accounts.id.renderButton(buttonRef.current, {
         theme: 'outline',
         size: 'large',
-        width: buttonRef.current.offsetWidth || 360,
+        width: Math.max(Math.round(buttonRef.current.getBoundingClientRect().width), 360),
         text: 'signin_with',
       });
     };

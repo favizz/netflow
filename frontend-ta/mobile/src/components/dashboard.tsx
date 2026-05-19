@@ -48,7 +48,7 @@ type ControlTarget = "relay" | "valve"
 
 const PERIODS: { id: TimePeriod; label: string }[] = [
   { id: "daily",   label: "Harian"   },
-  { id: "weekly",  label: "Mingguan" },
+  { id: "yearly",  label: "Tahunan"  },
   { id: "monthly", label: "Bulanan"  },
   { id: "live",    label: "Live"     },
 ]
@@ -98,25 +98,31 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
     return () => { active = false }
   }, [unitId])
 
-  // ── Load trend (Harian / Mingguan / Bulanan) ──────────────────────────────
+  // ── Load trend (Harian / Tahunan / Bulanan) ──────────────────────────────
   useEffect(() => {
     if (period === "live") return
     let active = true
     setTrendLoading(true)
     const load = async () => {
       try {
-        const apiPeriod = period === "monthly" ? "monthly" : "daily"
+        const apiPeriod = (period === "monthly" || period === "yearly") ? "monthly" : "daily"
         const rows = await api.getTrends(unitId, apiPeriod)
         if (!active) return
-        const mapped: TrendPoint[] = rows.map((r) => ({
-          date: period === "daily" || period === "weekly"
-            ? new Date(r.bucket).toLocaleDateString("id-ID", { day: "2-digit", month: "short" })
-            : new Date(r.bucket).toLocaleDateString("id-ID", { month: "short", year: "2-digit" }),
+        const currentYear = new Date().getFullYear()
+        const filtered = period === "yearly"
+          ? rows.filter((r) => new Date(r.bucket).getFullYear() === currentYear)
+          : rows
+        const mapped: TrendPoint[] = filtered.map((r) => ({
+          date: period === "yearly"
+            ? new Date(r.bucket).toLocaleDateString("id-ID", { month: "short" })
+            : period === "monthly"
+            ? new Date(r.bucket).toLocaleDateString("id-ID", { month: "short", year: "2-digit" })
+            : new Date(r.bucket).toLocaleDateString("id-ID", { day: "2-digit", month: "short" }),
           kwh:      r.kwh,
           water:    r.waterM3,
           fullDate: r.bucket,
         }))
-        setTrendData(period === "weekly" ? mapped.slice(-7) : mapped)
+        setTrendData(mapped)
       } catch {
         if (!active) return
         setTrendData([])
@@ -415,7 +421,7 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
         ) : (
           <ConsumptionChart
             data={displayData}
-            period={isLive ? "daily" : period === "monthly" ? "monthly" : "monthly"}
+            period={isLive ? "daily" : period === "monthly" ? "monthly" : period === "yearly" ? "yearly" : "daily"}
             dataKey={chartDataKey}
             unit={chartUnit}
             color={chartUtility === "electricity" ? "var(--primary)" : "var(--chart-2)"}

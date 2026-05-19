@@ -85,11 +85,16 @@ export default function ConsumptionHistory({ unitId }: ConsumptionHistoryProps) 
 
     const loadTrend = async () => {
       try {
-        const period = timePeriod === "monthly" ? "monthly" : "daily"
-        const rows = await api.getTrends(unitId, period)
+        const apiPeriod = (timePeriod === "monthly" || timePeriod === "yearly") ? "monthly" : "daily"
+        const rows = await api.getTrends(unitId, apiPeriod)
         if (!active) return
 
-        const mapped: ChartData[] = rows.map((r) => ({
+        const currentYear = new Date().getFullYear()
+        const filtered = timePeriod === "yearly"
+          ? rows.filter((r) => new Date(r.bucket).getFullYear() === currentYear)
+          : rows
+
+        const mapped: ChartData[] = filtered.map((r) => ({
           date: r.bucket,
           kwh: r.kwh,
           water: r.waterM3,
@@ -98,7 +103,7 @@ export default function ConsumptionHistory({ unitId }: ConsumptionHistoryProps) 
           fullDate: r.bucket,
         }))
 
-        setApiTrendData(timePeriod === "weekly" ? mapped.slice(-7) : mapped)
+        setApiTrendData(mapped)
       } catch {
         if (!active) return
         toast.error("Gagal memuat data tren")
@@ -256,13 +261,13 @@ export default function ConsumptionHistory({ unitId }: ConsumptionHistoryProps) 
         <TabsContent value="consumption" className="space-y-4">
           {/* Period toggle */}
           <div className={interactive.segRoot}>
-            {(["daily", "weekly", "monthly"] as TimePeriod[]).map((period) => (
+            {(["daily", "yearly", "monthly"] as TimePeriod[]).map((period) => (
               <button
                 key={period}
                 onClick={() => setTimePeriod(period)}
                 className={`${interactive.segItem} ${timePeriod === period ? interactive.segActive : interactive.segInactive}`}
               >
-                {period === "daily" ? "Harian" : period === "weekly" ? "Mingguan" : "Bulanan"}
+                {period === "daily" ? "Harian" : period === "yearly" ? "Tahunan" : "Bulanan"}
               </button>
             ))}
           </div>
@@ -301,7 +306,7 @@ export default function ConsumptionHistory({ unitId }: ConsumptionHistoryProps) 
             </div>
             <ConsumptionChart
               data={displayData}
-              period={timePeriod as "daily" | "weekly" | "monthly"}
+              period={timePeriod as "daily" | "yearly" | "monthly"}
               dataKey={selectedUtility === "kwh" ? "kwh" : "water"}
               unit={selectedUtility === "kwh" ? "KWh" : "m³"}
               color={selectedUtility === "kwh" ? "var(--primary)" : "var(--chart-2)"}

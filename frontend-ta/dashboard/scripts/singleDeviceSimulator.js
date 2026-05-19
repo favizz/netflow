@@ -67,9 +67,9 @@ function encodeTelemetry(t) {
 }
 
 const state = {
-    energyTotal: 0,   // kWh
-    waterTotal: 0,    // m³
-    balance: 100000,  // Rp — simulator-side tracking (backend is authoritative)
+    energyTotal: 120.50, // kWh — non-zero start so first frames don't encode as zero and trigger sensor_malfunction
+    waterTotal: 45.230,  // m³
+    balance: 100000,     // Rp — simulator-side tracking (backend is authoritative)
     relayOn: true,
     valveOpen: true,
     anomaly: null,
