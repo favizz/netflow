@@ -25,24 +25,16 @@ export class BinaryAwareMqttServer extends ServerMqtt {
       rawPacket = buffer; // ← key fix: preserve binary data
     }
 
-<<<<<<< HEAD
     const packet = (await this.deserializer.deserialize(
       rawPacket as Record<string, any>,
       { channel },
     )) as Record<string, any>;
-=======
-    const packet = await this.deserializer.deserialize(
-      rawPacket as Record<string, any>,
-      { channel },
-    );
->>>>>>> a31d07c1f20047b8988cf762eb8ce05b1f90b755
     const mqttContext = new MqttContext([
       channel,
       originalPacket as Record<string, any>,
     ]);
 
     // Event-based pattern (all handlers in this project use this path)
-<<<<<<< HEAD
     if (packet.id == null) {
       await this.handleEvent(channel, packet, mqttContext);
       return;
@@ -59,38 +51,13 @@ export class BinaryAwareMqttServer extends ServerMqtt {
         err: 'No matching message handler.',
       });
       return;
-=======
-    if ((packet as any).id == null) {
-      return this.handleEvent(channel, packet, mqttContext);
-    }
-
-    // Request-response pattern (included for completeness)
-    /* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
-    const publish = (this as any).getPublisher(
-      pub,
-      mqttContext,
-      (packet as any).id,
-    );
-    const handler = (this as any).getHandlerByPattern(channel);
-    if (!handler) {
-      return publish({
-        id: (packet as any).id,
-        status: 'error',
-        err: 'No matching message handler.',
-      });
->>>>>>> a31d07c1f20047b8988cf762eb8ce05b1f90b755
     }
     const response$ = this.transformToObservable(
       await handler(packet.data, mqttContext),
     );
-<<<<<<< HEAD
     if (response$) {
       this.send(response$, publish);
     }
     /* eslint-enable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument */
-=======
-    response$ && this.send(response$, publish);
-    /* eslint-enable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
->>>>>>> a31d07c1f20047b8988cf762eb8ce05b1f90b755
   }
 }
