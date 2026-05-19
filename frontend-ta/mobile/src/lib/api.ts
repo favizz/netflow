@@ -340,14 +340,6 @@ export const api = {
     );
   },
 
-  autoConfirmTopup(unitNo: string, transactionId: string) {
-    return request<PaymentTransaction>(
-      `/gateway/mobile/${encodeURIComponent(unitNo)}/topup/auto-confirm/${encodeURIComponent(transactionId)}`,
-      {
-        method: 'POST',
-      },
-    );
-  },
 
   setRelay(unitNo: string, on: boolean) {
     return request<{ relayStatus: boolean }>(

@@ -37,11 +37,6 @@ export class PaymentsController {
     return this.paymentsService.handleWebhook(dto);
   }
 
-  @Post('topup/auto-confirm/:transactionId')
-  autoConfirm(@Param('transactionId') transactionId: string) {
-    return this.paymentsService.autoConfirm(transactionId);
-  }
-
   @Get('transactions/:unitNo')
   transactions(@Param('unitNo') unitNo: string) {
     return this.paymentsService.listTransactionsForUnit(unitNo);
