@@ -42,11 +42,6 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "react-resizable-panels"
         update-types: ["version-update:semver-major"]
-  - package-ecosystem: pip
-    directory: /ml-service
-    schedule:
-      interval: weekly
-    open-pull-requests-limit: 5
   - package-ecosystem: github-actions
     directory: /
     schedule:
