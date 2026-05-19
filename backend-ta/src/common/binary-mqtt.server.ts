@@ -1,4 +1,4 @@
-import { ServerMqtt, MqttContext } from '@nestjs/microservices';
+import { ServerMqtt, MqttContext, ReadPacket } from '@nestjs/microservices';
 
 /**
  * Extends the default NestJS MQTT server to preserve raw binary payloads.
@@ -28,7 +28,7 @@ export class BinaryAwareMqttServer extends ServerMqtt {
     const packet = (await this.deserializer.deserialize(
       rawPacket as Record<string, any>,
       { channel },
-    )) as Record<string, any>;
+    )) as ReadPacket<any>;
     const mqttContext = new MqttContext([
       channel,
       originalPacket as Record<string, any>,
