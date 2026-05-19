@@ -28,7 +28,7 @@ export class BinaryAwareMqttServer extends ServerMqtt {
     const packet = (await this.deserializer.deserialize(
       rawPacket as Record<string, any>,
       { channel },
-    )) as ReadPacket<any>;
+    )) as ReadPacket<any> & { id?: string };
     const mqttContext = new MqttContext([
       channel,
       originalPacket as Record<string, any>,
