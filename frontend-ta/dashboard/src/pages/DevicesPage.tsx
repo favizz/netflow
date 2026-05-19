@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import { InventoryTable } from "@/components/inventory/InventoryTable";
 import { AddDeviceModal } from "@/components/inventory/AddDeviceModal";
+import { EditUnitModal } from "@/components/inventory/EditUnitModal";
 import type { InventoryItem } from "@/lib/mockData";
 import { fetchApi } from "@/lib/api";
 import mqtt from "mqtt";
@@ -13,6 +14,7 @@ export default function DevicesPage() {
 
     const [data, setData] = useState<InventoryItem[]>([]);
     const [isAddOpen, setIsAddOpen] = useState(false);
+    const [editTarget, setEditTarget] = useState<InventoryItem | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [buildings, setBuildings] = useState<{id: number, code: string, name: string}[]>([]);
 
@@ -114,10 +116,12 @@ export default function DevicesPage() {
                     initialFilter={initialFilter}
                     buildings={buildings}
                     onAdd={() => setIsAddOpen(true)}
+                    onEdit={(item) => setEditTarget(item)}
                 />
             )}
 
             <AddDeviceModal isOpen={isAddOpen} onClose={() => setIsAddOpen(false)} onSuccess={loadData} />
+            <EditUnitModal unit={editTarget} onClose={() => setEditTarget(null)} onSuccess={loadData} />
         </div>
     );
 }

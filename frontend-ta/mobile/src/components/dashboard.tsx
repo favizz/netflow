@@ -108,20 +108,29 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
         const apiPeriod = (period === "monthly" || period === "yearly") ? "monthly" : "daily"
         const rows = await api.getTrends(unitId, apiPeriod)
         if (!active) return
-        const currentYear = new Date().getFullYear()
-        const filtered = period === "yearly"
-          ? rows.filter((r) => new Date(r.bucket).getFullYear() === currentYear)
-          : rows
-        const mapped: TrendPoint[] = filtered.map((r) => ({
-          date: period === "yearly"
-            ? new Date(r.bucket).toLocaleDateString("id-ID", { month: "short" })
-            : period === "monthly"
-            ? new Date(r.bucket).toLocaleDateString("id-ID", { month: "short", year: "2-digit" })
-            : new Date(r.bucket).toLocaleDateString("id-ID", { day: "2-digit", month: "short" }),
-          kwh:      r.kwh,
-          water:    r.waterM3,
-          fullDate: r.bucket,
-        }))
+
+        let mapped: TrendPoint[]
+        if (period === "yearly") {
+          // Aggregate monthly buckets → one bar per year
+          const yearMap = new Map<string, { kwh: number; water: number }>()
+          rows.forEach((r) => {
+            const year = String(new Date(r.bucket).getFullYear())
+            const e = yearMap.get(year) || { kwh: 0, water: 0 }
+            yearMap.set(year, { kwh: e.kwh + r.kwh, water: e.water + r.waterM3 })
+          })
+          mapped = [...yearMap.entries()]
+            .sort(([a], [b]) => Number(a) - Number(b))
+            .map(([year, vals]) => ({ date: year, kwh: vals.kwh, water: vals.water, fullDate: `${year}-01-01` }))
+        } else {
+          mapped = rows.map((r) => ({
+            date: period === "monthly"
+              ? new Date(r.bucket).toLocaleDateString("id-ID", { month: "short", year: "2-digit" })
+              : new Date(r.bucket).toLocaleDateString("id-ID", { day: "2-digit", month: "short" }),
+            kwh:      r.kwh,
+            water:    r.waterM3,
+            fullDate: r.bucket,
+          }))
+        }
         setTrendData(mapped)
       } catch {
         if (!active) return

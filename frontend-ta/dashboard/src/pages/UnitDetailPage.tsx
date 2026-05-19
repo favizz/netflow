@@ -275,6 +275,27 @@ export default function UnitDetailPage() {
     useEffect(() => {
         if (period === "live" || rawTrendData.length === 0) return;
 
+        if (period === "yearly") {
+            // Aggregate monthly buckets → one bar per year
+            const yearMap = new Map<string, { powerVal: number; waterVal: number }>();
+            rawTrendData.forEach(t => {
+                const year = String(new Date(t.bucket).getFullYear());
+                const e = yearMap.get(year) || { powerVal: 0, waterVal: 0 };
+                yearMap.set(year, {
+                    powerVal: e.powerVal + Number(t.kwh || 0),
+                    waterVal: e.waterVal + Number(t.waterM3 || t.water_m3 || 0),
+                });
+            });
+            setHistoricalTrends(
+                [...yearMap.entries()]
+                    .sort(([a], [b]) => Number(a) - Number(b))
+                    .map(([year, vals]) => ({ time: year, ...vals }))
+            );
+            setHasPrev(false);
+            setHasNext(false);
+            return;
+        }
+
         let filtered = rawTrendData;
         if (period === "daily") {
             filtered = rawTrendData.filter(t => {
@@ -293,22 +314,17 @@ export default function UnitDetailPage() {
             waterVal: Number(t.waterM3 || t.water_m3 || 0),
         })));
 
-        if (period === "daily" || period === "monthly") {
-            const allKeys = rawTrendData.map(t => {
-                const d = new Date(t.bucket);
-                return period === "daily"
-                    ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-                    : String(d.getFullYear());
-            });
-            const unique = [...new Set(allKeys)];
-            const prevKey = offsetKey(periodKey, period, -1);
-            const nextKey = offsetKey(periodKey, period, 1);
-            setHasPrev(unique.includes(prevKey));
-            setHasNext(nextKey <= getDefaultPeriodKey(period) && unique.includes(nextKey));
-        } else {
-            setHasPrev(false);
-            setHasNext(false);
-        }
+        const allKeys = rawTrendData.map(t => {
+            const d = new Date(t.bucket);
+            return period === "daily"
+                ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+                : String(d.getFullYear());
+        });
+        const unique = [...new Set(allKeys)];
+        const prevKey = offsetKey(periodKey, period, -1);
+        const nextKey = offsetKey(periodKey, period, 1);
+        setHasPrev(unique.includes(prevKey));
+        setHasNext(nextKey <= getDefaultPeriodKey(period) && unique.includes(nextKey));
     }, [rawTrendData, periodKey, period]);
 
     // Auto-refresh anomalies every 10 seconds
@@ -579,11 +595,10 @@ export default function UnitDetailPage() {
                                     <Power className={cn("w-4 h-4", powerState ? "text-primary" : "text-gray-400 dark:text-gray-500")} />
                                     <span className="text-sm font-medium text-gray-800 dark:text-gray-200">Power Supply</span>
                                 </div>
-                                <label className={cn("relative inline-flex items-center", isOnline ? "cursor-pointer" : "cursor-not-allowed opacity-50")}>
+                                <label className="relative inline-flex items-center cursor-pointer">
                                     <input
                                         type="checkbox"
                                         checked={powerState}
-                                        disabled={!isOnline}
                                         onChange={(e) => setConfirmAction({ type: 'power', next: e.target.checked })}
                                         className="sr-only peer"
                                     />
@@ -595,11 +610,10 @@ export default function UnitDetailPage() {
                                     <Droplets className={cn("w-4 h-4", waterState ? "text-cyan-500" : "text-gray-400 dark:text-gray-500")} />
                                     <span className="text-sm font-medium text-gray-800 dark:text-gray-200">Water Supply</span>
                                 </div>
-                                <label className={cn("relative inline-flex items-center", isOnline ? "cursor-pointer" : "cursor-not-allowed opacity-50")}>
+                                <label className="relative inline-flex items-center cursor-pointer">
                                     <input
                                         type="checkbox"
                                         checked={waterState}
-                                        disabled={!isOnline}
                                         onChange={(e) => setConfirmAction({ type: 'water', next: e.target.checked })}
                                         className="sr-only peer"
                                     />

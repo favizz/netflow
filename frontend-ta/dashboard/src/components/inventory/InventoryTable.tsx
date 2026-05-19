@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
-import { Search, Power, Droplets, ChevronDown, ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { Search, Power, Droplets, ChevronDown, ChevronLeft, ChevronRight, Plus, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { InventoryItem } from "@/lib/mockData";
 import { PAGE_SIZE } from "@/lib/constants";
@@ -125,9 +125,10 @@ interface InventoryTableProps {
     initialFilter?: string;
     buildings?: { id: number; code: string; name: string }[];
     onAdd?: () => void;
+    onEdit?: (item: InventoryItem) => void;
 }
 
-export function InventoryTable({ data, initialFilter = "", buildings = [], onAdd }: InventoryTableProps) {
+export function InventoryTable({ data, initialFilter = "", buildings = [], onAdd, onEdit }: InventoryTableProps) {
     const navigate = useNavigate();
     const [searchQuery, setSearchQuery] = useState(initialFilter);
     const [statusFilter, setStatusFilter] = useState<"All" | "Online" | "Offline">("All");
@@ -211,6 +212,7 @@ export function InventoryTable({ data, initialFilter = "", buildings = [], onAdd
                             <th className="hidden md:table-cell px-3 sm:px-6 py-3 font-medium">Device ID</th>
                             <th className="px-3 sm:px-6 py-3 font-medium">Status</th>
                             <th className="hidden sm:table-cell px-3 sm:px-6 py-3 font-medium">Utilities</th>
+                            {onEdit && <th className="px-3 sm:px-6 py-3 font-medium text-right">Actions</th>}
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
@@ -265,11 +267,22 @@ export function InventoryTable({ data, initialFilter = "", buildings = [], onAdd
                                             </span>
                                         </div>
                                     </td>
+                                    {onEdit && (
+                                        <td className="px-3 sm:px-6 py-3 text-right">
+                                            <button
+                                                title="Edit unit"
+                                                onClick={(e) => { e.stopPropagation(); onEdit(item); }}
+                                                className="rounded-md border border-gray-200 dark:border-gray-600 p-1.5 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                                            >
+                                                <Pencil className="h-3.5 w-3.5" />
+                                            </button>
+                                        </td>
+                                    )}
                                 </tr>
                             ))
                         ) : (
                             <tr>
-                                <td colSpan={6} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
+                                <td colSpan={onEdit ? 7 : 6} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
                                     No devices found matching your search.
                                 </td>
                             </tr>
