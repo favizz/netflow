@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useParams, useNavigate } from "react-router-dom";
 import { useIsDark } from "@/lib/useIsDark";
-import { ArrowLeft, Power, Droplets, Zap, FileText, ChevronDown, ChevronUp, Wifi, WifiOff, Activity, AlertTriangle, Trash2, Radio } from "lucide-react";
+import { ArrowLeft, Power, Droplets, Zap, FileText, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Wifi, WifiOff, Activity, AlertTriangle, Trash2, Radio } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, AreaChart, Area } from "recharts";
 import { cn } from "@/lib/utils";
 import mqtt from "mqtt";
@@ -32,10 +32,10 @@ function decodeTelemetry(buf: Uint8Array): IoTPayload | null {
 type TimePeriod = "live" | "daily" | "yearly" | "monthly";
 
 const PERIODS: { id: TimePeriod; label: string }[] = [
-    { id: "live",    label: "Live"     },
-    { id: "daily",   label: "Harian"   },
-    { id: "yearly",  label: "Tahunan"  },
-    { id: "monthly", label: "Bulanan"  },
+    { id: "daily",   label: "Harian"  },
+    { id: "yearly",  label: "Tahunan" },
+    { id: "monthly", label: "Bulanan" },
+    { id: "live",    label: "Live"    },
 ];
 
 interface LogEntry {
@@ -66,6 +66,34 @@ const MQTT_CONFIG = {
         reconnectPeriod: 5000,
     }
 };
+
+type RawTrendRow = { bucket: string; kwh?: unknown; waterM3?: unknown; water_m3?: unknown };
+
+function getDefaultPeriodKey(period: TimePeriod): string {
+    const now = new Date();
+    if (period === "daily")   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    if (period === "monthly") return String(now.getFullYear());
+    return '';
+}
+
+function offsetKey(key: string, period: TimePeriod, delta: number): string {
+    if (period === "daily") {
+        const [y, m] = key.split('-').map(Number);
+        const d = new Date(y, m - 1 + delta);
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    }
+    if (period === "monthly") return String(Number(key) + delta);
+    return '';
+}
+
+function periodKeyLabel(key: string, period: TimePeriod): string {
+    if (period === "daily") {
+        const [y, m] = key.split('-').map(Number);
+        return new Date(y, m - 1).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+    }
+    if (period === "monthly") return `Tahun ${key}`;
+    return '';
+}
 
 type ConfirmAction = { type: 'power'; next: boolean } | { type: 'water'; next: boolean } | { type: 'delete' } | null;
 
@@ -160,6 +188,10 @@ export default function UnitDetailPage() {
     const [liveLogs, setLiveLogs] = useState<LogEntry[]>([]);
 
     const [historicalTrends, setHistoricalTrends] = useState<{ time: string; powerVal: number; waterVal: number; }[]>([]);
+    const [rawTrendData, setRawTrendData] = useState<RawTrendRow[]>([]);
+    const [periodKey, setPeriodKey] = useState(() => getDefaultPeriodKey("daily"));
+    const [hasPrev, setHasPrev] = useState(false);
+    const [hasNext, setHasNext] = useState(false);
     const [trendLoading, setTrendLoading] = useState(false);
 
     const [energyStats, setEnergyStats] = useState({ total_kwh: 0, active_power_w: 0 });
@@ -214,32 +246,70 @@ export default function UnitDetailPage() {
             .catch(() => {});
     }, [id]);
 
-    // Load historical trends
+    // Reset periodKey when period changes
+    useEffect(() => {
+        setPeriodKey(getDefaultPeriodKey(period));
+        setHasPrev(false);
+        setHasNext(false);
+        setRawTrendData([]);
+        setHistoricalTrends([]);
+    }, [period]);
+
+    // Fetch raw trend data when unit or period changes (not on periodKey changes)
     useEffect(() => {
         if (!unitInfo?.unit || period === "live") return;
+        let cancelled = false;
         setTrendLoading(true);
-        const apiPeriod = (period === "monthly" || period === "yearly") ? "monthly" : "daily";
+        const apiPeriod = period === "daily" ? "daily" : "monthly";
         fetchApi(`/reporting/trends/${encodeURIComponent(unitInfo.unit)}?period=${apiPeriod}`)
             .then(raw => {
-                const currentYear = new Date().getFullYear();
-                let items = (raw || []) as { bucket: string; kwh?: string; waterM3?: string; water_m3?: string; }[];
-                if (period === "yearly") {
-                    items = items.filter(t => new Date(t.bucket).getFullYear() === currentYear);
-                }
-                const mapped = items.map(t => ({
-                    time: period === "monthly"
-                        ? new Date(t.bucket).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })
-                        : period === "yearly"
-                        ? new Date(t.bucket).toLocaleDateString('id-ID', { month: 'short' })
-                        : new Date(t.bucket).toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric' }),
-                    powerVal: parseFloat(t.kwh || "0"),
-                    waterVal: parseFloat(t.waterM3 || t.water_m3 || "0"),
-                }));
-                setHistoricalTrends(mapped);
+                if (cancelled) return;
+                setRawTrendData((raw || []) as RawTrendRow[]);
             })
-            .catch(() => setHistoricalTrends([]))
-            .finally(() => setTrendLoading(false));
+            .catch(() => { if (!cancelled) { setRawTrendData([]); setHistoricalTrends([]); } })
+            .finally(() => { if (!cancelled) setTrendLoading(false); });
+        return () => { cancelled = true; };
     }, [unitInfo?.unit, period]);
+
+    // Filter raw data by periodKey and compute hasPrev/hasNext
+    useEffect(() => {
+        if (period === "live" || rawTrendData.length === 0) return;
+
+        let filtered = rawTrendData;
+        if (period === "daily") {
+            filtered = rawTrendData.filter(t => {
+                const d = new Date(t.bucket);
+                return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` === periodKey;
+            });
+        } else if (period === "monthly") {
+            filtered = rawTrendData.filter(t => String(new Date(t.bucket).getFullYear()) === periodKey);
+        }
+
+        setHistoricalTrends(filtered.map(t => ({
+            time: period === "daily"
+                ? new Date(t.bucket).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })
+                : new Date(t.bucket).toLocaleDateString('id-ID', { month: 'short' }),
+            powerVal: Number(t.kwh || 0),
+            waterVal: Number(t.waterM3 || t.water_m3 || 0),
+        })));
+
+        if (period === "daily" || period === "monthly") {
+            const allKeys = rawTrendData.map(t => {
+                const d = new Date(t.bucket);
+                return period === "daily"
+                    ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+                    : String(d.getFullYear());
+            });
+            const unique = [...new Set(allKeys)];
+            const prevKey = offsetKey(periodKey, period, -1);
+            const nextKey = offsetKey(periodKey, period, 1);
+            setHasPrev(unique.includes(prevKey));
+            setHasNext(nextKey <= getDefaultPeriodKey(period) && unique.includes(nextKey));
+        } else {
+            setHasPrev(false);
+            setHasNext(false);
+        }
+    }, [rawTrendData, periodKey, period]);
 
     // Auto-refresh anomalies every 10 seconds
     useEffect(() => {
@@ -623,7 +693,30 @@ export default function UnitDetailPage() {
                                 )}
                                 {isLive ? (isConnected ? "Live" : "Connecting...") : "Rentang Waktu"}
                             </div>
-                            <PeriodDropdown value={period} onChange={setPeriod} />
+                            <div className="flex items-center gap-2">
+                                {(period === "daily" || period === "monthly") && (
+                                    <div className="flex items-center">
+                                        <button
+                                            onClick={() => setPeriodKey(k => offsetKey(k, period, -1))}
+                                            disabled={!hasPrev}
+                                            className="rounded p-1 text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                        >
+                                            <ChevronLeft className="h-4 w-4" />
+                                        </button>
+                                        <span className="text-xs font-medium text-gray-700 dark:text-gray-300 min-w-[120px] text-center">
+                                            {periodKeyLabel(periodKey, period)}
+                                        </span>
+                                        <button
+                                            onClick={() => setPeriodKey(k => offsetKey(k, period, 1))}
+                                            disabled={!hasNext}
+                                            className="rounded p-1 text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                        >
+                                            <ChevronRight className="h-4 w-4" />
+                                        </button>
+                                    </div>
+                                )}
+                                <PeriodDropdown value={period} onChange={setPeriod} />
+                            </div>
                         </div>
                     </div>
 
@@ -632,7 +725,7 @@ export default function UnitDetailPage() {
                         <div className="flex items-center justify-between mb-6">
                             <h3 className="font-semibold text-gray-900 dark:text-gray-100">Power Consumption</h3>
                             <span className="text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
-                                {isLive ? "Live (W)" : period === "daily" ? "Harian (KWh)" : period === "yearly" ? "Tahunan (KWh)" : "Bulanan (KWh)"}
+                                {isLive ? "Live (W)" : period === "yearly" ? "Tahunan (KWh)" : period === "monthly" ? "Bulanan (KWh)" : "Harian (KWh)"}
                             </span>
                         </div>
                         {trendLoading ? (
@@ -663,7 +756,7 @@ export default function UnitDetailPage() {
                         <div className="flex items-center justify-between mb-6">
                             <h3 className="font-semibold text-gray-900 dark:text-gray-100">Water Consumption</h3>
                             <span className="text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
-                                {isLive ? "Live (L/min)" : period === "daily" ? "Harian (m³)" : period === "yearly" ? "Tahunan (m³)" : "Bulanan (m³)"}
+                                {isLive ? "Live (L/min)" : period === "yearly" ? "Tahunan (m³)" : period === "monthly" ? "Bulanan (m³)" : "Harian (m³)"}
                             </span>
                         </div>
                         {trendLoading ? (
