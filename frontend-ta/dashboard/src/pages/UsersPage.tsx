@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
-import { Users, UserPlus, Trash2, Link, ChevronLeft, ChevronRight, Search, ChevronDown, Loader2, Check, X, Shield } from "lucide-react";
+import { Users, Trash2, Link, ChevronLeft, ChevronRight, Search, ChevronDown, Loader2, Check, X, Shield, Plus } from "lucide-react";
 import { fetchApi } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/components/layout/ToastProvider";
@@ -337,7 +337,7 @@ export default function UsersPage() {
                                 onClick={() => { setShowAddForm(true); setAddError(null); setAddForm({ email: '', name: '' }); }}
                                 className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary/90 transition-colors"
                             >
-                                <UserPlus className="h-4 w-4" />
+                                <Plus className="h-4 w-4" />
                                 Add User
                             </button>
                         </div>

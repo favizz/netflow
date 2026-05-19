@@ -25,39 +25,39 @@ export class BinaryAwareMqttServer extends ServerMqtt {
       rawPacket = buffer; // ← key fix: preserve binary data
     }
 
-    const packet = await this.deserializer.deserialize(
+    const packet = (await this.deserializer.deserialize(
       rawPacket as Record<string, any>,
       { channel },
-    );
+    )) as Record<string, any>;
     const mqttContext = new MqttContext([
       channel,
       originalPacket as Record<string, any>,
     ]);
 
     // Event-based pattern (all handlers in this project use this path)
-    if ((packet as any).id == null) {
-      return this.handleEvent(channel, packet, mqttContext);
+    if (packet.id == null) {
+      await this.handleEvent(channel, packet, mqttContext);
+      return;
     }
 
     // Request-response pattern (included for completeness)
-    /* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
-    const publish = (this as any).getPublisher(
-      pub,
-      mqttContext,
-      (packet as any).id,
-    );
+    /* eslint-disable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument */
+    const publish = (this as any).getPublisher(pub, mqttContext, packet.id);
     const handler = (this as any).getHandlerByPattern(channel);
     if (!handler) {
-      return publish({
-        id: (packet as any).id,
+      publish({
+        id: packet.id,
         status: 'error',
         err: 'No matching message handler.',
       });
+      return;
     }
     const response$ = this.transformToObservable(
       await handler(packet.data, mqttContext),
     );
-    response$ && this.send(response$, publish);
-    /* eslint-enable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
+    if (response$) {
+      this.send(response$, publish);
+    }
+    /* eslint-enable @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-argument */
   }
 }

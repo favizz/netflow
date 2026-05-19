@@ -82,27 +82,36 @@ export class AnomalyService implements OnModuleInit {
     tokenElec: number,
     tokenWater: number,
     relayStatus: boolean,
+    valveStatus: boolean,
   ): void {
     try {
       const pw = power ?? 0;
       const vv = voltage ?? 0;
       const wf = waterFlow ?? 0;
 
-      // Throttled safety cutoffs - prevents spamming MQTT and consuming resources
+      // Re-send cutoff commands if device didn't acknowledge: relay off when
+      // token depleted or MCB/overvoltage; valve close when water token gone.
       const lastCmd = this.lastSafetyCommandMs.get(deviceId) ?? 0;
-      const shouldCutoff =
-        ((tokenElec <= 0 || tokenWater <= 0) &&
-          !relayStatus &&
-          (pw > 5 || wf > 0.1)) ||
+      const relayShouldCut =
+        (tokenElec <= 0 && !relayStatus && pw > 5) ||
         pw > MCB_WATT_LIMIT ||
         vv > VOLTAGE_CRITICAL_HIGH;
+      const valveShouldCut = tokenWater <= 0 && !valveStatus && wf > 0.1;
 
-      if (shouldCutoff && Date.now() - lastCmd > 5 * 60 * 1000) {
+      if ((relayShouldCut || valveShouldCut) && Date.now() - lastCmd > 5 * 60 * 1000) {
         this.lastSafetyCommandMs.set(deviceId, Date.now());
-        this.mqttClient.emit(
-          `device/${deviceId}/command`,
-          encodeCommand('relay', 0),
-        );
+        if (relayShouldCut) {
+          this.mqttClient.emit(
+            `device/${deviceId}/command`,
+            encodeCommand('relay', 0),
+          );
+        }
+        if (valveShouldCut) {
+          this.mqttClient.emit(
+            `device/${deviceId}/command`,
+            encodeCommand('valve', 0),
+          );
+        }
       }
 
       // Receiving telemetry proves the device is online.
@@ -445,20 +454,22 @@ export class AnomalyService implements OnModuleInit {
     const pw = latest.power ?? 0;
     const wf = latest.water_flow ?? 0;
 
-    if (
-      (Number(unit.token_electricity) <= 0 || Number(unit.token_water) <= 0) &&
-      !unit.relay_status &&
-      (pw > 5 || wf > 0.1)
-    ) {
+    const elecBypassed = Number(unit.token_electricity) <= 0 && !unit.relay_status && pw > 5;
+    const waterBypassed = Number(unit.token_water) <= 0 && !unit.valve_status && wf > 0.1;
+    if (elecBypassed || waterBypassed) {
+      const parts: string[] = [];
+      if (elecBypassed) parts.push(`listrik: ${pw.toFixed(0)} W (relay OFF)`);
+      if (waterBypassed) parts.push(`air: ${wf.toFixed(2)} L/min (valve CLOSE)`);
       anomalies.push({
         anomalyType: 'jailbreak',
         severity: 'critical',
         target: 'admin',
-        message: `Bypass terdeteksi pada unit ${unitNo}: token habis dan relay OFF, sensor masih aktif (${pw.toFixed(0)} W, ${wf.toFixed(2)} L/min).`,
+        message: `Bypass terdeteksi pada unit ${unitNo}: cutoff aktif tapi sensor masih aktif — ${parts.join(', ')}.`,
         metadata: {
           token_kwh: unit.token_electricity,
           token_m3: unit.token_water,
           relay_status: unit.relay_status,
+          valve_status: unit.valve_status,
           power_w: pw,
           flow_lpm: wf,
         },

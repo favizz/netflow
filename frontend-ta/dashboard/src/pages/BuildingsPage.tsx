@@ -20,6 +20,16 @@ type BuildingForm = {
 
 const EMPTY_FORM: BuildingForm = { code: '', name: '', address: '', floors: 1 };
 
+function friendlyError(err: unknown, fallback: string): string {
+    const raw = err instanceof Error ? err.message : fallback;
+    const body = raw.replace(/^API error \(\d+\): /, '');
+    try {
+        const parsed = JSON.parse(body) as { message?: string };
+        if (parsed.message && parsed.message.length < 80) return parsed.message;
+    } catch { /* not JSON */ }
+    return fallback;
+}
+
 function BuildingModal({
     initial,
     onSave,
@@ -46,8 +56,7 @@ function BuildingModal({
             await onSave(form);
             onClose();
         } catch (err: unknown) {
-            const msg = err instanceof Error ? err.message : 'Failed to save.';
-            setError(msg.replace(/^API error \(\d+\): /, '') || 'Failed to save.');
+            setError(friendlyError(err, 'Gagal menyimpan.'));
         } finally {
             setSaving(false);
         }
@@ -171,8 +180,7 @@ export default function BuildingsPage() {
             setDeleteTarget(null);
             load();
         } catch (err: unknown) {
-            const msg = err instanceof Error ? err.message : 'Failed to delete.';
-            setDeleteError(msg.replace(/^API error \(\d+\): /, '') || 'Failed to delete.');
+            setDeleteError(friendlyError(err, 'Gedung masih punya unit.'));
         } finally {
             setDeleting(false);
         }
@@ -185,7 +193,6 @@ export default function BuildingsPage() {
             <div className="rounded-lg bg-white dark:bg-gray-900 shadow-sm ring-1 ring-gray-900/5 dark:ring-gray-700 overflow-hidden">
                 <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 px-6 py-4">
                     <div className="flex items-center gap-2">
-                        <Building2 className="h-5 w-5 text-gray-400 dark:text-gray-500" />
                         <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{buildings.length} building{buildings.length !== 1 ? 's' : ''}</span>
                     </div>
                     <button

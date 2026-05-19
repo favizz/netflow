@@ -287,6 +287,39 @@ export class PaymentsService {
     return tx;
   }
 
+  async autoConfirm(transactionId: string): Promise<{ status: string }> {
+    const tx = await this.txRepo.findOne({ where: { id: transactionId } });
+    if (!tx) throw new NotFoundException('Transaction not found');
+
+    if (tx.status !== 'pending') {
+      return { status: tx.status };
+    }
+
+    tx.status = 'success';
+    tx.confirmed_at = new Date();
+
+    if (tx.electricity_amount_rp > 0) {
+      const elecTariff = await this.tariffService.findCurrent('electricity');
+      await this.unitService.creditTokensByUnitNo(
+        tx.unit_no,
+        tx.electricity_amount_rp / elecTariff,
+        'electricity',
+      );
+    }
+
+    if (tx.water_amount_rp > 0) {
+      const waterTariff = await this.tariffService.findCurrent('water');
+      await this.unitService.creditTokensByUnitNo(
+        tx.unit_no,
+        tx.water_amount_rp / waterTariff,
+        'water',
+      );
+    }
+
+    await this.txRepo.save(tx);
+    return { status: tx.status };
+  }
+
   async getTopupStatus(unitNo: string, transactionId: string) {
     const tx = await this.getTransactionForUnit(unitNo, transactionId);
 

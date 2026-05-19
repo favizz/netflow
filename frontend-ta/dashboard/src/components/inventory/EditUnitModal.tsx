@@ -89,7 +89,7 @@ interface EditUnitModalProps {
 }
 
 export function EditUnitModal({ unit, onClose, onSuccess }: EditUnitModalProps) {
-    const [deviceId, setDeviceId] = useState("");
+    const [unitNo, setUnitNo] = useState("");
     const [selectedBuilding, setSelectedBuilding] = useState<Building | null>(null);
 
     const [buildings, setBuildings] = useState<Building[]>([]);
@@ -101,7 +101,7 @@ export function EditUnitModal({ unit, onClose, onSuccess }: EditUnitModalProps) 
 
     useEffect(() => {
         if (unit) {
-            setDeviceId(unit.meterSerial);
+            setUnitNo(unit.unit);
             setError(null);
 
             setLoadingBuildings(true);
@@ -120,17 +120,18 @@ export function EditUnitModal({ unit, onClose, onSuccess }: EditUnitModalProps) 
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (!unitNo.trim()) { setError("Unit number is required."); return; }
         setError(null);
         setLoading(true);
         try {
             await fetchApi(`/unit/${unit.id}`, {
                 method: 'PATCH',
                 body: JSON.stringify({
-                    device_id: deviceId.trim().toUpperCase(),
-                    building_id: selectedBuilding ? selectedBuilding.id : undefined
+                    unit_no: unitNo.trim(),
+                    building_id: selectedBuilding ? selectedBuilding.id : undefined,
                 }),
             });
-            toast.success(`Unit ${unit.unit} updated successfully.`);
+            toast.success(`Unit updated successfully.`);
             onSuccess();
             onClose();
         } catch (err) {
@@ -146,7 +147,7 @@ export function EditUnitModal({ unit, onClose, onSuccess }: EditUnitModalProps) 
                 <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-700 p-4">
                     <div>
                         <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Edit Unit</h3>
-                        <p className="text-sm text-gray-500">{unit.unit}</p>
+                        <p className="text-sm text-gray-500 font-mono">{unit.meterSerial}</p>
                     </div>
                     <button onClick={onClose} className="rounded-full p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700">
                         <X className="h-5 w-5" />
@@ -160,6 +161,19 @@ export function EditUnitModal({ unit, onClose, onSuccess }: EditUnitModalProps) 
                         </div>
                     )}
 
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Unit Number</label>
+                        <input
+                            required
+                            type="text"
+                            value={unitNo}
+                            onChange={(e) => setUnitNo(e.target.value)}
+                            placeholder="e.g. A-101"
+                            maxLength={50}
+                            className="block w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                        />
+                    </div>
+
                     <SearchDropdown
                         label="Building"
                         placeholder="Search building..."
@@ -168,18 +182,6 @@ export function EditUnitModal({ unit, onClose, onSuccess }: EditUnitModalProps) 
                         onSelect={setSelectedBuilding}
                         loading={loadingBuildings}
                     />
-
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Device ID / MAC</label>
-                        <input
-                            required
-                            type="text"
-                            value={deviceId}
-                            onChange={(e) => setDeviceId(e.target.value)}
-                            maxLength={100}
-                            className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                        />
-                    </div>
 
                     <div className="pt-2 flex justify-end space-x-3">
                         <button

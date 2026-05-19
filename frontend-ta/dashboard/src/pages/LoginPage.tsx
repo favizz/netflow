@@ -1,5 +1,9 @@
 import { useState, useEffect, useRef, useSyncExternalStore } from 'react';
 
+// Module-level flag: persists across component unmount/remount so GIS is
+// never initialized twice in the same browser session.
+let _gsiInitialized = false;
+
 function useIsDark() {
   return useSyncExternalStore(
     (cb) => { const mq = window.matchMedia('(prefers-color-scheme: dark)'); mq.addEventListener('change', cb); return () => mq.removeEventListener('change', cb); },
@@ -31,7 +35,6 @@ export default function LoginPage({ onSuccess }: LoginPageProps) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const buttonRef = useRef<HTMLDivElement>(null);
-  const initializedRef = useRef(false);
   const navigate = useNavigate();
   const isDark = useIsDark();
 
@@ -66,8 +69,8 @@ export default function LoginPage({ onSuccess }: LoginPageProps) {
 
   useEffect(() => {
     const init = () => {
-      if (!window.google || !buttonRef.current || !GOOGLE_CLIENT_ID || initializedRef.current) return;
-      initializedRef.current = true;
+      if (!window.google || !buttonRef.current || !GOOGLE_CLIENT_ID || _gsiInitialized) return;
+      _gsiInitialized = true;
       window.google.accounts.id.initialize({
         client_id: GOOGLE_CLIENT_ID,
         callback: handleCredential,

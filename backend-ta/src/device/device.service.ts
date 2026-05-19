@@ -147,6 +147,7 @@ export class DeviceService {
         Number(savedUnit.token_electricity),
         Number(savedUnit.token_water),
         savedUnit.relay_status,
+        savedUnit.valve_status,
       );
     }
   }

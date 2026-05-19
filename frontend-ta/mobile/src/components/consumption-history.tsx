@@ -89,19 +89,40 @@ export default function ConsumptionHistory({ unitId }: ConsumptionHistoryProps) 
         const rows = await api.getTrends(unitId, apiPeriod)
         if (!active) return
 
-        const currentYear = new Date().getFullYear()
-        const filtered = timePeriod === "yearly"
-          ? rows.filter((r) => new Date(r.bucket).getFullYear() === currentYear)
-          : rows
-
-        const mapped: ChartData[] = filtered.map((r) => ({
-          date: r.bucket,
-          kwh: r.kwh,
-          water: r.waterM3,
-          watts: r.avgPowerW,
-          flowRate: r.avgFlowLpm,
-          fullDate: r.bucket,
-        }))
+        let mapped: ChartData[]
+        if (timePeriod === "yearly") {
+          // Aggregate monthly buckets → one bar per year
+          const yearMap = new Map<string, { kwh: number; water: number; watts: number; flowRate: number }>()
+          rows.forEach((r) => {
+            const year = String(new Date(r.bucket).getFullYear())
+            const e = yearMap.get(year) || { kwh: 0, water: 0, watts: 0, flowRate: 0 }
+            yearMap.set(year, {
+              kwh:      e.kwh      + r.kwh,
+              water:    e.water    + r.waterM3,
+              watts:    e.watts    + (r.avgPowerW  ?? 0),
+              flowRate: e.flowRate + (r.avgFlowLpm ?? 0),
+            })
+          })
+          mapped = [...yearMap.entries()]
+            .sort(([a], [b]) => Number(a) - Number(b))
+            .map(([year, vals]) => ({
+              date:     year,
+              kwh:      vals.kwh,
+              water:    vals.water,
+              watts:    vals.watts,
+              flowRate: vals.flowRate,
+              fullDate: `${year}-01-01`,
+            }))
+        } else {
+          mapped = rows.map((r) => ({
+            date:     r.bucket,
+            kwh:      r.kwh,
+            water:    r.waterM3,
+            watts:    r.avgPowerW,
+            flowRate: r.avgFlowLpm,
+            fullDate: r.bucket,
+          }))
+        }
 
         setApiTrendData(mapped)
       } catch {
@@ -259,50 +280,48 @@ export default function ConsumptionHistory({ unitId }: ConsumptionHistoryProps) 
         </TabsList>
 
         <TabsContent value="consumption" className="space-y-4">
-          {/* Period toggle */}
-          <div className={interactive.segRoot}>
-            {(["daily", "yearly", "monthly"] as TimePeriod[]).map((period) => (
-              <button
-                key={period}
-                onClick={() => setTimePeriod(period)}
-                className={`${interactive.segItem} ${timePeriod === period ? interactive.segActive : interactive.segInactive}`}
-              >
-                {period === "daily" ? "Harian" : period === "yearly" ? "Tahunan" : "Bulanan"}
-              </button>
-            ))}
-          </div>
-
-          {/* Utility toggle */}
-          <div className="flex gap-2">
-            <button
-              onClick={() => setSelectedUtility("kwh")}
-              className={`flex-1 py-3 px-4 rounded-xl border-2 font-semibold transition-all active:scale-[0.98] ${
-                selectedUtility === "kwh"
-                  ? "border-primary bg-primary/5 text-primary"
-                  : "border-border text-muted-foreground hover:border-primary/40"
-              }`}
-            >
-              <Zap size={18} className="inline mr-2" />
-              Listrik (KWh)
-            </button>
-            <button
-              onClick={() => setSelectedUtility("water")}
-              className={`flex-1 py-3 px-4 rounded-xl border-2 font-semibold transition-all active:scale-[0.98] ${
-                selectedUtility === "water"
-                  ? "border-chart-2 bg-chart-2/5 text-chart-2"
-                  : "border-border text-muted-foreground hover:border-chart-2/40"
-              }`}
-            >
-              <Droplets size={18} className="inline mr-2" />
-              Air (m³)
-            </button>
-          </div>
-
-          {/* Chart */}
-          <Card className="p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <BarChart3 size={20} className="text-primary" />
-              <h2 className="text-lg font-semibold text-foreground">Grafik Konsumsi</h2>
+          {/* Chart with selectors inside */}
+          <Card className="p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <BarChart3 size={18} className="text-primary" />
+                <h2 className="text-base font-semibold text-foreground">Grafik Konsumsi</h2>
+              </div>
+              <div className="flex gap-1">
+                <button
+                  onClick={() => setSelectedUtility("kwh")}
+                  title="Listrik (KWh)"
+                  className={`p-1.5 rounded-lg border transition-all ${
+                    selectedUtility === "kwh"
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border text-muted-foreground hover:border-primary/40"
+                  }`}
+                >
+                  <Zap size={15} />
+                </button>
+                <button
+                  onClick={() => setSelectedUtility("water")}
+                  title="Air (m³)"
+                  className={`p-1.5 rounded-lg border transition-all ${
+                    selectedUtility === "water"
+                      ? "border-chart-2 bg-chart-2/10 text-chart-2"
+                      : "border-border text-muted-foreground hover:border-chart-2/40"
+                  }`}
+                >
+                  <Droplets size={15} />
+                </button>
+              </div>
+            </div>
+            <div className={`${interactive.segRoot} mb-3`}>
+              {(["daily", "yearly", "monthly"] as TimePeriod[]).map((period) => (
+                <button
+                  key={period}
+                  onClick={() => setTimePeriod(period)}
+                  className={`${interactive.segItem} ${timePeriod === period ? interactive.segActive : interactive.segInactive}`}
+                >
+                  {period === "daily" ? "Harian" : period === "yearly" ? "Tahunan" : "Bulanan"}
+                </button>
+              ))}
             </div>
             <ConsumptionChart
               data={displayData}
