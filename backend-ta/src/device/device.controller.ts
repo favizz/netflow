@@ -152,10 +152,29 @@ export class DeviceController {
     const topic: string = ctx.getTopic();
     const deviceId = topic.split('/')[1] ?? null;
 
+    this.logger.warn(`TYPE=${typeof data}`);
+    this.logger.warn(`BUFFER=${Buffer.isBuffer(data)}`);
+    this.logger.warn(`RAW=${JSON.stringify(data)}`);
+
+    let buf: Buffer | null = null;
+    if (Buffer.isBuffer(data)) {
+      buf = data;
+    } else if (data instanceof Uint8Array) {
+      buf = Buffer.from(data);
+    } else if (data && data.type === 'Buffer' && Array.isArray(data.data)) {
+      buf = Buffer.from(data.data);
+    } else if (typeof data === 'object' && Object.keys(data).length > 0 && !data.et) {
+      // Catch the case where NestJS passes an object like { "0": 0, "1": 0, ... }
+      // but it's not explicitly labeled as type: "Buffer".
+      const values = Object.values(data);
+      if (values.every((v) => typeof v === 'number')) {
+        buf = Buffer.from(values as number[]);
+      }
+    }
+
     // Merge device_id so downstream code does not need to parse the topic.
     let payload: Record<string, unknown>;
-    if (Buffer.isBuffer(data) || data instanceof Uint8Array) {
-      const buf = Buffer.isBuffer(data) ? data : Buffer.from(data);
+    if (buf) {
       // Serialize buffer as base64 so BullMQ can store it in Redis JSON.
       payload = {
         _isBuffer: true,
@@ -179,10 +198,9 @@ export class DeviceController {
         `Queue unavailable, processing inline: ${(queueErr as Error).message}`,
       );
       try {
-        // Pass the raw data buffer and explicitly pass the deviceId
-        await this.deviceService.saveSensorData(data, deviceId);
-      } catch (err) {
-        this.logger.error(
+        // Pass the raw data buffer and explicitly pass the deviceId 
+        await this.deviceService.saveSensorData(buf || data, deviceId);
+      } catch (err) {        this.logger.error(
           `Inline telemetry error for ${deviceId}: ${(err as Error).message}`,
         );
       }
