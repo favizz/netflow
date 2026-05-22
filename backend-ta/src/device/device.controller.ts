@@ -148,14 +148,44 @@ export class DeviceController {
   }
 
   @MessagePattern('device/+/data')
-  async handleSensorData(@Payload() data: any, @Ctx() ctx: MqttContext) {
+  async handleSensorData(@Payload() data: unknown, @Ctx() ctx: MqttContext) {
     const topic: string = ctx.getTopic();
     const deviceId = topic.split('/')[1] ?? null;
 
+    this.logger.warn(`TYPE=${typeof data}`);
+    this.logger.warn(`BUFFER=${Buffer.isBuffer(data)}`);
+    this.logger.warn(`RAW=${JSON.stringify(data)}`);
+
+    let buf: Buffer | null = null;
+    const d = data as Record<string, unknown>;
+
+    if (Buffer.isBuffer(data)) {
+      buf = data;
+    } else if (data instanceof Uint8Array) {
+      buf = Buffer.from(data);
+    } else if (
+      d &&
+      d.type === 'Buffer' &&
+      Array.isArray(d.data) &&
+      (d.data as unknown[]).every((v) => typeof v === 'number')
+    ) {
+      buf = Buffer.from(d.data as number[]);
+    } else if (
+      typeof data === 'object' &&
+      data !== null &&
+      Object.keys(data).length > 0 &&
+      !('et' in d)
+    ) {
+      // Catch the case where NestJS passes an object like { "0": 0, "1": 0, ... }
+      const values = Object.values(d);
+      if (values.every((v) => typeof v === 'number')) {
+        buf = Buffer.from(values as number[]);
+      }
+    }
+
     // Merge device_id so downstream code does not need to parse the topic.
     let payload: Record<string, unknown>;
-    if (Buffer.isBuffer(data) || data instanceof Uint8Array) {
-      const buf = Buffer.isBuffer(data) ? data : Buffer.from(data);
+    if (buf) {
       // Serialize buffer as base64 so BullMQ can store it in Redis JSON.
       payload = {
         _isBuffer: true,
@@ -163,7 +193,7 @@ export class DeviceController {
         _deviceId: deviceId,
       };
     } else {
-      payload = { ...(data as Record<string, unknown>), _deviceId: deviceId };
+      payload = { ...(d as Record<string, unknown>), _deviceId: deviceId };
     }
 
     try {
@@ -179,10 +209,9 @@ export class DeviceController {
         `Queue unavailable, processing inline: ${(queueErr as Error).message}`,
       );
       try {
-        // Pass the raw data buffer and explicitly pass the deviceId
-        await this.deviceService.saveSensorData(data, deviceId);
-      } catch (err) {
-        this.logger.error(
+        // Pass the raw data buffer and explicitly pass the deviceId 
+        await this.deviceService.saveSensorData(buf || data, deviceId);
+      } catch (err) {        this.logger.error(
           `Inline telemetry error for ${deviceId}: ${(err as Error).message}`,
         );
       }
