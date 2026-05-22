@@ -79,6 +79,7 @@ const state = {
 const client = mqtt.connect(BROKER_URL, {
     clientId: `single-sim-${DEVICE_ID}-${Date.now().toString(36)}`,
     clean: true,
+    rejectUnauthorized: false,
 });
 
 const generatePayload = () => {

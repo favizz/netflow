@@ -267,6 +267,7 @@ function connectBatch(start) {
       clean: true,
       reconnectPeriod: 5000,
       connectTimeout: 10_000,
+      rejectUnauthorized: false,
     });
 
     const entry = {
