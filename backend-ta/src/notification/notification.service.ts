@@ -7,6 +7,8 @@ import { ResidentsService } from '../residents/residents.service';
 export class NotificationService {
   private readonly logger = new Logger(NotificationService.name);
   private transporter: nodemailer.Transporter | null = null;
+  private readonly telegramSendQueues = new Map<string, Promise<void>>();
+  private readonly lastTelegramSendAt = new Map<string, number>();
 
   constructor(
     private readonly configService: ConfigService,
@@ -63,6 +65,35 @@ export class NotificationService {
   async sendTelegram(chatId: string, html: string): Promise<void> {
     const token = this.configService.get<string>('TELEGRAM_BOT_TOKEN');
     if (!token || !chatId) return;
+    const previousSend =
+      this.telegramSendQueues.get(chatId) ?? Promise.resolve();
+    const queuedSend = previousSend
+      .catch(() => {})
+      .then(() => this.sendTelegramQueued(chatId, html, token));
+
+    this.telegramSendQueues.set(chatId, queuedSend);
+
+    try {
+      await queuedSend;
+    } finally {
+      if (this.telegramSendQueues.get(chatId) === queuedSend) {
+        this.telegramSendQueues.delete(chatId);
+      }
+    }
+  }
+
+  private async sendTelegramQueued(
+    chatId: string,
+    html: string,
+    token: string,
+  ): Promise<void> {
+    const lastSendAt = this.lastTelegramSendAt.get(chatId) ?? 0;
+    const waitMs = 1_000 - (Date.now() - lastSendAt);
+    if (waitMs > 0) {
+      await new Promise<void>((resolve) => setTimeout(resolve, waitMs));
+    }
+
+    this.lastTelegramSendAt.set(chatId, Date.now());
     try {
       const res = await fetch(
         `https://api.telegram.org/bot${token}/sendMessage`,

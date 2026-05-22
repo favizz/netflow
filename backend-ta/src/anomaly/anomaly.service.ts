@@ -9,6 +9,7 @@ import { Anomaly } from './entities/anomaly.entity';
 import { encodeCommand } from '../common/binary-codec';
 import { NotificationService } from '../notification/notification.service';
 import { ResidentsService } from '../residents/residents.service';
+import { Resident } from '../residents/resident.entity';
 
 // ── Detection thresholds ────────────────────────────────────────────────────
 const MCB_WATT_LIMIT = 1300;
@@ -28,6 +29,7 @@ const SPIKE_MIN_BASELINE_W = 100;
 const SPIKE_MIN_W = 500;
 
 const TELEMETRY_REFRESH_THROTTLE_MS = 30_000;
+const ADMIN_ALERT_COOLDOWN_MS = 15 * 60 * 1_000;
 
 @Injectable()
 export class AnomalyService implements OnModuleInit {
@@ -36,6 +38,9 @@ export class AnomalyService implements OnModuleInit {
   // Updated on every telemetry frame (not just when the throttled computeAll fires).
   // Used to suppress device_offline during the BullMQ processing window.
   private readonly lastTelemetryArrivalMs = new Map<string, number>();
+  private cachedAdmins: Resident[] | null = null;
+  private adminsCachedAt = 0;
+  private readonly adminAlertCooldown = new Map<AnomalyType, number>();
 
   constructor(
     private readonly unitService: UnitService,
@@ -145,6 +150,8 @@ export class AnomalyService implements OnModuleInit {
     try {
       // Periodic cleanup of stale memory maps to prevent RAM growth
       this.pruneMaps();
+      const newlyOfflineUnits: Array<{ unitNo: string; ageMinutes: number }> =
+        [];
 
       // Use the generator to stream units in chunks, preventing RAM spikes.
       for await (const units of this.unitService.streamAllWithDevice(100)) {
@@ -179,6 +186,10 @@ export class AnomalyService implements OnModuleInit {
                   offline_threshold_ms: OFFLINE_THRESHOLD_MS,
                 }),
               });
+              newlyOfflineUnits.push({
+                unitNo: unit.unit_no,
+                ageMinutes: Math.floor(ageMs / 60_000),
+              });
               if (unit.resident_email) {
                 void this.notificationService
                   .sendResidentNotification(
@@ -188,21 +199,6 @@ export class AnomalyService implements OnModuleInit {
                   )
                   .catch(() => {});
               }
-              void this.residentsService
-                .findAdmins()
-                .then((admins) => {
-                  for (const admin of admins) {
-                    if (admin.telegram_chat_id) {
-                      void this.notificationService
-                        .sendTelegram(
-                          admin.telegram_chat_id,
-                          `🚨 *[Admin Alert]* DEVICE_OFFLINE — Unit ${unit.unit_no}\n\nTidak ada data masuk selama ${Math.floor(ageMs / 60_000)} menit.`,
-                        )
-                        .catch(() => {});
-                    }
-                  }
-                })
-                .catch(() => {});
             }
           } catch {
             // Skip unit on error, continue others
@@ -210,6 +206,25 @@ export class AnomalyService implements OnModuleInit {
         }
         // Small yield to event loop
         await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+
+      if (newlyOfflineUnits.length > 0) {
+        void this.getAdmins()
+          .then((admins) => {
+            const message =
+              newlyOfflineUnits.length === 1
+                ? `🚨 *[Admin Alert]* DEVICE_OFFLINE — Unit ${newlyOfflineUnits[0].unitNo}\n\nTidak ada data masuk selama ${newlyOfflineUnits[0].ageMinutes} menit.`
+                : this.formatOfflineSummary(newlyOfflineUnits);
+
+            for (const admin of admins) {
+              if (admin.telegram_chat_id) {
+                void this.notificationService
+                  .sendTelegram(admin.telegram_chat_id, message)
+                  .catch(() => {});
+              }
+            }
+          })
+          .catch(() => {});
       }
     } catch {
       // DB not ready — retry on next interval
@@ -297,21 +312,27 @@ export class AnomalyService implements OnModuleInit {
 
           // Admin Telegram Notification
           if (comp.severity === 'critical' || comp.severity === 'warning') {
-            void this.residentsService
-              .findAdmins()
-              .then((admins) => {
-                for (const admin of admins) {
-                  if (admin.telegram_chat_id) {
-                    void this.notificationService
-                      .sendTelegram(
-                        admin.telegram_chat_id,
-                        `🚨 *[Admin Alert]* ${comp.anomalyType.toUpperCase()} — Unit ${unitNo}\n\n${comp.message}`,
-                      )
-                      .catch(() => {});
+            const lastAdminAlert =
+              this.adminAlertCooldown.get(comp.anomalyType) ?? 0;
+            if (Date.now() - lastAdminAlert > ADMIN_ALERT_COOLDOWN_MS) {
+              await this.getAdmins()
+                .then(async (admins) => {
+                  const sends: Promise<void>[] = [];
+                  for (const admin of admins) {
+                    if (admin.telegram_chat_id) {
+                      sends.push(
+                        this.notificationService.sendTelegram(
+                          admin.telegram_chat_id,
+                          `🚨 *[Admin Alert]* ${comp.anomalyType.toUpperCase()} — Unit ${unitNo}\n\n${comp.message}`,
+                        ),
+                      );
+                    }
                   }
-                }
-              })
-              .catch(() => {});
+                  await Promise.allSettled(sends);
+                  this.adminAlertCooldown.set(comp.anomalyType, Date.now());
+                })
+                .catch(() => {});
+            }
           }
         }
       }
@@ -337,6 +358,26 @@ export class AnomalyService implements OnModuleInit {
 
     // Manual prune for anomalyCache since it stores objects, not timestamps
     if (this.anomalyCache.size > 5000) this.anomalyCache.clear();
+  }
+
+  private async getAdmins(): Promise<Resident[]> {
+    if (!this.cachedAdmins || Date.now() - this.adminsCachedAt > 60 * 1_000) {
+      this.cachedAdmins = await this.residentsService.findAdmins();
+      this.adminsCachedAt = Date.now();
+    }
+    return this.cachedAdmins;
+  }
+
+  private formatOfflineSummary(
+    newlyOfflineUnits: Array<{ unitNo: string }>,
+  ): string {
+    const shownUnits = newlyOfflineUnits
+      .slice(0, 10)
+      .map((unit) => unit.unitNo)
+      .join(', ');
+    const hiddenCount = newlyOfflineUnits.length - 10;
+    const suffix = hiddenCount > 0 ? ` (+${hiddenCount} more)` : '';
+    return `\u{1F6A8} ${newlyOfflineUnits.length} unit offline: ${shownUnits}${suffix}`;
   }
 
   // ── Core detection ─────────────────────────────────────────────────────────

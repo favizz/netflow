@@ -143,6 +143,55 @@ describe('AnomalyService', () => {
 
       expect(mockAnomalyRepo.save).toHaveBeenCalled();
     });
+
+    it('sends one admin summary when multiple units go offline', async () => {
+      jest.useRealTimers();
+      mockUnitService.streamAllWithDevice.mockImplementation(async function* () {
+        yield [
+          makeUnit({ device_id: 'DEV-A-101', unit_no: 'A-101' }),
+          makeUnit({ device_id: 'DEV-A-102', unit_no: 'A-102' }),
+        ];
+      });
+      mockMeterRepo.findOne.mockResolvedValue(
+        makeReading({ time: new Date(Date.now() - 15 * 60_000) }),
+      );
+      mockAnomalyRepo.findOne.mockResolvedValue(null);
+      mockResidentsService.findAdmins.mockResolvedValue([
+        { telegram_chat_id: 'admin-chat' },
+      ]);
+
+      await service['checkOfflineUnits']();
+      await Promise.resolve();
+
+      expect(mockNotificationService.sendTelegram).toHaveBeenCalledTimes(1);
+      expect(mockNotificationService.sendTelegram).toHaveBeenCalledWith(
+        'admin-chat',
+        expect.stringContaining('2 unit offline: A-101, A-102'),
+      );
+    });
+  });
+
+  describe('syncAnomaliesToDb', () => {
+    it('caches admins and cools down repeated admin alerts by anomaly type', async () => {
+      jest.useRealTimers();
+      mockResidentsService.findAdmins.mockResolvedValue([
+        { telegram_chat_id: 'admin-chat' },
+      ]);
+      const voltageAnomaly = {
+        anomalyType: 'voltage_anomaly',
+        severity: 'warning',
+        target: 'both',
+        message: 'Voltage dip',
+        metadata: {},
+        detectedAt: new Date().toISOString(),
+      };
+
+      await service['syncAnomaliesToDb']('A-101', [voltageAnomaly]);
+      await service['syncAnomaliesToDb']('A-102', [voltageAnomaly]);
+
+      expect(mockResidentsService.findAdmins).toHaveBeenCalledTimes(1);
+      expect(mockNotificationService.sendTelegram).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('checkOnTelemetry', () => {
