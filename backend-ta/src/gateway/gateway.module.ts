@@ -8,6 +8,7 @@ import { UnitModule } from '../unit/unit.module';
 import { AnomalyModule } from '../anomaly/anomaly.module';
 import { GatewayController } from './gateway.controller';
 import { GatewayService } from './gateway.service';
+import { PaymentCompletedListener } from './listeners/payment-completed.listener';
 
 @Module({
   imports: [
@@ -42,6 +43,6 @@ import { GatewayService } from './gateway.service';
     ]),
   ],
   controllers: [GatewayController],
-  providers: [GatewayService],
+  providers: [GatewayService, PaymentCompletedListener],
 })
 export class GatewayModule {}

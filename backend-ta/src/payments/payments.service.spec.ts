@@ -12,6 +12,8 @@ import { TariffService } from '../tariff/tariff.service';
 import { AuditLogService } from '../audit-log/audit-log.service';
 import { NotificationService } from '../notification/notification.service';
 import { PAYMENT_EXPIRY_QUEUE } from './payment-expiry.processor';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { Unit } from '../unit/entities/unit.entity';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -54,6 +56,8 @@ describe('PaymentsService', () => {
   };
   let unitService: { findByUnitNo: jest.Mock; creditTokensByUnitNo: jest.Mock };
   let tariffService: { findCurrent: jest.Mock };
+  let eventEmitter: { emit: jest.Mock };
+  let unitRepo: { findOneBy: jest.Mock };
 
   beforeEach(async () => {
     txRepo = {
@@ -74,14 +78,28 @@ describe('PaymentsService', () => {
       ),
     };
 
+    eventEmitter = {
+      emit: jest.fn(),
+    };
+
+    unitRepo = {
+      findOneBy: jest.fn().mockResolvedValue({
+        id: 1,
+        unit_no: 'A-101',
+        resident_email: 'resident@test.com',
+      }),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         PaymentsService,
         { provide: getRepositoryToken(Transaction), useValue: txRepo },
+        { provide: getRepositoryToken(Unit), useValue: unitRepo },
         { provide: UnitService, useValue: unitService },
         { provide: TariffService, useValue: tariffService },
         { provide: getQueueToken(PAYMENT_EXPIRY_QUEUE), useValue: { add: jest.fn().mockResolvedValue(undefined) } },
         { provide: AuditLogService, useValue: { log: jest.fn().mockResolvedValue(undefined) } },
+        { provide: EventEmitter2, useValue: eventEmitter },
         {
           provide: ConfigService,
           useValue: {
@@ -120,10 +138,15 @@ describe('PaymentsService', () => {
       const payload = makeWebhookPayload({ order_id: 'TRX-001', gross_amount: '30000.00', transaction_status: 'settlement' });
       const result = await service.handleWebhook(payload);
 
-      // Elec: 15000 / 1500 = 10 tokens
-      expect(unitService.creditTokensByUnitNo).toHaveBeenCalledWith('A-101', 10, 'electricity');
-      // Water: 15000 / 5000 = 3 tokens
-      expect(unitService.creditTokensByUnitNo).toHaveBeenCalledWith('A-101', 3, 'water');
+      expect(eventEmitter.emit).toHaveBeenCalledWith(
+        'payment.completed',
+        expect.objectContaining({
+          transactionId: 'TRX-001',
+          unitNo: 'A-101',
+          electricityAmountRp: 15_000,
+          waterAmountRp: 15_000,
+        }),
+      );
       expect(result.status).toBe('success');
     });
 
@@ -143,7 +166,7 @@ describe('PaymentsService', () => {
       const payload = makeWebhookPayload({ transaction_status: 'settlement' });
       const result = await service.handleWebhook(payload);
 
-      expect(unitService.creditTokensByUnitNo).not.toHaveBeenCalled();
+      expect(eventEmitter.emit).not.toHaveBeenCalled();
       expect((result as any).idempotent).toBe(true);
     });
 
@@ -164,7 +187,7 @@ describe('PaymentsService', () => {
       const payload = makeWebhookPayload({ order_id: 'TRX-002', transaction_status: 'expire' });
       const result = await service.handleWebhook(payload);
 
-      expect(unitService.creditTokensByUnitNo).not.toHaveBeenCalled();
+      expect(eventEmitter.emit).not.toHaveBeenCalled();
       expect(result.status).toBe('failed');
     });
 
@@ -200,7 +223,15 @@ describe('PaymentsService', () => {
 
       const result = await service.autoConfirm('TRX-DEV-001');
       expect(result.status).toBe('success');
-      expect(unitService.creditTokensByUnitNo).toHaveBeenCalledWith('A-101', 10, 'electricity');
+      expect(eventEmitter.emit).toHaveBeenCalledWith(
+        'payment.completed',
+        expect.objectContaining({
+          transactionId: 'TRX-DEV-001',
+          unitNo: 'A-101',
+          electricityAmountRp: 15_000,
+          waterAmountRp: 0,
+        }),
+      );
     });
 
     it('is idempotent - does not re-credit already-confirmed transaction', async () => {
@@ -216,7 +247,7 @@ describe('PaymentsService', () => {
       txRepo.findOne.mockResolvedValue(tx);
 
       await service.autoConfirm('TRX-DONE');
-      expect(unitService.creditTokensByUnitNo).not.toHaveBeenCalled();
+      expect(eventEmitter.emit).not.toHaveBeenCalled();
     });
   });
 });

@@ -53,7 +53,7 @@ section "── [4/5] Backend (NestJS)"
 cd "$REPO_DIR/backend-ta"
 pnpm install --frozen-lockfile
 pnpm build
-pm2_start_or_reload "backend" "\"node -r ./dist/tracing dist/main\""
+pm2_start_or_reload "backend" "\"node -r ./dist/src/tracing.js dist/src/main.js\""
 log "Backend live on :5000"
 
 # ── 5. ML service ──────────────────────────────────────────────────
