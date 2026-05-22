@@ -21,28 +21,28 @@ const LABELS: Record<Utility, { title: string; unit: string }> = {
 
 function getCurrentPeriodKey(period: Period): string {
     const now = new Date();
-    if (period === 'monthly') return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-    if (period === 'yearly') return String(now.getFullYear());
-    return 'last7';
+    if (period === 'daily') return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    if (period === 'monthly') return String(now.getFullYear());
+    return 'all';
 }
 
 function offsetPeriodKey(key: string, period: Period, delta: number): string {
-    if (period === 'monthly') {
+    if (period === 'daily') {
         const [y, m] = key.split('-').map(Number);
         const date = new Date(y, m - 1 + delta);
         return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
     }
-    if (period === 'yearly') return String(Number(key) + delta);
-    return 'last7';
+    if (period === 'monthly') return String(Number(key) + delta);
+    return 'all';
 }
 
 function periodLabel(key: string, period: Period): string {
-    if (period === 'monthly') {
+    if (period === 'daily') {
         const [y, m] = key.split('-').map(Number);
         return new Date(y, m - 1).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
     }
-    if (period === 'yearly') return `Year ${key}`;
-    return 'Last 7 days';
+    if (period === 'monthly') return `Tahun ${key}`;
+    return 'All Time';
 }
 
 interface TrendData {
@@ -95,49 +95,61 @@ export function TrendChart() {
                 if (cancelled) return;
                 if (!units || units.length === 0) { setData([]); setHasPrev(false); setHasNext(false); return; }
 
-                const firstUnit = units[0].unit_no;
-                const apiPeriod = period === 'yearly' ? 'monthly' : 'daily';
+                const apiPeriod = period === 'daily' ? 'daily' : 'monthly';
                 const trends = await fetchApi(`/reporting/trends/${encodeURIComponent(firstUnit)}?period=${apiPeriod}`);
                 if (cancelled) return;
 
                 const raw = (trends || []) as TrendResponse[];
 
-                let filtered: TrendResponse[];
+                let mapped: TrendData[] = [];
                 if (period === 'daily') {
-                    filtered = raw.slice(-7);
-                } else {
-                    filtered = raw.filter(t => {
+                    // Show last 30 days filtered by periodKey (YYYY-MM)
+                    const filtered = raw.filter(t => {
                         const d = new Date(t.bucket);
-                        if (period === 'monthly') {
-                            const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-                            return k === periodKey;
-                        }
-                        return String(d.getFullYear()) === periodKey;
+                        const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                        return k === periodKey;
                     });
+                    mapped = filtered.map(t => ({
+                        name: new Date(t.bucket).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }),
+                        electricity: Number(t.kwh || 0),
+                        water: Number(t.waterM3 || t.water_m3 || 0),
+                    }));
+                } else if (period === 'monthly') {
+                    // Show months of the year filtered by periodKey (YYYY)
+                    const filtered = raw.filter(t => String(new Date(t.bucket).getFullYear()) === periodKey);
+                    mapped = filtered.map(t => ({
+                        name: new Date(t.bucket).toLocaleDateString('id-ID', { month: 'short' }),
+                        electricity: Number(t.kwh || 0),
+                        water: Number(t.waterM3 || t.water_m3 || 0),
+                    }));
+                } else if (period === 'yearly') {
+                    // Aggregate monthly data into years
+                    const yearMap = new Map<string, { electricity: number; water: number }>();
+                    raw.forEach(t => {
+                        const year = String(new Date(t.bucket).getFullYear());
+                        const e = yearMap.get(year) || { electricity: 0, water: 0 };
+                        yearMap.set(year, {
+                            electricity: e.electricity + Number(t.kwh || 0),
+                            water: e.water + Number(t.waterM3 || t.water_m3 || 0),
+                        });
+                    });
+                    mapped = [...yearMap.entries()]
+                        .sort(([a], [b]) => Number(a) - Number(b))
+                        .map(([year, vals]) => ({ name: year, ...vals }));
                 }
-
-                const mapped: TrendData[] = filtered.map(t => ({
-                    name: period === 'monthly'
-                        ? new Date(t.bucket).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })
-                        : period === 'yearly'
-                        ? new Date(t.bucket).toLocaleDateString('id-ID', { month: 'short' })
-                        : new Date(t.bucket).toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric' }),
-                    electricity: Number(t.kwh || 0),
-                    water: Number(t.waterM3 || t.water_m3 || 0),
-                }));
 
                 setData(mapped);
 
-                if (period !== 'daily') {
+                if (period !== 'yearly') {
                     const allKeys = raw.map(t => {
                         const d = new Date(t.bucket);
-                        return period === 'monthly'
+                        return period === 'daily'
                             ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
                             : String(d.getFullYear());
                     });
                     const unique = [...new Set(allKeys)];
-                    const prevKey = offsetPeriodKey(periodKey, period, -1);
-                    const nextKey = offsetPeriodKey(periodKey, period, 1);
+                    const prevKey = offsetPeriodKey(periodKey, period === 'daily' ? 'monthly' : 'yearly', -1);
+                    const nextKey = offsetPeriodKey(periodKey, period === 'daily' ? 'monthly' : 'yearly', 1);
                     setHasPrev(unique.includes(prevKey));
                     setHasNext(nextKey <= todayKey.current && unique.includes(nextKey));
                 } else {
