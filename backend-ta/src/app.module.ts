@@ -37,6 +37,7 @@ import { AppService } from './app.service';
     }),
 
     ScheduleModule.forRoot(),
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
     EventEmitterModule.forRoot(),
     // ── Database ─────────────────────────────────────────────────────────────
     TypeOrmModule.forRootAsync({
@@ -70,8 +71,6 @@ import { AppService } from './app.service';
           port: cfg.get<number>('REDIS_PORT', 6379),
           password: cfg.get('REDIS_PASSWORD') || undefined,
           maxRetriesPerRequest: null, // required for BullMQ
-          lazyConnect: true, // don't connect on startup. Connect on first use
-          enableOfflineQueue: false, // fail fast so DeviceController catch() fires immediately
           retryStrategy: (times: number) =>
             times > 3 ? null : Math.min(times * 500, 2000),
         },

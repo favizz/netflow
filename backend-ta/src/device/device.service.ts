@@ -18,10 +18,10 @@ export class DeviceService {
     private readonly anomalyService: AnomalyService,
   ) {}
 
-  async saveSensorData(payload: any) {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+  async saveSensorData(payload: unknown, fallbackDeviceId?: string) {
+    const p = payload as Record<string, string | undefined>;
     const deviceId: string | undefined =
-      payload?._deviceId || payload?.dev_id || payload?.device_id; // eslint-disable-line @typescript-eslint/no-unsafe-member-access
+      fallbackDeviceId || p?._deviceId || p?.dev_id || p?.device_id;
     if (!deviceId) return;
 
     let data: Record<string, any>;

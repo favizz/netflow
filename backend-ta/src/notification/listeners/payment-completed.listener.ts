@@ -11,7 +11,7 @@ export class PaymentCompletedListener {
     private readonly unitService: UnitService,
   ) {}
 
-  @OnEvent('payment.completed', { async: true })
+  @OnEvent('payment.completed', { async: true }) // eslint-disable-line @typescript-eslint/no-unsafe-call
   async handle(event: PaymentCompletedEvent): Promise<void> {
     const unit = await this.unitService.findByUnitNo(event.unitNo);
     if (!unit.resident_email) return;

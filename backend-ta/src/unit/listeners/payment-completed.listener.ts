@@ -11,7 +11,7 @@ export class PaymentCompletedListener {
     private readonly tariffService: TariffService,
   ) {}
 
-  @OnEvent('payment.completed', { async: true })
+  @OnEvent('payment.completed', { async: true }) // eslint-disable-line @typescript-eslint/no-unsafe-call
   async handle(event: PaymentCompletedEvent): Promise<void> {
     if (event.electricityAmountRp > 0) {
       const tariff = await this.tariffService.findCurrent('electricity');
