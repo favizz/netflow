@@ -78,7 +78,9 @@ function encode(reading) {
 }
 
 function deviceId(index) {
-  return `SMART-METER-${String(index).padStart(4, '0')}`;
+  // Assuming the DB has A-101 to A-xxx format.
+  // We'll just generate DEV-A-101, DEV-A-102, etc.
+  return `DEV-A-${index + 100}`; 
 }
 
 function nextReading(state) {
