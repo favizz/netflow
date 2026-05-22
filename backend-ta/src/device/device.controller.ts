@@ -161,6 +161,8 @@ export class DeviceController {
 
     if (Buffer.isBuffer(data)) {
       buf = data;
+    } else if (typeof data === 'string') {
+      buf = Buffer.from(data, 'latin1');
     } else if (data instanceof Uint8Array) {
       buf = Buffer.from(data);
     } else if (
@@ -184,6 +186,7 @@ export class DeviceController {
     }
 
     // Merge device_id so downstream code does not need to parse the topic.
+    this.logger.warn(`BUF_LEN=${buf?.length}`);
     let payload: Record<string, unknown>;
     if (buf) {
       // Serialize buffer as base64 so BullMQ can store it in Redis JSON.
