@@ -31,8 +31,12 @@ function loadEnv() {
 }
 loadEnv();
 
-const UNIT_NO = process.argv[2] || 'A-0002';
-const DEVICE_ID = `DEV-${UNIT_NO}`;
+const rawUnit = process.argv[2] || 'A-0002';
+const numPart = rawUnit.replace(/[^0-9]/g, ''); // extracts '101' from 'A-101'
+const paddedNum = String(numPart).padStart(4, '0'); // pads to '0101'
+
+const UNIT_NO = `A-${paddedNum}`;
+const DEVICE_ID = `SMART-METER-${paddedNum}`;
 // Use .env broker, then command line arg, then fallback
 const BROKER_URL = process.env.MQTT_BROKER_URL || process.argv[3] || 'mqtt://ta252601002.srusun.id:1883';
 const INTERVAL_MS = 2000;
