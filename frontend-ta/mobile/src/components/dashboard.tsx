@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
-import { Zap, Droplets, Wifi, WifiOff, Radio } from "lucide-react"
+import { Zap, Droplets, Wifi, WifiOff, Radio, ChevronLeft, ChevronRight } from "lucide-react"
 import mqtt from "mqtt"
 import { toast } from "sonner"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -48,10 +48,36 @@ type ControlTarget = "relay" | "valve"
 
 const PERIODS: { id: TimePeriod; label: string }[] = [
   { id: "daily",   label: "Harian"   },
-  { id: "yearly",  label: "Tahunan"  },
   { id: "monthly", label: "Bulanan"  },
+  { id: "yearly",  label: "Tahunan"  },
   { id: "live",    label: "Live"     },
 ]
+
+function getDefaultPeriodKey(period: TimePeriod): string {
+  const now = new Date();
+  if (period === "daily")   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  if (period === "monthly") return String(now.getFullYear());
+  return '';
+}
+
+function offsetKey(key: string, period: TimePeriod, delta: number): string {
+  if (period === "daily") {
+    const [y, m] = key.split('-').map(Number);
+    const d = new Date(y, m - 1 + delta);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  }
+  if (period === "monthly") return String(Number(key) + delta);
+  return '';
+}
+
+function periodKeyLabel(key: string, period: TimePeriod): string {
+  if (period === "daily") {
+    const [y, m] = key.split('-').map(Number);
+    return new Date(y, m - 1).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+  }
+  if (period === "monthly") return `Tahun ${key}`;
+  return '';
+}
 
 export default function Dashboard({ unitId, availableUnits, onSelectUnit }: DashboardProps) {
   // ── Summary ──────────────────────────────────────────────────────────────
@@ -72,6 +98,10 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
   const [chartUtility, setChartUtility] = useState<"electricity" | "water">("electricity")
   const [trendData, setTrendData]       = useState<TrendPoint[]>([])
   const [trendLoading, setTrendLoading] = useState(false)
+  const [periodKey, setPeriodKey]       = useState(() => getDefaultPeriodKey("daily"))
+  const [hasPrev, setHasPrev]           = useState(false)
+  const [hasNext, setHasNext]           = useState(false)
+  const [rawTrendData, setRawTrendData] = useState<any[]>([])
 
   // ── MQTT live ────────────────────────────────────────────────────────────
   const [liveData, setLiveData]           = useState<LivePoint[]>([])
@@ -98,7 +128,16 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
     return () => { active = false }
   }, [unitId])
 
-  // ── Load trend (Harian / Tahunan / Bulanan) ──────────────────────────────
+  // Reset periodKey when period changes
+  useEffect(() => {
+    setPeriodKey(getDefaultPeriodKey(period));
+    setHasPrev(false);
+    setHasNext(false);
+    setRawTrendData([]);
+    setTrendData([]);
+  }, [period]);
+
+  // Load trend (Harian / Tahunan / Bulanan)
   useEffect(() => {
     if (period === "live") return
     let active = true
@@ -108,33 +147,10 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
         const apiPeriod = (period === "monthly" || period === "yearly") ? "monthly" : "daily"
         const rows = await api.getTrends(unitId, apiPeriod)
         if (!active) return
-
-        let mapped: TrendPoint[]
-        if (period === "yearly") {
-          // Aggregate monthly buckets → one bar per year
-          const yearMap = new Map<string, { kwh: number; water: number }>()
-          rows.forEach((r) => {
-            const year = String(new Date(r.bucket).getFullYear())
-            const e = yearMap.get(year) || { kwh: 0, water: 0 }
-            yearMap.set(year, { kwh: e.kwh + r.kwh, water: e.water + r.waterM3 })
-          })
-          mapped = [...yearMap.entries()]
-            .sort(([a], [b]) => Number(a) - Number(b))
-            .map(([year, vals]) => ({ date: year, kwh: vals.kwh, water: vals.water, fullDate: `${year}-01-01` }))
-        } else {
-          mapped = rows.map((r) => ({
-            date: period === "monthly"
-              ? new Date(r.bucket).toLocaleDateString("id-ID", { month: "short", year: "2-digit" })
-              : new Date(r.bucket).toLocaleDateString("id-ID", { day: "2-digit", month: "short" }),
-            kwh:      r.kwh,
-            water:    r.waterM3,
-            fullDate: r.bucket,
-          }))
-        }
-        setTrendData(mapped)
+        setRawTrendData(rows || [])
       } catch {
         if (!active) return
-        setTrendData([])
+        setRawTrendData([])
       } finally {
         if (active) setTrendLoading(false)
       }
@@ -142,6 +158,55 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
     void load()
     return () => { active = false }
   }, [period, unitId])
+
+  // Filter and map trend data based on periodKey
+  useEffect(() => {
+    if (period === "live" || rawTrendData.length === 0) return;
+
+    if (period === "yearly") {
+      const yearMap = new Map<string, { kwh: number; water: number }>();
+      rawTrendData.forEach((r) => {
+        const year = String(new Date(r.bucket).getFullYear());
+        const e = yearMap.get(year) || { kwh: 0, water: 0 };
+        yearMap.set(year, { kwh: e.kwh + r.kwh, water: e.water + r.waterM3 });
+      });
+      setTrendData([...yearMap.entries()]
+        .sort(([a], [b]) => Number(a) - Number(b))
+        .map(([year, vals]) => ({ date: year, kwh: vals.kwh, water: vals.water, fullDate: `${year}-01-01` }))
+      );
+      setHasPrev(false); setHasNext(false);
+      return;
+    }
+
+    let filtered = rawTrendData;
+    if (period === "daily") {
+      filtered = rawTrendData.filter(t => {
+        const d = new Date(t.bucket);
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` === periodKey;
+      });
+    } else if (period === "monthly") {
+      filtered = rawTrendData.filter(t => String(new Date(t.bucket).getFullYear()) === periodKey);
+    }
+
+    setTrendData(filtered.map((r) => ({
+      date: period === "monthly"
+        ? new Date(r.bucket).toLocaleDateString("id-ID", { month: "short" })
+        : new Date(r.bucket).toLocaleDateString("id-ID", { day: "2-digit", month: "short" }),
+      kwh: r.kwh,
+      water: r.waterM3,
+      fullDate: r.bucket,
+    })));
+
+    const allKeys = rawTrendData.map(t => {
+      const d = new Date(t.bucket);
+      return period === "daily" ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` : String(d.getFullYear());
+    });
+    const unique = [...new Set(allKeys)];
+    const prevK = offsetKey(periodKey, period, -1);
+    const nextK = offsetKey(periodKey, period, 1);
+    setHasPrev(unique.includes(prevK));
+    setHasNext(nextK <= getDefaultPeriodKey(period) && unique.includes(nextK));
+  }, [rawTrendData, period, periodKey]);
 
   // ── MQTT (Live only) ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -162,7 +227,7 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
       username: MQTT_CONFIG.username || undefined,
       password: MQTT_CONFIG.password || undefined,
       clientId: `dash_${Math.random().toString(16).slice(2, 10)}`,
-      reconnectPeriod: 0,
+      reconnectPeriod: 5000,
       connectTimeout: 10000,
     })
     mqttRef.current = client
@@ -184,7 +249,7 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
     client.on("message", (t, msg) => {
       if (t !== topic) return
       try {
-        let p: Record<string, unknown> | null = null
+        let p: any = null
         const uint8 = new Uint8Array(msg)
 
         // 1. Try 21-byte custom binary frame
@@ -208,6 +273,10 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
         }
 
         if (!p) return
+
+        // Sync actuator state from live telemetry
+        if (p.rs !== undefined) setRelayOn(p.rs === 1);
+        if (p.vs !== undefined) setValveOpen(p.vs === 1);
 
         const now = new Date()
         const watts    = Number(p.p ?? p.active_power_w ?? 0)
@@ -310,7 +379,7 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
   }
 
   return (
-    <div className="p-5 space-y-5 w-full">
+    <div className="p-5 space-y-5 w-full pb-20">
 
       {/* 2-col stat cards */}
       <div className="grid grid-cols-2 gap-3">
@@ -367,12 +436,12 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
         </div>
 
         {/* Period tabs */}
-        <div className="flex gap-1">
+        <div className="flex gap-1 overflow-x-auto no-scrollbar">
           {PERIODS.map(({ id, label }) => (
             <button
               key={id}
               onClick={() => setPeriod(id)}
-              className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              className={`flex-1 min-w-[70px] flex items-center justify-center gap-1 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                 period === id
                   ? id === "live"
                     ? "bg-status-critical text-white shadow-sm"
@@ -385,6 +454,29 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
             </button>
           ))}
         </div>
+
+        {/* Period switcher for daily/monthly */}
+        {(period === "daily" || period === "monthly") && (
+          <div className="flex items-center justify-between px-1">
+            <button
+              onClick={() => setPeriodKey(k => offsetKey(k, period, -1))}
+              disabled={!hasPrev}
+              className="p-1 rounded-full hover:bg-muted disabled:opacity-30"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+              {periodKeyLabel(periodKey, period)}
+            </span>
+            <button
+              onClick={() => setPeriodKey(k => offsetKey(k, period, 1))}
+              disabled={!hasNext}
+              className="p-1 rounded-full hover:bg-muted disabled:opacity-30"
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
+        )}
 
         {/* Live current metrics */}
         {isLive && (

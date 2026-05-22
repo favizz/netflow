@@ -33,8 +33,8 @@ type TimePeriod = "live" | "daily" | "yearly" | "monthly";
 
 const PERIODS: { id: TimePeriod; label: string }[] = [
     { id: "daily",   label: "Harian"  },
-    { id: "yearly",  label: "Tahunan" },
     { id: "monthly", label: "Bulanan" },
+    { id: "yearly",  label: "Tahunan" },
     { id: "live",    label: "Live"    },
 ];
 
@@ -758,7 +758,7 @@ export default function UnitDetailPage() {
                                         <XAxis dataKey="time" axisLine={false} tickLine={false} tick={{ fill: tickColor, fontSize: 11 }} />
                                         <YAxis axisLine={false} tickLine={false} tick={{ fill: tickColor, fontSize: 11 }} width={36} />
                                         <RechartsTooltip contentStyle={tooltipStyle} />
-                                        <Area type="stepAfter" dataKey="value" stroke="#3b82f6" strokeWidth={2} fillOpacity={1} fill="url(#colorPower)" dot={false} activeDot={isLive ? false : { r: 4 }} isAnimationActive={!isLive} />
+                                        <Area type="monotone" dataKey="value" stroke="#3b82f6" strokeWidth={2} fillOpacity={1} fill="url(#colorPower)" dot={false} activeDot={isLive ? false : { r: 4 }} isAnimationActive={!isLive} />
                                     </AreaChart>
                                 </ResponsiveContainer>
                             </div>
@@ -766,7 +766,7 @@ export default function UnitDetailPage() {
                     </div>
 
                     {/* Water Chart */}
-                    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-6">
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm p-6">
                         <div className="flex items-center justify-between mb-6">
                             <h3 className="font-semibold text-gray-900 dark:text-gray-100">Water Consumption</h3>
                             <span className="text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
@@ -783,7 +783,7 @@ export default function UnitDetailPage() {
                                         <XAxis dataKey="time" axisLine={false} tickLine={false} tick={{ fill: tickColor, fontSize: 11 }} />
                                         <YAxis axisLine={false} tickLine={false} tick={{ fill: tickColor, fontSize: 11 }} width={36} />
                                         <RechartsTooltip contentStyle={tooltipStyle} />
-                                        <Line type="stepAfter" dataKey="value" stroke="#06b6d4" strokeWidth={2} dot={false} activeDot={isLive ? false : { r: 4 }} isAnimationActive={!isLive} />
+                                        <Line type="monotone" dataKey="value" stroke="#06b6d4" strokeWidth={2} dot={false} activeDot={isLive ? false : { r: 4 }} isAnimationActive={!isLive} />
                                     </LineChart>
                                 </ResponsiveContainer>
                             </div>
@@ -791,7 +791,7 @@ export default function UnitDetailPage() {
                     </div>
 
                     {/* Raw Logs */}
-                    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
                         <button
                             onClick={() => setIsLogsOpen(!isLogsOpen)}
                             className="w-full flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
