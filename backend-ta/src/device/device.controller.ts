@@ -179,7 +179,7 @@ export class DeviceController {
         `Queue unavailable, processing inline: ${(queueErr as Error).message}`,
       );
       try {
-        // Pass the raw data buffer and explicitly pass the deviceId 
+        // Pass the raw data buffer and explicitly pass the deviceId
         await this.deviceService.saveSensorData(data, deviceId);
       } catch (err) {
         this.logger.error(

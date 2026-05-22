@@ -7,7 +7,7 @@ import { AuditLogService } from '../audit-log.service';
 export class PaymentCompletedListener {
   constructor(private readonly auditLogService: AuditLogService) {}
 
-  @OnEvent('payment.completed', { async: true })
+  @OnEvent('payment.completed', { async: true }) // eslint-disable-line @typescript-eslint/no-unsafe-call
   handle(event: PaymentCompletedEvent): void {
     const totalRp = event.electricityAmountRp + event.waterAmountRp;
     void this.auditLogService.log(
