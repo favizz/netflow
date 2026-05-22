@@ -76,7 +76,7 @@ static const unsigned long OTA_TIMEOUT_MS = 120000UL;  // 2 min max
 // =============================================================================
 const char* WIFI_SSID    = "Nevatron";
 const char* WIFI_PASS    = "Nevatron!2024Ok";
-const char* MQTT_SERVER  = "broker.emqx.io";
+const char* MQTT_SERVER  = "ta252601002.srusun.id";
 const int   MQTT_PORT    = 8883;           // MQTTS — TLS with certificate verification
 const char* MQTT_SECRET  = "";
 const char* DEVICE_ID    = "DEV-A-101";   // must match units.device_id in DB
