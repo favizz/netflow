@@ -1,12 +1,9 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { BullModule } from '@nestjs/bullmq';
-import { ClientsModule, Transport } from '@nestjs/microservices';
-import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ConfigModule } from '@nestjs/config';
 import { UnitModule } from '../unit/unit.module';
-import { TariffModule } from '../tariff/tariff.module';
 import { AuditLogModule } from '../audit-log/audit-log.module';
-import { NotificationModule } from '../notification/notification.module';
 import { Transaction } from './entities/transaction.entity';
 import { PaymentsController } from './payments.controller';
 import { PaymentsService } from './payments.service';
@@ -19,33 +16,8 @@ import {
   imports: [
     TypeOrmModule.forFeature([Transaction]),
     UnitModule,
-    TariffModule,
     AuditLogModule,
-    NotificationModule,
     BullModule.registerQueue({ name: PAYMENT_EXPIRY_QUEUE }),
-    ClientsModule.registerAsync([
-      {
-        name: 'MQTT_CLIENT',
-        imports: [ConfigModule],
-        useFactory: (configService: ConfigService) => ({
-          transport: Transport.MQTT,
-          options: {
-            url: configService.get<string>('MQTT_BROKER_URL'),
-            username: configService.get<string>('MQTT_USERNAME') || undefined,
-            password: configService.get<string>('MQTT_PASSWORD') || undefined,
-            serializer: {
-              serialize: (value: { data: unknown }): Buffer => {
-                const d = value.data;
-                if (Buffer.isBuffer(d)) return d;
-                if (d instanceof Uint8Array) return Buffer.from(d);
-                return Buffer.from(JSON.stringify(d));
-              },
-            },
-          },
-        }),
-        inject: [ConfigService],
-      },
-    ]),
   ],
   controllers: [PaymentsController],
   providers: [PaymentsService, PaymentExpiryProcessor],

@@ -12,16 +12,14 @@ import { Repository } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
-import { UnitService } from '../unit/unit.service';
-import { TariffService } from '../tariff/tariff.service';
 import { AuditLogService } from '../audit-log/audit-log.service';
-import { NotificationService } from '../notification/notification.service';
 import { Transaction } from './entities/transaction.entity';
 import { InitiateTopupDto } from './dto/initiate-topup.dto';
 import { PAYMENT_EXPIRY_QUEUE } from './payment-expiry.processor';
 import { createHash } from 'crypto';
-import { ClientProxy } from '@nestjs/microservices';
-import { encodeTopup, encodeCommand } from '../common/binary-codec';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { PaymentCompletedEvent } from './events/payment-completed.event';
+import { Unit } from '../unit/entities/unit.entity';
 
 const PAYMENT_EXPIRY_MS = 30 * 60 * 1_000; // 30 minutes
 
@@ -32,18 +30,17 @@ export class PaymentsService {
   constructor(
     @InjectRepository(Transaction)
     private readonly txRepo: Repository<Transaction>,
-    private readonly unitService: UnitService,
     private readonly configService: ConfigService,
     private readonly auditLogService: AuditLogService,
     @InjectQueue(PAYMENT_EXPIRY_QUEUE)
     private readonly expiryQueue: Queue,
-    @Inject('MQTT_CLIENT') private readonly mqttClient: ClientProxy,
-    private readonly notificationService: NotificationService,
-    private readonly tariffService: TariffService,
+    private readonly eventEmitter: EventEmitter2,
+    @InjectRepository(Unit) private readonly unitRepo: Repository<Unit>
   ) {}
 
   async initiateTopup(dto: InitiateTopupDto) {
-    const unit = await this.unitService.findByUnitNo(dto.unitNo); // validate unit exists
+    const unit = await this.unitRepo.findOneBy({ unit_no: dto.unitNo }); // validate unit exists
+    if (!unit) throw new NotFoundException('Unit not found');
     const id = `TRX-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
     const totalAmount = dto.electricityAmount + dto.waterAmount;
@@ -211,78 +208,38 @@ export class PaymentsService {
 
     if (finalStatus === 'success') {
       tx.confirmed_at = new Date();
-
-      if (tx.electricity_amount_rp > 0) {
-        const elecTariff = await this.tariffService.findCurrent('electricity');
-        await this.unitService.creditTokensByUnitNo(
+      this.eventEmitter.emit(
+        'payment.completed',
+        new PaymentCompletedEvent(
+          tx.id,
           tx.unit_no,
-          tx.electricity_amount_rp / elecTariff,
-          'electricity',
-        );
-      }
-
-      let updatedUnit = await this.unitService.findByUnitNo(tx.unit_no);
-      if (tx.water_amount_rp > 0) {
-        const waterTariff = await this.tariffService.findCurrent('water');
-        updatedUnit = await this.unitService.creditTokensByUnitNo(
-          tx.unit_no,
-          tx.water_amount_rp / waterTariff,
-          'water',
-        );
-      }
-
-      if (updatedUnit.device_id) {
-        const payload = encodeTopup({
-          electricAmount: Number(tx.electricity_amount_rp),
-          waterAmount: Number(tx.water_amount_rp),
-          timestamp: Math.floor(Date.now() / 1000),
-        });
-        this.logger.log(
-          `Pushing top-up to device [${updatedUnit.device_id}]: elec=Rp${Number(tx.electricity_amount_rp)} water=Rp${Number(tx.water_amount_rp)}`,
-        );
-        this.mqttClient.emit(`device/${updatedUnit.device_id}/topup`, payload);
-        if (tx.electricity_amount_rp > 0)
-          this.mqttClient.emit(
-            `device/${updatedUnit.device_id}/command`,
-            encodeCommand('relay', 1),
-          );
-        if (tx.water_amount_rp > 0)
-          this.mqttClient.emit(
-            `device/${updatedUnit.device_id}/command`,
-            encodeCommand('valve', 1),
-          );
-      }
-
-      const totalRp =
-        Number(tx.electricity_amount_rp) + Number(tx.water_amount_rp);
-      if (updatedUnit.resident_email) {
-        void this.notificationService
-          .sendResidentNotification(
-            updatedUnit.resident_email,
-            `[NetFlow] Top-up Berhasil — Unit ${tx.unit_no}`,
-            `✅ Pembayaran Rp ${totalRp.toLocaleString('id-ID')} berhasil dikonfirmasi.\n\nUnit: ${tx.unit_no}\nListrik: Rp ${Number(tx.electricity_amount_rp).toLocaleString('id-ID')}\nAir: Rp ${Number(tx.water_amount_rp).toLocaleString('id-ID')}\nID Transaksi: ${tx.id}\n\nToken Anda akan segera diperbarui.`,
-          )
-          .catch(() => {});
-      }
+          Number(tx.electricity_amount_rp),
+          Number(tx.water_amount_rp),
+          tx.method,
+          tx.confirmed_at,
+        ),
+      );
     }
 
     await this.txRepo.save(tx);
 
-    const totalRp =
-      Number(tx.electricity_amount_rp) + Number(tx.water_amount_rp);
-    void this.auditLogService.log(
-      'midtrans',
-      'TOKEN_PURCHASE',
-      'transaction',
-      tx.id,
-      {
-        amount: totalRp,
-        method: tx.method,
-        status: finalStatus,
-        gateway_status: mStatus,
-      },
-      finalStatus === 'success' ? 'success' : 'failure',
-    );
+    if (finalStatus === 'failed') {
+      const totalRp =
+        Number(tx.electricity_amount_rp) + Number(tx.water_amount_rp);
+      void this.auditLogService.log(
+        'midtrans',
+        'TOKEN_PURCHASE',
+        'transaction',
+        tx.id,
+        {
+          amount: totalRp,
+          method: tx.method,
+          status: 'failed',
+          gateway_status: mStatus,
+        },
+        'failure',
+      );
+    }
 
     return tx;
   }
@@ -298,59 +255,22 @@ export class PaymentsService {
     tx.status = 'success';
     tx.confirmed_at = new Date();
 
-    if (tx.electricity_amount_rp > 0) {
-      const elecTariff = await this.tariffService.findCurrent('electricity');
-      await this.unitService.creditTokensByUnitNo(
+    this.eventEmitter.emit(
+      'payment.completed',
+      new PaymentCompletedEvent(
+        tx.id,
         tx.unit_no,
-        tx.electricity_amount_rp / elecTariff,
-        'electricity',
-      );
-    }
+        Number(tx.electricity_amount_rp),
+        Number(tx.water_amount_rp),
+        tx.method,
+        tx.confirmed_at,
+      ),
+    );
 
-    let updatedUnit = await this.unitService.findByUnitNo(tx.unit_no);
-    if (tx.water_amount_rp > 0) {
-      const waterTariff = await this.tariffService.findCurrent('water');
-      updatedUnit = await this.unitService.creditTokensByUnitNo(
-        tx.unit_no,
-        tx.water_amount_rp / waterTariff,
-        'water',
-      );
-    }
-
-    if (updatedUnit.device_id) {
-      const payload = encodeTopup({
-        electricAmount: Number(tx.electricity_amount_rp),
-        waterAmount: Number(tx.water_amount_rp),
-        timestamp: Math.floor(Date.now() / 1000),
-      });
-      this.logger.log(
-        `Pushing top-up to device [${updatedUnit.device_id}]: elec=Rp${Number(tx.electricity_amount_rp)} water=Rp${Number(tx.water_amount_rp)}`,
-      );
-      this.mqttClient.emit(`device/${updatedUnit.device_id}/topup`, payload);
-      if (tx.electricity_amount_rp > 0)
-        this.mqttClient.emit(
-          `device/${updatedUnit.device_id}/command`,
-          encodeCommand('relay', 1),
-        );
-      if (tx.water_amount_rp > 0)
-        this.mqttClient.emit(
-          `device/${updatedUnit.device_id}/command`,
-          encodeCommand('valve', 1),
-        );
-    }
-    const totalRp =
-      Number(tx.electricity_amount_rp) + Number(tx.water_amount_rp);
-    if (updatedUnit.resident_email) {
-      void this.notificationService
-        .sendResidentNotification(
-          updatedUnit.resident_email,
-          `[NetFlow] Top-up Berhasil — Unit ${tx.unit_no}`,
-          `✅ Pembayaran Rp ${totalRp.toLocaleString('id-ID')} berhasil dikonfirmasi.\n\nUnit: ${tx.unit_no}\nListrik: Rp ${Number(tx.electricity_amount_rp).toLocaleString('id-ID')}\nAir: Rp ${Number(tx.water_amount_rp).toLocaleString('id-ID')}\nID Transaksi: ${tx.id}\n\nToken Anda akan segera diperbarui.`,
-        )
-        .catch(() => {});
-    }
     await this.txRepo.save(tx);
 
+    const totalRp =
+      Number(tx.electricity_amount_rp) + Number(tx.water_amount_rp);
     void this.auditLogService.log(
       tx.unit_no,
       'TOKEN_PURCHASE',

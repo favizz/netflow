@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { BullModule } from '@nestjs/bullmq';
@@ -36,7 +37,7 @@ import { AppService } from './app.service';
     }),
 
     ScheduleModule.forRoot(),
-
+    EventEmitterModule.forRoot(),
     // ── Database ─────────────────────────────────────────────────────────────
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],

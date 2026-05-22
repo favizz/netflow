@@ -9,6 +9,7 @@ import { ConfigModule } from '@nestjs/config';
 import { AdminJwtGuard } from '../common/guards/admin-jwt.guard';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { AuditLogModule } from '../audit-log/audit-log.module';
+import { PaymentCompletedListener } from './listeners/payment-completed.listener';
 
 @Module({
   imports: [
@@ -18,7 +19,7 @@ import { AuditLogModule } from '../audit-log/audit-log.module';
     AuditLogModule,
   ],
   controllers: [UnitController],
-  providers: [UnitService, AdminJwtGuard, JwtAuthGuard],
+  providers: [UnitService, AdminJwtGuard, JwtAuthGuard, PaymentCompletedListener],
   exports: [TypeOrmModule, UnitService],
 })
 export class UnitModule {}
