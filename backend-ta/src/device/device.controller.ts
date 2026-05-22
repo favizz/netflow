@@ -179,7 +179,8 @@ export class DeviceController {
         `Queue unavailable, processing inline: ${(queueErr as Error).message}`,
       );
       try {
-        await this.deviceService.saveSensorData(payload);
+        // Pass the raw data buffer (not the wrapped BullMQ payload) so deviceService can decode it
+        await this.deviceService.saveSensorData(data);
       } catch (err) {
         this.logger.error(
           `Inline telemetry error for ${deviceId}: ${(err as Error).message}`,
