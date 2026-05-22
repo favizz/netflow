@@ -148,7 +148,7 @@ export class DeviceController {
   }
 
   @MessagePattern('device/+/data')
-  async handleSensorData(@Payload() data: any, @Ctx() ctx: MqttContext) {
+  async handleSensorData(@Payload() data: unknown, @Ctx() ctx: MqttContext) {
     const topic: string = ctx.getTopic();
     const deviceId = topic.split('/')[1] ?? null;
 
@@ -157,16 +157,27 @@ export class DeviceController {
     this.logger.warn(`RAW=${JSON.stringify(data)}`);
 
     let buf: Buffer | null = null;
+    const d = data as Record<string, unknown>;
+
     if (Buffer.isBuffer(data)) {
       buf = data;
     } else if (data instanceof Uint8Array) {
       buf = Buffer.from(data);
-    } else if (data && data.type === 'Buffer' && Array.isArray(data.data)) {
-      buf = Buffer.from(data.data);
-    } else if (typeof data === 'object' && Object.keys(data).length > 0 && !data.et) {
+    } else if (
+      d &&
+      d.type === 'Buffer' &&
+      Array.isArray(d.data) &&
+      (d.data as unknown[]).every((v) => typeof v === 'number')
+    ) {
+      buf = Buffer.from(d.data as number[]);
+    } else if (
+      typeof data === 'object' &&
+      data !== null &&
+      Object.keys(data).length > 0 &&
+      !('et' in d)
+    ) {
       // Catch the case where NestJS passes an object like { "0": 0, "1": 0, ... }
-      // but it's not explicitly labeled as type: "Buffer".
-      const values = Object.values(data);
+      const values = Object.values(d);
       if (values.every((v) => typeof v === 'number')) {
         buf = Buffer.from(values as number[]);
       }
@@ -182,7 +193,7 @@ export class DeviceController {
         _deviceId: deviceId,
       };
     } else {
-      payload = { ...(data as Record<string, unknown>), _deviceId: deviceId };
+      payload = { ...(d as Record<string, unknown>), _deviceId: deviceId };
     }
 
     try {
