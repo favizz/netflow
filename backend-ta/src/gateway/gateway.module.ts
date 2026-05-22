@@ -26,6 +26,7 @@ import { PaymentCompletedListener } from './listeners/payment-completed.listener
             url: configService.get<string>('MQTT_BROKER_URL'),
             username: configService.get<string>('MQTT_USERNAME') || undefined,
             password: configService.get<string>('MQTT_PASSWORD') || undefined,
+            rejectUnauthorized: false,
             // If the caller already encoded a Buffer (custom binary frame),
             // pass it through unchanged; otherwise fall back to JSON.
             serializer: {

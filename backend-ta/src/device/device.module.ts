@@ -33,6 +33,7 @@ import { AuditLogModule } from '../audit-log/audit-log.module';
             url: configService.get<string>('MQTT_BROKER_URL'),
             username: configService.get<string>('MQTT_USERNAME') || undefined,
             password: configService.get<string>('MQTT_PASSWORD') || undefined,
+            rejectUnauthorized: false,
             serializer: {
               serialize: (value: { data: unknown }): Buffer => {
                 const d = value.data;
