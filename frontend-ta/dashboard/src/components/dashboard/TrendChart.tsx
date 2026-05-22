@@ -95,6 +95,7 @@ export function TrendChart() {
                 if (cancelled) return;
                 if (!units || units.length === 0) { setData([]); setHasPrev(false); setHasNext(false); return; }
 
+                const firstUnit = units[0].unit_no;
                 const apiPeriod = period === 'daily' ? 'daily' : 'monthly';
                 const trends = await fetchApi(`/reporting/trends/${encodeURIComponent(firstUnit)}?period=${apiPeriod}`);
                 if (cancelled) return;
