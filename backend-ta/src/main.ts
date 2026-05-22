@@ -83,6 +83,7 @@ async function bootstrap() {
       url: process.env.MQTT_BROKER_URL,
       username: process.env.MQTT_USERNAME || undefined,
       password: process.env.MQTT_PASSWORD || undefined,
+      rejectUnauthorized: false,
     },
   });
 
