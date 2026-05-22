@@ -60,7 +60,9 @@ try {
       `[OTel] Tracing active - service="${serviceName}" exporter="${otlpEndpoint ?? 'console'}" protocol="${otlpProtocol}"`,
     );
 
-    const shutdown = () => sdk.shutdown().catch(console.error);
+    const shutdown = () => {
+      void sdk.shutdown().catch(console.error);
+    };
     process.on('SIGTERM', shutdown);
     process.on('SIGINT', shutdown);
   }
@@ -74,9 +76,7 @@ function loadTracingEnv() {
   const rootEnv = resolve(process.cwd(), '../.env');
   const rootDevEnv = resolve(process.cwd(), '../.env.dev');
   const envFiles =
-    process.env.NODE_ENV === 'production'
-      ? [rootEnv]
-      : [rootDevEnv, rootEnv];
+    process.env.NODE_ENV === 'production' ? [rootEnv] : [rootDevEnv, rootEnv];
 
   for (const envFile of envFiles) {
     if (existsSync(envFile)) {

@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { BullModule } from '@nestjs/bullmq';
-import { ConfigModule } from '@nestjs/config';
 import { UnitModule } from '../unit/unit.module';
 import { AuditLogModule } from '../audit-log/audit-log.module';
 import { Transaction } from './entities/transaction.entity';

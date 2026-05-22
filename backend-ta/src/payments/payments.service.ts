@@ -1,7 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument */
 import {
   ForbiddenException,
-  Inject,
   Injectable,
   Logger,
   NotFoundException,
@@ -35,7 +34,7 @@ export class PaymentsService {
     @InjectQueue(PAYMENT_EXPIRY_QUEUE)
     private readonly expiryQueue: Queue,
     private readonly eventEmitter: EventEmitter2,
-    @InjectRepository(Unit) private readonly unitRepo: Repository<Unit>
+    @InjectRepository(Unit) private readonly unitRepo: Repository<Unit>,
   ) {}
 
   async initiateTopup(dto: InitiateTopupDto) {

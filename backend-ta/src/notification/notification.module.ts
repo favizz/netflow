@@ -4,9 +4,9 @@ import { ResidentsModule } from '../residents/residents.module';
 import { UnitModule } from '../unit/unit.module';
 import { PaymentCompletedListener } from './listeners/payment-completed.listener';
 
-  @Module({
-    imports: [ResidentsModule, UnitModule],
-    providers: [NotificationService, PaymentCompletedListener],
-    exports: [NotificationService],
-  })
-  export class NotificationModule {}
+@Module({
+  imports: [ResidentsModule, UnitModule],
+  providers: [NotificationService, PaymentCompletedListener],
+  exports: [NotificationService],
+})
+export class NotificationModule {}

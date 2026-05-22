@@ -19,7 +19,12 @@ import { PaymentCompletedListener } from './listeners/payment-completed.listener
     AuditLogModule,
   ],
   controllers: [UnitController],
-  providers: [UnitService, AdminJwtGuard, JwtAuthGuard, PaymentCompletedListener],
+  providers: [
+    UnitService,
+    AdminJwtGuard,
+    JwtAuthGuard,
+    PaymentCompletedListener,
+  ],
   exports: [TypeOrmModule, UnitService],
 })
 export class UnitModule {}

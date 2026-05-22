@@ -98,7 +98,10 @@ export class AnomalyService implements OnModuleInit {
         vv > VOLTAGE_CRITICAL_HIGH;
       const valveShouldCut = tokenWater <= 0 && !valveStatus && wf > 0.1;
 
-      if ((relayShouldCut || valveShouldCut) && Date.now() - lastCmd > 5 * 60 * 1000) {
+      if (
+        (relayShouldCut || valveShouldCut) &&
+        Date.now() - lastCmd > 5 * 60 * 1000
+      ) {
         this.lastSafetyCommandMs.set(deviceId, Date.now());
         if (relayShouldCut) {
           this.mqttClient.emit(
@@ -454,12 +457,15 @@ export class AnomalyService implements OnModuleInit {
     const pw = latest.power ?? 0;
     const wf = latest.water_flow ?? 0;
 
-    const elecBypassed = Number(unit.token_electricity) <= 0 && !unit.relay_status && pw > 5;
-    const waterBypassed = Number(unit.token_water) <= 0 && !unit.valve_status && wf > 0.1;
+    const elecBypassed =
+      Number(unit.token_electricity) <= 0 && !unit.relay_status && pw > 5;
+    const waterBypassed =
+      Number(unit.token_water) <= 0 && !unit.valve_status && wf > 0.1;
     if (elecBypassed || waterBypassed) {
       const parts: string[] = [];
       if (elecBypassed) parts.push(`listrik: ${pw.toFixed(0)} W (relay OFF)`);
-      if (waterBypassed) parts.push(`air: ${wf.toFixed(2)} L/min (valve CLOSE)`);
+      if (waterBypassed)
+        parts.push(`air: ${wf.toFixed(2)} L/min (valve CLOSE)`);
       anomalies.push({
         anomalyType: 'jailbreak',
         severity: 'critical',
