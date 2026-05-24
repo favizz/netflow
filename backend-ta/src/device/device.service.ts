@@ -3,7 +3,7 @@ import { ClientProxy } from '@nestjs/microservices';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { decodeTelemetry, encodeCommand } from '../common/binary-codec';
-import { Unit } from '../unit/entities/unit.entity';
+import { Unit } from '../admin/unit/entities/unit.entity';
 import { MeterReading } from './entities/device.entity';
 import { AnomalyService } from '../anomaly/anomaly.service';
 

@@ -5,7 +5,7 @@ import { getQueueToken } from '@nestjs/bullmq';
 import { AdminService } from './admin.service';
 import { CalibrationSetting } from './entities/calibration-setting.entity';
 import { Building } from './entities/building.entity';
-import { UnitService } from '../unit/unit.service';
+import { UnitService } from './unit/unit.service';
 import { PaymentsService } from '../payments/payments.service';
 
 describe('AdminService', () => {

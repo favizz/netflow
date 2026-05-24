@@ -4,7 +4,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 import { DeviceService } from './device.service';
 import { MeterReading } from './entities/device.entity';
-import { Unit } from '../unit/entities/unit.entity';
+import { Unit } from '../admin/unit/entities/unit.entity';
 import { AnomalyService } from '../anomaly/anomaly.service';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────

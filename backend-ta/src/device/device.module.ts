@@ -8,9 +8,9 @@ import { DeviceService } from './device.service';
 import { DeviceController } from './device.controller';
 import { TelemetryProcessor, TELEMETRY_QUEUE } from './telemetry.processor';
 import { MeterReading } from './entities/device.entity';
-import { Unit } from '../unit/entities/unit.entity';
+import { Unit } from '../admin/unit/entities/unit.entity';
 import { AnomalyModule } from '../anomaly/anomaly.module';
-import { AuditLogModule } from '../audit-log/audit-log.module';
+import { AuditLogModule } from '../admin/audit-log/audit-log.module';
 
 @Module({
   imports: [

@@ -3,19 +3,22 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { Anomaly } from './entities/anomaly.entity';
-import { UnitModule } from '../unit/unit.module';
-import { ResidentsModule } from '../residents/residents.module';
-import { AnomalyService } from './anomaly.service';
+import { MeterReading } from '../device/entities/device.entity';
+import { UnitModule } from '../admin/unit/unit.module';
+import { ResidentsModule } from '../admin/residents/residents.module';
 import { NotificationModule } from '../notification/notification.module';
+import { AnomalyService } from './anomaly.service';
+import { AnomalyDetectionService } from './anomaly-detection.service';
+import { AnomalyNotificationService } from './anomaly-notification.service';
+import { AnomalyController } from './anomaly.controller';
 
 @Module({
   imports: [
     ConfigModule,
-    // UnitModule exports UnitService + TypeOrmModule (includes MeterReading repository)
     UnitModule,
     ResidentsModule,
-    TypeOrmModule.forFeature([Anomaly]),
     NotificationModule,
+    TypeOrmModule.forFeature([Anomaly, MeterReading]),
     ClientsModule.registerAsync([
       {
         name: 'MQTT_CLIENT',
@@ -29,10 +32,10 @@ import { NotificationModule } from '../notification/notification.module';
             rejectUnauthorized: false,
             serializer: {
               serialize: (value: { data: unknown }): Buffer => {
-                const d = value.data;
-                if (Buffer.isBuffer(d)) return d;
-                if (d instanceof Uint8Array) return Buffer.from(d);
-                return Buffer.from(JSON.stringify(d));
+                const payload = value.data;
+                if (Buffer.isBuffer(payload)) return payload;
+                if (payload instanceof Uint8Array) return Buffer.from(payload);
+                return Buffer.from(JSON.stringify(payload));
               },
             },
           },
@@ -41,7 +44,8 @@ import { NotificationModule } from '../notification/notification.module';
       },
     ]),
   ],
-  providers: [AnomalyService],
+  controllers: [AnomalyController],
+  providers: [AnomalyService, AnomalyDetectionService, AnomalyNotificationService],
   exports: [AnomalyService],
 })
 export class AnomalyModule {}

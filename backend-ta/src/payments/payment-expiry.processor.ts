@@ -4,7 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Job } from 'bullmq';
 import { Transaction } from './entities/transaction.entity';
-import { AuditLogService } from '../audit-log/audit-log.service';
+import { AuditLogService } from '../admin/audit-log/audit-log.service';
 
 export const PAYMENT_EXPIRY_QUEUE = 'payment-expiry';
 

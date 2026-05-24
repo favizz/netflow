@@ -1,13 +1,13 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { MeterReading } from '../device/entities/device.entity';
+import { MeterReading } from '../../device/entities/device.entity';
 import { Unit } from './entities/unit.entity';
 import { UnitController } from './unit.controller';
 import { UnitService } from './unit.service';
 import { TariffModule } from '../tariff/tariff.module';
 import { ConfigModule } from '@nestjs/config';
-import { AdminJwtGuard } from '../common/guards/admin-jwt.guard';
-import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { AdminJwtGuard } from '../../common/guards/admin-jwt.guard';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { AuditLogModule } from '../audit-log/audit-log.module';
 import { PaymentCompletedListener } from './listeners/payment-completed.listener';
 

@@ -2,7 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { ClientProxy } from '@nestjs/microservices';
 import { PaymentCompletedEvent } from '../../payments/events/payment-completed.event';
-import { UnitService } from '../../unit/unit.service';
+import { UnitService } from '../../admin/unit/unit.service';
 import { encodeTopup, encodeCommand } from '../../common/binary-codec';
 
 @Injectable()

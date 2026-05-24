@@ -21,11 +21,11 @@ interface AdminRequest extends ExpressRequest {
 }
 import { UpdateAdminAccessDto } from './dto/update-admin-access.dto';
 import { AdminService, CalibrationSettings } from './admin.service';
-import { ResidentsService } from '../residents/residents.service';
-import { UnitService } from '../unit/unit.service';
+import { ResidentsService } from './residents/residents.service';
+import { UnitService } from './unit/unit.service';
 import { AnomalyService } from '../anomaly/anomaly.service';
-import { TariffService, CreateTariffDto } from '../tariff/tariff.service';
-import { AuditLogService } from '../audit-log/audit-log.service';
+import { TariffService, CreateTariffDto } from './tariff/tariff.service';
+import { AuditLogService } from './audit-log/audit-log.service';
 
 class CreateResidentDto {
   @IsEmail()

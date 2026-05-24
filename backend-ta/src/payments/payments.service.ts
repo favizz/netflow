@@ -11,14 +11,14 @@ import { Repository } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
-import { AuditLogService } from '../audit-log/audit-log.service';
+import { AuditLogService } from '../admin/audit-log/audit-log.service';
 import { Transaction } from './entities/transaction.entity';
 import { InitiateTopupDto } from './dto/initiate-topup.dto';
 import { PAYMENT_EXPIRY_QUEUE } from './payment-expiry.processor';
 import { createHash } from 'crypto';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PaymentCompletedEvent } from './events/payment-completed.event';
-import { Unit } from '../unit/entities/unit.entity';
+import { Unit } from '../admin/unit/entities/unit.entity';
 
 const PAYMENT_EXPIRY_MS = 30 * 60 * 1_000; // 30 minutes
 

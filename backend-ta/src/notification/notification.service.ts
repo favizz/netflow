@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
-import { ResidentsService } from '../residents/residents.service';
+import { ResidentsService } from '../admin/residents/residents.service';
 
 @Injectable()
 export class NotificationService {

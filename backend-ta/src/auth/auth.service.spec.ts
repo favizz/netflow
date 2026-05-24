@@ -6,8 +6,8 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { AuthService } from './auth.service';
 import { AuthRefreshToken } from './entities/auth-refresh-token.entity';
-import { ResidentsService } from '../residents/residents.service';
-import { UnitService } from '../unit/unit.service';
+import { ResidentsService } from '../admin/residents/residents.service';
+import { UnitService } from '../admin/unit/unit.service';
 
 function makeResident(overrides: Partial<any> = {}) {
   return { email: 'user@test.com', role: 'resident', google_id: null, name: null, picture: null, ...overrides };

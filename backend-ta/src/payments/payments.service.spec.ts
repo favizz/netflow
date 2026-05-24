@@ -7,13 +7,13 @@ import * as crypto from 'crypto';
 import { getQueueToken } from '@nestjs/bullmq';
 import { PaymentsService } from './payments.service';
 import { Transaction } from './entities/transaction.entity';
-import { UnitService } from '../unit/unit.service';
-import { TariffService } from '../tariff/tariff.service';
-import { AuditLogService } from '../audit-log/audit-log.service';
+import { UnitService } from '../admin/unit/unit.service';
+import { TariffService } from '../admin/tariff/tariff.service';
+import { AuditLogService } from '../admin/audit-log/audit-log.service';
 import { NotificationService } from '../notification/notification.service';
 import { PAYMENT_EXPIRY_QUEUE } from './payment-expiry.processor';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { Unit } from '../unit/entities/unit.entity';
+import { Unit } from '../admin/unit/entities/unit.entity';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 

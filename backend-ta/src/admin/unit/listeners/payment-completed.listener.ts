@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
-import { PaymentCompletedEvent } from '../../payments/events/payment-completed.event';
+import { PaymentCompletedEvent } from '../../../payments/events/payment-completed.event';
 import { UnitService } from '../unit.service';
 import { TariffService } from '../../tariff/tariff.service';
 

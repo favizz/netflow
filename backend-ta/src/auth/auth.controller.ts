@@ -15,8 +15,8 @@ import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { SelectUnitDto } from './dto/select-unit.dto';
 import type { JwtPayload } from './interfaces/jwt-payload.interface';
 import { AuthService } from './auth.service';
-import { JwtAuthGuard } from './jwt-auth.guard';
-import { UnitService } from '../unit/unit.service';
+import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { UnitService } from '../admin/unit/unit.service';
 
 @Controller('auth')
 export class AuthController {

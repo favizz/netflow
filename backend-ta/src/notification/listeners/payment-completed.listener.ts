@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { PaymentCompletedEvent } from '../../payments/events/payment-completed.event';
-import { UnitService } from '../../unit/unit.service';
+import { UnitService } from '../../admin/unit/unit.service';
 import { NotificationService } from '../notification.service';
 
 @Injectable()

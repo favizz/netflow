@@ -3,7 +3,7 @@ import { encodeCommand } from '../common/binary-codec';
 import { ClientProxy } from '@nestjs/microservices';
 import { PaymentsService } from '../payments/payments.service';
 import { ReportingService } from '../reporting/reporting.service';
-import { UnitService } from '../unit/unit.service';
+import { UnitService } from '../admin/unit/unit.service';
 import { AnomalyService } from '../anomaly/anomaly.service';
 
 @Injectable()

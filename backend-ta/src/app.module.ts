@@ -16,14 +16,13 @@ import { DeviceModule } from './device/device.module';
 import { GatewayModule } from './gateway/gateway.module';
 import { PaymentsModule } from './payments/payments.module';
 import { ReportingModule } from './reporting/reporting.module';
-import { UnitModule } from './unit/unit.module';
+import { UnitModule } from './admin/unit/unit.module';
 import { AuthModule } from './auth/auth.module';
-import { TariffModule } from './tariff/tariff.module';
-import { AuditLogModule } from './audit-log/audit-log.module';
-import { RetentionModule } from './retention/retention.module';
+import { TariffModule } from './admin/tariff/tariff.module';
+import { AuditLogModule } from './admin/audit-log/audit-log.module';
+import { RetentionModule } from './admin/retention/retention.module';
 import { TelegramModule } from './telegram/telegram.module';
 import { AppController } from './app.controller';
-import { AppService } from './app.service';
 
 @Module({
   imports: [
@@ -127,6 +126,5 @@ import { AppService } from './app.service';
     TelegramModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
 })
 export class AppModule {}

@@ -9,8 +9,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { createHash, randomBytes } from 'crypto';
 import { OAuth2Client } from 'google-auth-library';
 import { Repository } from 'typeorm';
-import { ResidentsService } from '../residents/residents.service';
-import { UnitService } from '../unit/unit.service';
+import { ResidentsService } from '../admin/residents/residents.service';
+import { UnitService } from '../admin/unit/unit.service';
 import { AuthRefreshToken } from './entities/auth-refresh-token.entity';
 import type { JwtPayload } from './interfaces/jwt-payload.interface';
 

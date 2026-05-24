@@ -1,5 +1,5 @@
 import { Body, Controller, HttpCode, Post } from '@nestjs/common';
-import { ResidentsService } from '../residents/residents.service';
+import { ResidentsService } from '../admin/residents/residents.service';
 import { NotificationService } from '../notification/notification.service';
 import { ConfigService } from '@nestjs/config';
 import { Logger } from '@nestjs/common';

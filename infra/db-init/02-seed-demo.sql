@@ -203,9 +203,13 @@ INSERT IGNORE INTO transactions (id, unit_no, electricity_amount_rp, water_amoun
 -- -----------------------------------------
 
 INSERT IGNORE INTO anomalies (device_id, type, severity, description, action_taken, created_at, resolved_at) VALUES
-  ('DEV-B-202', 'low_token',          'warning',  'Electricity token below 5 kWh threshold',         'Relay cut off automatically',      DATE_SUB(NOW(), INTERVAL 2  DAY), NULL),
-  ('DEV-A-103', 'voltage_anomaly',    'warning',  'Voltage 198V — below ±10% of 220V nominal',       'Monitoring; no relay action taken', DATE_SUB(NOW(), INTERVAL 5  DAY), DATE_SUB(NOW(), INTERVAL 4 DAY)),
-  ('DEV-B-101', 'usage_spike',        'warning',  'Energy 3× above 7-day average in 1 hour',         'Flagged for resident review',       DATE_SUB(NOW(), INTERVAL 8  DAY), DATE_SUB(NOW(), INTERVAL 7 DAY)),
-  ('DEV-C-101', 'low_power_factor',   'warning',  'Power factor 0.62 — inductive load detected',     'Resident advised to reduce inductive appliances', DATE_SUB(NOW(), INTERVAL 3  DAY), NULL),
-  ('DEV-A-201', 'sensor_malfunction', 'critical', 'Water flow sensor returning null for 15+ minutes', 'Device rebooted via MQTT command',  DATE_SUB(NOW(), INTERVAL 12 DAY), DATE_SUB(NOW(), INTERVAL 12 DAY) + INTERVAL 30 MINUTE),
-  ('DEV-A-102', 'low_token',          'warning',  'Water token 1.0 m3 — approaching zero',            'Resident notified',                DATE_SUB(NOW(), INTERVAL 1  DAY), NULL);
+  ('DEV-B-202', 'low_electricity_token', 'warning',  'Token listrik hampir habis: 3.20 kWh. Segera top-up.',                     'Relay cut off automatically',                     DATE_SUB(NOW(), INTERVAL 2  DAY), NULL),
+  ('DEV-A-102', 'low_water_token',        'warning',  'Token air hampir habis: 0.80 m³. Segera top-up.',                           'Resident notified',                               DATE_SUB(NOW(), INTERVAL 1  DAY), NULL),
+  ('DEV-A-103', 'voltage_anomaly',         'warning',  'Tegangan terlalu rendah pada unit A-103: 197.0 V (aman: 198–242 V).',      'Monitoring; no relay action taken',               DATE_SUB(NOW(), INTERVAL 5  DAY), DATE_SUB(NOW(), INTERVAL 4 DAY)),
+  ('DEV-B-101', 'usage_spike',             'warning',  'Lonjakan konsumsi pada unit B-101: 1450 W (3.2× rata-rata 453 W).',        'Flagged for resident review',                     DATE_SUB(NOW(), INTERVAL 8  DAY), DATE_SUB(NOW(), INTERVAL 7 DAY)),
+  ('DEV-C-101', 'low_power_factor',        'warning',  'Faktor daya rendah pada unit C-101: 62% (minimum 60%).',                   'Resident advised to reduce inductive appliances', DATE_SUB(NOW(), INTERVAL 3  DAY), NULL),
+  ('DEV-A-201', 'sensor_malfunction',      'warning',  'Sensor tidak merespons pada unit A-201: 10 pembacaan terakhir semua kosong.','Device rebooted via MQTT command',              DATE_SUB(NOW(), INTERVAL 12 DAY), DATE_SUB(NOW(), INTERVAL 12 DAY) + INTERVAL 30 MINUTE),
+  ('DEV-A-101', 'water_leak',              'warning',  'Kemungkinan kebocoran: debit rata-rata 0.45 L/menit konstan dalam 30 pembacaan.','Resident notified',                        DATE_SUB(NOW(), INTERVAL 4  DAY), DATE_SUB(NOW(), INTERVAL 3 DAY)),
+  ('DEV-B-201', 'zero_flow',               'warning',  'Tidak ada aliran air selama 20 pembacaan terakhir meskipun katup terbuka.', 'Supply valve checked',                            DATE_SUB(NOW(), INTERVAL 6  DAY), DATE_SUB(NOW(), INTERVAL 6 DAY) + INTERVAL 2 HOUR),
+  ('DEV-C-201', 'backflow',                'warning',  'Aliran air balik terdeteksi pada unit C-201: -0.15 L/menit.',               'Technician dispatched',                           DATE_SUB(NOW(), INTERVAL 9  DAY), DATE_SUB(NOW(), INTERVAL 8 DAY)),
+  ('DEV-B-202', 'device_offline',          'critical', 'Perangkat unit B-202 offline. Tidak ada data masuk selama 45 menit.',       '{"lastSeenMs":2700000,"offlineThresholdMs":600000}',DATE_SUB(NOW(), INTERVAL 7  DAY), DATE_SUB(NOW(), INTERVAL 7 DAY) + INTERVAL 50 MINUTE);

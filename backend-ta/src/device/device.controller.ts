@@ -9,7 +9,7 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { DeviceService } from './device.service';
 import { TELEMETRY_QUEUE } from './telemetry.processor';
-import { AuditLogService } from '../audit-log/audit-log.service';
+import { AuditLogService } from '../admin/audit-log/audit-log.service';
 
 /**
  * MQTT ingestion controller.
@@ -152,10 +152,6 @@ export class DeviceController {
     const topic: string = ctx.getTopic();
     const deviceId = topic.split('/')[1] ?? null;
 
-    this.logger.warn(`TYPE=${typeof data}`);
-    this.logger.warn(`BUFFER=${Buffer.isBuffer(data)}`);
-    this.logger.warn(`RAW=${JSON.stringify(data)}`);
-
     let buf: Buffer | null = null;
     const d = data as Record<string, unknown>;
 
@@ -185,8 +181,6 @@ export class DeviceController {
       }
     }
 
-    // Merge device_id so downstream code does not need to parse the topic.
-    this.logger.warn(`BUF_LEN=${buf?.length}`);
     let payload: Record<string, unknown>;
     if (buf) {
       // Serialize buffer as base64 so BullMQ can store it in Redis JSON.

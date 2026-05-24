@@ -1,8 +1,8 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { BullModule } from '@nestjs/bullmq';
-import { UnitModule } from '../unit/unit.module';
-import { AuditLogModule } from '../audit-log/audit-log.module';
+import { UnitModule } from '../admin/unit/unit.module';
+import { AuditLogModule } from '../admin/audit-log/audit-log.module';
 import { Transaction } from './entities/transaction.entity';
 import { PaymentsController } from './payments.controller';
 import { PaymentsService } from './payments.service';

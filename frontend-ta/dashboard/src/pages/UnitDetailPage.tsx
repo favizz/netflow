@@ -358,7 +358,7 @@ export default function UnitDetailPage() {
 
         client.on('message', (topic, message) => {
             const now = new Date();
-            const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
             try {
                 let parsed: IoTPayload | null = null;

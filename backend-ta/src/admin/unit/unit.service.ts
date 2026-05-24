@@ -8,11 +8,12 @@ import { Repository, Not, IsNull, In } from 'typeorm';
 import { CreateUnitDto } from './dto/create-unit.dto';
 import { UpdateUnitDto } from './dto/update-unit.dto';
 import { Unit } from './entities/unit.entity';
-import { MeterReading } from '../device/entities/device.entity';
+import { MeterReading } from '../../device/entities/device.entity';
 import { TariffService } from '../tariff/tariff.service';
 import { AuditLogService } from '../audit-log/audit-log.service';
+import { ANOMALY_DETECTION_CONFIG } from '../../anomaly/anomaly.constants';
 
-const LOW_TOKEN_THRESHOLD_KWH = 10;
+const LOW_TOKEN_THRESHOLD_KWH = ANOMALY_DETECTION_CONFIG.lowElectricityTokenKwh;
 
 @Injectable()
 export class UnitService {

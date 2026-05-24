@@ -4,7 +4,7 @@ import { Repository } from 'typeorm';
 import { ClientProxy } from '@nestjs/microservices';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
-import { UnitService } from '../unit/unit.service';
+import { UnitService } from './unit/unit.service';
 import { PaymentsService } from '../payments/payments.service';
 import {
   encodeCalibration,
