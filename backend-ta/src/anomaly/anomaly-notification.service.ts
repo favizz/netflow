@@ -20,7 +20,7 @@ export class AnomalyNotificationService {
   private readonly logger = new Logger(AnomalyNotificationService.name);
   private cachedAdminList: Resident[] | null = null;
   private adminListCachedAt = 0;
-  private readonly adminAlertCooldownMap = new Map<AnomalyType, number>();
+  private readonly adminAlertCooldownMap = new Map<string, number>();
 
   constructor(
     private readonly notificationService: NotificationService,
@@ -60,7 +60,8 @@ export class AnomalyNotificationService {
    * @returns Promise that resolves after all admin sends are attempted.
    */
   async notifyAdminsOfAnomaly(anomaly: AnomalyItem, unitNumber: string): Promise<void> {
-    const lastAlertTimestamp = this.adminAlertCooldownMap.get(anomaly.anomalyType) ?? 0;
+    const cooldownKey = `${anomaly.anomalyType}:${unitNumber}`;
+    const lastAlertTimestamp = this.adminAlertCooldownMap.get(cooldownKey) ?? 0;
     const cooldownElapsed = Date.now() - lastAlertTimestamp > CFG.adminAlertCooldownMs;
 
     if (!cooldownElapsed) return;
@@ -73,7 +74,7 @@ export class AnomalyNotificationService {
 
     if (adminsWithTelegram.length === 0) return;
 
-    this.adminAlertCooldownMap.set(anomaly.anomalyType, Date.now());
+    this.adminAlertCooldownMap.set(cooldownKey, Date.now());
 
     const telegramMessage = `\u{1F6A8} *[Admin Alert]* ${anomaly.anomalyType.toUpperCase()} — Unit ${unitNumber}\n\n${anomaly.message}`;
 

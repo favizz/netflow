@@ -157,11 +157,15 @@ export type AnomalyType =
   | 'water_leak'
   | 'device_offline'
   | 'mcb_trip'
-  | 'low_token'
+  | 'low_electricity_token'
+  | 'low_water_token'
   | 'voltage_anomaly'
   | 'sensor_malfunction'
   | 'low_power_factor'
-  | 'usage_spike';
+  | 'usage_spike'
+  | 'zero_flow'
+  | 'backflow'
+  | 'topup_success';
 
 export type AnomalySeverity = 'critical' | 'warning' | 'info';
 
@@ -300,16 +304,6 @@ export const api = {
     return request<AnomalyItem[]>(`/gateway/mobile/${encodeURIComponent(unitNo)}/anomalies`);
   },
 
-  getTowerConnectivity(tower?: string) {
-    const query = tower ? `?tower=${encodeURIComponent(tower)}` : '';
-    return request<{
-      totalUnits: number;
-      onlineUnits: number;
-      offlineUnits: number;
-      units: Array<{ unitNo: string; online: boolean; relayStatus: boolean; lastTelemetryAt: string | null }>;
-    }>(`/gateway/tower/connectivity${query}`);
-  },
-
   getTrends(unitNo: string, period: 'daily' | 'monthly') {
     return request<TrendPoint[]>(`/gateway/mobile/${encodeURIComponent(unitNo)}/trends?period=${period}`);
   },
@@ -361,17 +355,4 @@ export const api = {
     );
   },
 
-  getForecast(unitNo: string) {
-    return request<{
-      unitNo: string;
-      tokenElec: number;
-      tokenWater: number;
-      estimatedDaysElec: number;
-      estimatedDaysWater: number;
-      avgDailyKwh: number;
-      avgDailyM3: number;
-      confidence: 'high' | 'medium' | 'low';
-      forecastAt: string;
-    }>(`/gateway/mobile/${encodeURIComponent(unitNo)}/forecast`);
-  },
 };

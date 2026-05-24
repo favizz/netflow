@@ -417,7 +417,12 @@ export class AnomalyService implements OnModuleInit {
       if (now - timestamp > staleThresholdMs) this.lastSafetyCommandMs.delete(key);
     }
     if (this.anomalyCache.size > CFG.anomalyCacheMaxSize) {
-      this.anomalyCache.clear();
+      const evictCount = Math.floor(this.anomalyCache.size / 2);
+      let evicted = 0;
+      for (const key of this.anomalyCache.keys()) {
+        this.anomalyCache.delete(key);
+        if (++evicted >= evictCount) break;
+      }
     }
   }
 }

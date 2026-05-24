@@ -16,29 +16,35 @@ export class PaymentCompletedListener {
 
   @OnEvent('payment.completed', { async: true }) // eslint-disable-line @typescript-eslint/no-unsafe-call
   async handle(event: PaymentCompletedEvent): Promise<void> {
-    const unit = await this.unitService.findByUnitNo(event.unitNo);
-    if (!unit.device_id) return;
+    try {
+      const unit = await this.unitService.findByUnitNo(event.unitNo);
+      if (!unit.device_id) return;
 
-    const payload = encodeTopup({
-      electricAmount: event.electricityAmountRp,
-      waterAmount: event.waterAmountRp,
-      timestamp: Math.floor(Date.now() / 1000),
-    });
+      const payload = encodeTopup({
+        electricAmount: event.electricityAmountRp,
+        waterAmount: event.waterAmountRp,
+        timestamp: Math.floor(Date.now() / 1000),
+      });
 
-    this.logger.log(
-      `Pushing top-up to device [${unit.device_id}]: elec=Rp${event.electricityAmountRp} water=Rp${event.waterAmountRp}`,
-    );
-
-    this.mqttClient.emit(`device/${unit.device_id}/topup`, payload);
-    if (event.electricityAmountRp > 0)
-      this.mqttClient.emit(
-        `device/${unit.device_id}/command`,
-        encodeCommand('relay', 1),
+      this.logger.log(
+        `Pushing top-up to device [${unit.device_id}]: elec=Rp${event.electricityAmountRp} water=Rp${event.waterAmountRp}`,
       );
-    if (event.waterAmountRp > 0)
-      this.mqttClient.emit(
-        `device/${unit.device_id}/command`,
-        encodeCommand('valve', 1),
+
+      this.mqttClient.emit(`device/${unit.device_id}/topup`, payload);
+      if (event.electricityAmountRp > 0)
+        this.mqttClient.emit(
+          `device/${unit.device_id}/command`,
+          encodeCommand('relay', 1),
+        );
+      if (event.waterAmountRp > 0)
+        this.mqttClient.emit(
+          `device/${unit.device_id}/command`,
+          encodeCommand('valve', 1),
+        );
+    } catch (err) {
+      this.logger.error(
+        `Failed to push top-up command for unit ${event.unitNo} (txn: ${event.transactionId}): ${(err as Error).message}`,
       );
+    }
   }
 }

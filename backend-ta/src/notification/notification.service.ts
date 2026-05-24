@@ -94,29 +94,42 @@ export class NotificationService {
     }
 
     this.lastTelegramSendAt.set(chatId, Date.now());
-    try {
-      const res = await fetch(
-        `https://api.telegram.org/bot${token}/sendMessage`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            chat_id: chatId,
-            text: html,
-            parse_mode: 'HTML',
-          }),
-        },
-      );
-      if (!res.ok) {
-        const body = await res.text();
-        this.logger.warn(
-          `Telegram sendMessage failed (${res.status}): ${body}`,
+
+    const MAX_RETRIES = 3;
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        const res = await fetch(
+          `https://api.telegram.org/bot${token}/sendMessage`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: chatId,
+              text: html,
+              parse_mode: 'HTML',
+            }),
+          },
         );
+        if (res.ok) return;
+
+        const body = await res.text();
+        if ((res.status === 429 || res.status >= 500) && attempt < MAX_RETRIES) {
+          const delayMs = attempt * 1_000;
+          this.logger.warn(
+            `Telegram sendMessage ${res.status} (attempt ${attempt}/${MAX_RETRIES}), retrying in ${delayMs}ms: ${body}`,
+          );
+          await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
+          continue;
+        }
+
+        this.logger.warn(`Telegram sendMessage failed (${res.status}): ${body}`);
+        return;
+      } catch (err) {
+        this.logger.error(
+          `Failed to send Telegram message: ${(err as Error).message}`,
+        );
+        return;
       }
-    } catch (err) {
-      this.logger.error(
-        `Failed to send Telegram message: ${(err as Error).message}`,
-      );
     }
   }
 

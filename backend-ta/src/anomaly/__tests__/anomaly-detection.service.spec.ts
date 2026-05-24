@@ -119,7 +119,7 @@ describe('AnomalyDetectionService', () => {
       expect(anomalies.some((a) => a.anomalyType === 'low_water_token')).toBe(false);
     });
 
-    it('electricity and water low_token anomalies are both detected simultaneously', () => {
+    it('low_electricity_token and low_water_token anomalies are both detected simultaneously', () => {
       const context = makeContext({
         unit: makeUnit({
           token_electricity: 2,

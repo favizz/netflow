@@ -160,6 +160,14 @@ export class PaymentsService {
       where: { webhook_event_id: eventId },
     });
     if (alreadyProcessed) {
+      void this.auditLogService.log(
+        'midtrans',
+        'TOKEN_PURCHASE',
+        'transaction',
+        alreadyProcessed.id,
+        { event: eventId, status: 'duplicate_webhook' },
+        'info',
+      );
       return { ...this.toResponse(alreadyProcessed), idempotent: true };
     }
 
@@ -207,6 +215,11 @@ export class PaymentsService {
 
     if (finalStatus === 'success') {
       tx.confirmed_at = new Date();
+    }
+
+    await this.txRepo.save(tx);
+
+    if (finalStatus === 'success') {
       this.eventEmitter.emit(
         'payment.completed',
         new PaymentCompletedEvent(
@@ -215,12 +228,10 @@ export class PaymentsService {
           Number(tx.electricity_amount_rp),
           Number(tx.water_amount_rp),
           tx.method,
-          tx.confirmed_at,
+          tx.confirmed_at!,
         ),
       );
     }
-
-    await this.txRepo.save(tx);
 
     if (finalStatus === 'failed') {
       const totalRp =
@@ -254,6 +265,8 @@ export class PaymentsService {
     tx.status = 'success';
     tx.confirmed_at = new Date();
 
+    await this.txRepo.save(tx);
+
     this.eventEmitter.emit(
       'payment.completed',
       new PaymentCompletedEvent(
@@ -265,8 +278,6 @@ export class PaymentsService {
         tx.confirmed_at,
       ),
     );
-
-    await this.txRepo.save(tx);
 
     const totalRp =
       Number(tx.electricity_amount_rp) + Number(tx.water_amount_rp);

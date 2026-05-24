@@ -64,11 +64,21 @@ export class DeviceService {
         let deltaEnergy = 0;
         if (incomingEnergyTotal > Number(unit.last_energy_reading)) {
           deltaEnergy = incomingEnergyTotal - Number(unit.last_energy_reading);
+        } else if (incomingEnergyTotal < Number(unit.last_energy_reading)) {
+          this.logger.warn(
+            `Sensor reset on device ${deviceId}: energy_total dropped from ${unit.last_energy_reading} to ${incomingEnergyTotal}. Updating baseline.`,
+          );
+          unit.last_energy_reading = incomingEnergyTotal;
         }
 
         let deltaWater = 0;
         if (incomingWaterTotal > Number(unit.last_water_reading)) {
           deltaWater = incomingWaterTotal - Number(unit.last_water_reading);
+        } else if (incomingWaterTotal < Number(unit.last_water_reading)) {
+          this.logger.warn(
+            `Sensor reset on device ${deviceId}: water_total dropped from ${unit.last_water_reading} to ${incomingWaterTotal}. Updating baseline.`,
+          );
+          unit.last_water_reading = incomingWaterTotal;
         }
 
         // Direct token deduction

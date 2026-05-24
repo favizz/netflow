@@ -21,15 +21,19 @@ const ANOMALY_META: Record<
   AnomalyType,
   { label: string; Icon: React.ElementType; action: string }
 > = {
-  low_token:          { label: "Token Hampir Habis",       Icon: BatteryWarning, action: "Segera beli token di menu Beli Token." },
-  mcb_trip:           { label: "MCB Trip / Overload",      Icon: Zap,            action: "Kurangi beban listrik, lalu nyalakan ulang relay dari Beranda." },
-  water_leak:         { label: "Kebocoran Air",            Icon: Droplets,       action: "Periksa seluruh kran dan pipa. Hubungi teknisi jika tidak ditemukan." },
-  voltage_anomaly:    { label: "Tegangan Tidak Normal",    Icon: AlertTriangle,  action: "Hentikan pemakaian perangkat sensitif dan laporkan ke pengelola." },
-  sensor_malfunction: { label: "Sensor Tidak Berfungsi",   Icon: Cpu,            action: "Hubungi teknisi untuk pemeriksaan sensor dan kabel." },
-  low_power_factor:   { label: "Faktor Daya Rendah",       Icon: Gauge,          action: "Kurangi beban induktif atau hubungi teknisi listrik." },
-  usage_spike:        { label: "Lonjakan Konsumsi",        Icon: TrendingUp,     action: "Periksa perangkat yang baru dinyalakan. Matikan yang tidak diperlukan." },
-  jailbreak:          { label: "Bypass Sistem",            Icon: ShieldAlert,    action: "Hubungi pengelola gedung segera." },
-  device_offline:     { label: "Perangkat Offline",        Icon: WifiOff,        action: "Hubungi pengelola untuk pemeriksaan perangkat." },
+  low_electricity_token: { label: "Token Listrik Hampir Habis", Icon: BatteryWarning, action: "Segera beli token listrik di menu Beli Token." },
+  low_water_token:       { label: "Token Air Hampir Habis",     Icon: BatteryWarning, action: "Segera beli token air di menu Beli Token." },
+  mcb_trip:              { label: "MCB Trip / Overload",        Icon: Zap,            action: "Kurangi beban listrik, lalu nyalakan ulang relay dari Beranda." },
+  water_leak:            { label: "Kebocoran Air",              Icon: Droplets,       action: "Periksa seluruh kran dan pipa. Hubungi teknisi jika tidak ditemukan." },
+  voltage_anomaly:       { label: "Tegangan Tidak Normal",      Icon: AlertTriangle,  action: "Hentikan pemakaian perangkat sensitif dan laporkan ke pengelola." },
+  sensor_malfunction:    { label: "Sensor Tidak Berfungsi",     Icon: Cpu,            action: "Hubungi teknisi untuk pemeriksaan sensor dan kabel." },
+  low_power_factor:      { label: "Faktor Daya Rendah",         Icon: Gauge,          action: "Kurangi beban induktif atau hubungi teknisi listrik." },
+  usage_spike:           { label: "Lonjakan Konsumsi",          Icon: TrendingUp,     action: "Periksa perangkat yang baru dinyalakan. Matikan yang tidak diperlukan." },
+  jailbreak:             { label: "Bypass Sistem",              Icon: ShieldAlert,    action: "Hubungi pengelola gedung segera." },
+  device_offline:        { label: "Perangkat Offline",          Icon: WifiOff,        action: "Hubungi pengelola untuk pemeriksaan perangkat." },
+  zero_flow:             { label: "Aliran Air Nol",             Icon: Droplets,       action: "Valve terbuka namun tidak ada aliran. Periksa pipa atau hubungi pengelola." },
+  backflow:              { label: "Aliran Air Balik",           Icon: Droplets,       action: "Terdeteksi aliran balik. Hubungi teknisi segera." },
+  topup_success:         { label: "Pembelian Token Berhasil",   Icon: CheckCircle,    action: "" },
 }
 
 // ── Unit selector (custom dropdown, no system UI) ─────────────────────────────
