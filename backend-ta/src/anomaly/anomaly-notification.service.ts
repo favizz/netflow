@@ -63,7 +63,7 @@ export class AnomalyNotificationService {
     anomaly: AnomalyItem,
     unitNumber: string,
   ): Promise<void> {
-    const cooldownKey = `${anomaly.anomalyType}:${unitNumber}`;
+    const cooldownKey = anomaly.anomalyType;
     const lastAlertTimestamp = this.adminAlertCooldownMap.get(cooldownKey) ?? 0;
     const cooldownElapsed =
       Date.now() - lastAlertTimestamp > CFG.adminAlertCooldownMs;
