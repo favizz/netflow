@@ -22,7 +22,11 @@ import { AnomalyController } from './anomaly.controller';
     SharedMqttClientModule,
   ],
   controllers: [AnomalyController],
-  providers: [AnomalyService, AnomalyDetectionService, AnomalyNotificationService],
+  providers: [
+    AnomalyService,
+    AnomalyDetectionService,
+    AnomalyNotificationService,
+  ],
   exports: [AnomalyService],
 })
 export class AnomalyModule {}

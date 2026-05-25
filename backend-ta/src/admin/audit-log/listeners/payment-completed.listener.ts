@@ -9,7 +9,7 @@ export class PaymentCompletedListener {
 
   constructor(private readonly auditLogService: AuditLogService) {}
 
-  @OnEvent('payment.completed', { async: true }) // eslint-disable-line @typescript-eslint/no-unsafe-call
+  @OnEvent('payment.completed', { async: true })
   handle(event: PaymentCompletedEvent): void {
     const totalRp = event.electricityAmountRp + event.waterAmountRp;
     void this.auditLogService
@@ -22,7 +22,9 @@ export class PaymentCompletedListener {
         'success',
       )
       .catch((err: Error) =>
-        this.logger.error(`Audit log failed for txn ${event.transactionId}: ${err.message}`),
+        this.logger.error(
+          `Audit log failed for txn ${event.transactionId}: ${err.message}`,
+        ),
       );
   }
 }

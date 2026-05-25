@@ -14,7 +14,7 @@ export class PaymentCompletedListener {
     @Inject('MQTT_CLIENT') private readonly mqttClient: ClientProxy,
   ) {}
 
-  @OnEvent('payment.completed', { async: true }) // eslint-disable-line @typescript-eslint/no-unsafe-call
+  @OnEvent('payment.completed', { async: true })
   async handle(event: PaymentCompletedEvent): Promise<void> {
     try {
       const unit = await this.unitService.findByUnitNo(event.unitNo);

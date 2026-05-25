@@ -9,7 +9,10 @@ import { ANOMALY_DETECTION_CONFIG as CFG } from './anomaly.constants';
 import type { AnomalyItem, AnomalyType } from './anomaly.types';
 import { Anomaly } from './entities/anomaly.entity';
 import { AnomalyDetectionService } from './anomaly-detection.service';
-import { AnomalyNotificationService, OfflineUnitSummary } from './anomaly-notification.service';
+import {
+  AnomalyNotificationService,
+  OfflineUnitSummary,
+} from './anomaly-notification.service';
 
 /**
  * Orchestrates the anomaly detection lifecycle:
@@ -38,8 +41,14 @@ export class AnomalyService implements OnModuleInit {
   ) {}
 
   onModuleInit(): void {
-    setTimeout(() => void this.checkOfflineUnits(), CFG.offlineCheckInitialDelayMs);
-    setInterval(() => void this.checkOfflineUnits(), CFG.offlineCheckIntervalMs);
+    setTimeout(
+      () => void this.checkOfflineUnits(),
+      CFG.offlineCheckInitialDelayMs,
+    );
+    setInterval(
+      () => void this.checkOfflineUnits(),
+      CFG.offlineCheckIntervalMs,
+    );
   }
 
   /**
@@ -97,23 +106,20 @@ export class AnomalyService implements OnModuleInit {
     valveStatus: boolean,
   ): void {
     try {
-      this.emitSafetyCommandsIfRequired(
-        deviceId,
-        {
-          unit: {
-            unit_no: unitNumber,
-            device_id: deviceId,
-            token_electricity: tokenElectricityKwh,
-            token_water: tokenWaterM3,
-            relay_status: relayStatus,
-            valve_status: valveStatus,
-            resident_email: null,
-          },
-          powerWatts: powerWatts ?? 0,
-          voltageVolts: voltageVolts ?? 0,
-          flowLitresPerMin: flowLitresPerMin ?? 0,
+      this.emitSafetyCommandsIfRequired(deviceId, {
+        unit: {
+          unit_no: unitNumber,
+          device_id: deviceId,
+          token_electricity: tokenElectricityKwh,
+          token_water: tokenWaterM3,
+          relay_status: relayStatus,
+          valve_status: valveStatus,
+          resident_email: null,
         },
-      );
+        powerWatts: powerWatts ?? 0,
+        voltageVolts: voltageVolts ?? 0,
+        flowLitresPerMin: flowLitresPerMin ?? 0,
+      });
 
       this.lastTelemetryArrivalMs.set(unitNumber, Date.now());
       void this.resolveOfflineAnomaly(deviceId, unitNumber);
@@ -144,7 +150,9 @@ export class AnomalyService implements OnModuleInit {
   private emitSafetyCommandsIfRequired(
     deviceId: string,
     context: {
-      unit: Parameters<AnomalyDetectionService['detectSafetyCommands']>[0]['unit'];
+      unit: Parameters<
+        AnomalyDetectionService['detectSafetyCommands']
+      >[0]['unit'];
       powerWatts: number;
       voltageVolts: number;
       flowLitresPerMin: number;
@@ -277,10 +285,16 @@ export class AnomalyService implements OnModuleInit {
   ): Promise<void> {
     try {
       const cachedAnomalies = this.anomalyCache.get(unitNumber);
-      if (cachedAnomalies?.some((anomaly) => anomaly.anomalyType === 'device_offline')) {
+      if (
+        cachedAnomalies?.some(
+          (anomaly) => anomaly.anomalyType === 'device_offline',
+        )
+      ) {
         this.anomalyCache.set(
           unitNumber,
-          cachedAnomalies.filter((anomaly) => anomaly.anomalyType !== 'device_offline'),
+          cachedAnomalies.filter(
+            (anomaly) => anomaly.anomalyType !== 'device_offline',
+          ),
         );
       }
 
@@ -323,13 +337,15 @@ export class AnomalyService implements OnModuleInit {
       );
 
       for (const activeAnomaly of activeAnomaliesInDb) {
-        if (computedAnomalyTypes.includes(activeAnomaly.type as AnomalyType)) continue;
+        if (computedAnomalyTypes.includes(activeAnomaly.type as AnomalyType))
+          continue;
         activeAnomaly.resolved_at = new Date();
         await this.anomalyRepo.save(activeAnomaly);
       }
 
       for (const computedAnomaly of computedAnomalies) {
-        if (activeAnomalyTypesInDb.includes(computedAnomaly.anomalyType)) continue;
+        if (activeAnomalyTypesInDb.includes(computedAnomaly.anomalyType))
+          continue;
 
         await this.anomalyRepo.save({
           device_id: unit.device_id,
@@ -372,7 +388,9 @@ export class AnomalyService implements OnModuleInit {
     }
   }
 
-  private async computeAndCacheAnomalies(unitNumber: string): Promise<AnomalyItem[]> {
+  private async computeAndCacheAnomalies(
+    unitNumber: string,
+  ): Promise<AnomalyItem[]> {
     const unit = await this.unitService.findByUnitNo(unitNumber);
 
     const readings = unit.device_id
@@ -408,13 +426,16 @@ export class AnomalyService implements OnModuleInit {
     const staleThresholdMs = CFG.memoryPruneAgeMs;
 
     for (const [key, timestamp] of this.lastTelemetryArrivalMs.entries()) {
-      if (now - timestamp > staleThresholdMs) this.lastTelemetryArrivalMs.delete(key);
+      if (now - timestamp > staleThresholdMs)
+        this.lastTelemetryArrivalMs.delete(key);
     }
     for (const [key, timestamp] of this.lastTelemetryRefreshMs.entries()) {
-      if (now - timestamp > staleThresholdMs) this.lastTelemetryRefreshMs.delete(key);
+      if (now - timestamp > staleThresholdMs)
+        this.lastTelemetryRefreshMs.delete(key);
     }
     for (const [key, timestamp] of this.lastSafetyCommandMs.entries()) {
-      if (now - timestamp > staleThresholdMs) this.lastSafetyCommandMs.delete(key);
+      if (now - timestamp > staleThresholdMs)
+        this.lastSafetyCommandMs.delete(key);
     }
     if (this.anomalyCache.size > CFG.anomalyCacheMaxSize) {
       const evictCount = Math.floor(this.anomalyCache.size / 2);

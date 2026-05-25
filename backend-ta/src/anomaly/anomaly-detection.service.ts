@@ -45,25 +45,44 @@ export class AnomalyDetectionService {
     const jailbreak = this.detectJailbreak(context, latest);
     if (jailbreak) anomalies.push(jailbreak);
 
-    const mcbTrip = this.detectMcbTrip(latest, context.unit.unit_no, context.detectionTimestamp);
+    const mcbTrip = this.detectMcbTrip(
+      latest,
+      context.unit.unit_no,
+      context.detectionTimestamp,
+    );
     if (mcbTrip) anomalies.push(mcbTrip);
 
-    const voltageAnomaly = this.detectVoltageAnomaly(latest, context.unit.unit_no, context.detectionTimestamp);
+    const voltageAnomaly = this.detectVoltageAnomaly(
+      latest,
+      context.unit.unit_no,
+      context.detectionTimestamp,
+    );
     if (voltageAnomaly) anomalies.push(voltageAnomaly);
 
-    const lowPowerFactor = this.detectLowPowerFactor(latest, context.unit.unit_no, context.detectionTimestamp);
+    const lowPowerFactor = this.detectLowPowerFactor(
+      latest,
+      context.unit.unit_no,
+      context.detectionTimestamp,
+    );
     if (lowPowerFactor) anomalies.push(lowPowerFactor);
 
     const usageSpike = this.detectUsageSpike(context);
     if (usageSpike) anomalies.push(usageSpike);
 
-    const waterLeak = this.detectWaterLeak(context.readings, context.detectionTimestamp);
+    const waterLeak = this.detectWaterLeak(
+      context.readings,
+      context.detectionTimestamp,
+    );
     if (waterLeak) anomalies.push(waterLeak);
 
     const zeroFlow = this.detectZeroFlow(context, latest);
     if (zeroFlow) anomalies.push(zeroFlow);
 
-    const backflow = this.detectBackflow(latest, context.unit.unit_no, context.detectionTimestamp);
+    const backflow = this.detectBackflow(
+      latest,
+      context.unit.unit_no,
+      context.detectionTimestamp,
+    );
     if (backflow) anomalies.push(backflow);
 
     return anomalies;
@@ -94,7 +113,8 @@ export class AnomalyDetectionService {
       powerWatts > CFG.jailbreakMinPowerWatts;
 
     const mcbOverloadDetected = powerWatts > CFG.mcbWattLimit;
-    const criticalOvervoltageDetected = voltageVolts > CFG.criticalVoltageMaxVolts;
+    const criticalOvervoltageDetected =
+      voltageVolts > CFG.criticalVoltageMaxVolts;
 
     if (electricityJailbreakDetected) {
       commands.push({
@@ -112,7 +132,11 @@ export class AnomalyDetectionService {
       });
     }
 
-    if (criticalOvervoltageDetected && !electricityJailbreakDetected && !mcbOverloadDetected) {
+    if (
+      criticalOvervoltageDetected &&
+      !electricityJailbreakDetected &&
+      !mcbOverloadDetected
+    ) {
       commands.push({
         deviceId: unit.device_id,
         actuatorType: 'relay',
@@ -158,7 +182,8 @@ export class AnomalyDetectionService {
     if (nonZeroFlows.length < CFG.waterLeakMinReadingCount) return null;
 
     const meanFlowLitresPerMin =
-      nonZeroFlows.reduce((total, flow) => total + flow, 0) / nonZeroFlows.length;
+      nonZeroFlows.reduce((total, flow) => total + flow, 0) /
+      nonZeroFlows.length;
 
     if (meanFlowLitresPerMin < CFG.waterLeakMinFlowLitresPerMin) return null;
 
@@ -170,7 +195,8 @@ export class AnomalyDetectionService {
 
     const coefficientOfVariation = Math.sqrt(variance) / meanFlowLitresPerMin;
 
-    if (coefficientOfVariation >= CFG.waterLeakMaxCoefficientOfVariation) return null;
+    if (coefficientOfVariation >= CFG.waterLeakMaxCoefficientOfVariation)
+      return null;
 
     return {
       anomalyType: 'water_leak',
@@ -250,7 +276,8 @@ export class AnomalyDetectionService {
     detectionTimestamp: string,
   ): AnomalyItem | null {
     if (latestReading.water_flow === null) return null;
-    if (latestReading.water_flow >= CFG.backflowThresholdLitresPerMin) return null;
+    if (latestReading.water_flow >= CFG.backflowThresholdLitresPerMin)
+      return null;
 
     return {
       anomalyType: 'backflow',
@@ -265,7 +292,9 @@ export class AnomalyDetectionService {
     };
   }
 
-  private detectLowElectricityToken(context: AnomalyDetectionContext): AnomalyItem | null {
+  private detectLowElectricityToken(
+    context: AnomalyDetectionContext,
+  ): AnomalyItem | null {
     const { unit, detectionTimestamp } = context;
     const tokenKwh = Number(unit.token_electricity);
 
@@ -285,7 +314,9 @@ export class AnomalyDetectionService {
     };
   }
 
-  private detectLowWaterToken(context: AnomalyDetectionContext): AnomalyItem | null {
+  private detectLowWaterToken(
+    context: AnomalyDetectionContext,
+  ): AnomalyItem | null {
     const { unit, detectionTimestamp } = context;
     const tokenM3 = Number(unit.token_water);
 
@@ -305,7 +336,9 @@ export class AnomalyDetectionService {
     };
   }
 
-  private detectDeviceOffline(context: AnomalyDetectionContext): AnomalyItem | null {
+  private detectDeviceOffline(
+    context: AnomalyDetectionContext,
+  ): AnomalyItem | null {
     const { unit, readings, latestMqttArrivalMs, detectionTimestamp } = context;
 
     const latestReading = readings[0] ?? null;
@@ -332,7 +365,9 @@ export class AnomalyDetectionService {
     };
   }
 
-  private detectSensorMalfunction(context: AnomalyDetectionContext): AnomalyItem | null {
+  private detectSensorMalfunction(
+    context: AnomalyDetectionContext,
+  ): AnomalyItem | null {
     const { unit, readings, detectionTimestamp } = context;
     const windowReadings = readings.slice(0, CFG.sensorMalfunctionWindowSize);
 
@@ -382,10 +417,14 @@ export class AnomalyDetectionService {
 
     const bypassDescriptions: string[] = [];
     if (electricityBypassDetected) {
-      bypassDescriptions.push(`listrik: ${powerWatts.toFixed(0)} W (relay OFF)`);
+      bypassDescriptions.push(
+        `listrik: ${powerWatts.toFixed(0)} W (relay OFF)`,
+      );
     }
     if (waterBypassDetected) {
-      bypassDescriptions.push(`air: ${flowLitresPerMin.toFixed(2)} L/min (valve CLOSE)`);
+      bypassDescriptions.push(
+        `air: ${flowLitresPerMin.toFixed(2)} L/min (valve CLOSE)`,
+      );
     }
 
     return {
@@ -432,7 +471,8 @@ export class AnomalyDetectionService {
     unitNumber: string,
     detectionTimestamp: string,
   ): AnomalyItem | null {
-    if (latestReading.voltage === null || latestReading.voltage <= 0) return null;
+    if (latestReading.voltage === null || latestReading.voltage <= 0)
+      return null;
 
     const voltageVolts = latestReading.voltage;
     const isWithinSafeRange =
@@ -446,7 +486,9 @@ export class AnomalyDetectionService {
       voltageVolts > CFG.criticalVoltageMaxVolts;
 
     const directionLabel =
-      voltageVolts > CFG.safeVoltageMaxVolts ? 'terlalu tinggi' : 'terlalu rendah';
+      voltageVolts > CFG.safeVoltageMaxVolts
+        ? 'terlalu tinggi'
+        : 'terlalu rendah';
 
     return {
       anomalyType: 'voltage_anomaly',
@@ -493,7 +535,9 @@ export class AnomalyDetectionService {
     };
   }
 
-  private detectUsageSpike(context: AnomalyDetectionContext): AnomalyItem | null {
+  private detectUsageSpike(
+    context: AnomalyDetectionContext,
+  ): AnomalyItem | null {
     const { unit, readings, detectionTimestamp } = context;
 
     const latestReading = readings[0] ?? null;
@@ -509,17 +553,22 @@ export class AnomalyDetectionService {
       .map((reading) => reading.power)
       .filter((power): power is number => power !== null && power >= 0);
 
-    if (validPowerReadings.length < CFG.usageSpikeReadingWindowSize) return null;
+    if (validPowerReadings.length < CFG.usageSpikeReadingWindowSize)
+      return null;
 
-    const baselineReadings = validPowerReadings.slice(CFG.usageSpikeBaselineWindowSize);
+    const baselineReadings = validPowerReadings.slice(
+      CFG.usageSpikeBaselineWindowSize,
+    );
     if (baselineReadings.length < CFG.usageSpikeBaselineWindowSize) return null;
 
     const baselineAverageWatts =
-      baselineReadings.reduce((total, power) => total + power, 0) / baselineReadings.length;
+      baselineReadings.reduce((total, power) => total + power, 0) /
+      baselineReadings.length;
 
     if (baselineAverageWatts <= CFG.usageSpikeMinBaselineWatts) return null;
     if (currentPowerWatts <= CFG.usageSpikeMinCurrentWatts) return null;
-    if (currentPowerWatts <= baselineAverageWatts * CFG.usageSpikeMultiplier) return null;
+    if (currentPowerWatts <= baselineAverageWatts * CFG.usageSpikeMultiplier)
+      return null;
 
     const spikeRatio = currentPowerWatts / baselineAverageWatts;
 

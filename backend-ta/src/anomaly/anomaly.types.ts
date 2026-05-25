@@ -52,5 +52,9 @@ export interface AnomalyDetectionContext {
 export interface SafetyCommand {
   deviceId: string;
   actuatorType: 'relay' | 'valve';
-  triggerReason: 'jailbreak_electricity' | 'jailbreak_water' | 'mcb_trip' | 'overvoltage';
+  triggerReason:
+    | 'jailbreak_electricity'
+    | 'jailbreak_water'
+    | 'mcb_trip'
+    | 'overvoltage';
 }

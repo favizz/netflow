@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ANOMALY_DETECTION_CONFIG as CFG } from './anomaly.constants';
-import type { AnomalyItem, AnomalyType } from './anomaly.types';
+import type { AnomalyItem } from './anomaly.types';
 import { NotificationService } from '../notification/notification.service';
 import { ResidentsService } from '../admin/residents/residents.service';
 import { Resident } from '../admin/residents/resident.entity';
@@ -59,10 +59,14 @@ export class AnomalyNotificationService {
    * @param unitNumber - Human-readable unit number for message context.
    * @returns Promise that resolves after all admin sends are attempted.
    */
-  async notifyAdminsOfAnomaly(anomaly: AnomalyItem, unitNumber: string): Promise<void> {
+  async notifyAdminsOfAnomaly(
+    anomaly: AnomalyItem,
+    unitNumber: string,
+  ): Promise<void> {
     const cooldownKey = `${anomaly.anomalyType}:${unitNumber}`;
     const lastAlertTimestamp = this.adminAlertCooldownMap.get(cooldownKey) ?? 0;
-    const cooldownElapsed = Date.now() - lastAlertTimestamp > CFG.adminAlertCooldownMs;
+    const cooldownElapsed =
+      Date.now() - lastAlertTimestamp > CFG.adminAlertCooldownMs;
 
     if (!cooldownElapsed) return;
 
@@ -112,7 +116,8 @@ export class AnomalyNotificationService {
 
     if (adminsWithTelegram.length === 0) return;
 
-    const telegramMessage = this.formatOfflineUnitsSummary(offlineUnitSummaries);
+    const telegramMessage =
+      this.formatOfflineUnitsSummary(offlineUnitSummaries);
 
     const sendPromises = adminsWithTelegram.map((admin) =>
       this.notificationService

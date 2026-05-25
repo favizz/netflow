@@ -36,7 +36,7 @@ import { AppController } from './app.controller';
     }),
 
     ScheduleModule.forRoot(),
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+
     EventEmitterModule.forRoot(),
     // ── Database ─────────────────────────────────────────────────────────────
     TypeOrmModule.forRootAsync({

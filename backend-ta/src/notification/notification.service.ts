@@ -113,7 +113,10 @@ export class NotificationService {
         if (res.ok) return;
 
         const body = await res.text();
-        if ((res.status === 429 || res.status >= 500) && attempt < MAX_RETRIES) {
+        if (
+          (res.status === 429 || res.status >= 500) &&
+          attempt < MAX_RETRIES
+        ) {
           const delayMs = attempt * 1_000;
           this.logger.warn(
             `Telegram sendMessage ${res.status} (attempt ${attempt}/${MAX_RETRIES}), retrying in ${delayMs}ms: ${body}`,
@@ -122,7 +125,9 @@ export class NotificationService {
           continue;
         }
 
-        this.logger.warn(`Telegram sendMessage failed (${res.status}): ${body}`);
+        this.logger.warn(
+          `Telegram sendMessage failed (${res.status}): ${body}`,
+        );
         return;
       } catch (err) {
         this.logger.error(

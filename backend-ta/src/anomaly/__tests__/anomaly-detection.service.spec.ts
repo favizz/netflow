@@ -62,10 +62,14 @@ describe('AnomalyDetectionService', () => {
   describe('detectLowElectricityToken', () => {
     it('triggers when token_electricity is below threshold', () => {
       const context = makeContext({
-        unit: makeUnit({ token_electricity: CFG.lowElectricityTokenKwh - 0.01 }),
+        unit: makeUnit({
+          token_electricity: CFG.lowElectricityTokenKwh - 0.01,
+        }),
       });
       const anomalies = service.detectAll(context);
-      expect(anomalies.some((a) => a.anomalyType === 'low_electricity_token')).toBe(true);
+      expect(
+        anomalies.some((a) => a.anomalyType === 'low_electricity_token'),
+      ).toBe(true);
     });
 
     it('does not trigger when token_electricity equals threshold', () => {
@@ -73,7 +77,9 @@ describe('AnomalyDetectionService', () => {
         unit: makeUnit({ token_electricity: CFG.lowElectricityTokenKwh }),
       });
       const anomalies = service.detectAll(context);
-      expect(anomalies.some((a) => a.anomalyType === 'low_electricity_token')).toBe(false);
+      expect(
+        anomalies.some((a) => a.anomalyType === 'low_electricity_token'),
+      ).toBe(false);
     });
 
     it('does not trigger when token_electricity is zero (already depleted, not a warning)', () => {
@@ -81,7 +87,9 @@ describe('AnomalyDetectionService', () => {
         unit: makeUnit({ token_electricity: 0 }),
       });
       const anomalies = service.detectAll(context);
-      expect(anomalies.some((a) => a.anomalyType === 'low_electricity_token')).toBe(false);
+      expect(
+        anomalies.some((a) => a.anomalyType === 'low_electricity_token'),
+      ).toBe(false);
     });
 
     it('sets target to resident only', () => {
@@ -89,7 +97,9 @@ describe('AnomalyDetectionService', () => {
         unit: makeUnit({ token_electricity: 2 }),
       });
       const anomalies = service.detectAll(context);
-      const found = anomalies.find((a) => a.anomalyType === 'low_electricity_token');
+      const found = anomalies.find(
+        (a) => a.anomalyType === 'low_electricity_token',
+      );
       expect(found?.target).toBe('resident');
     });
   });
@@ -100,7 +110,9 @@ describe('AnomalyDetectionService', () => {
         unit: makeUnit({ token_water: CFG.lowWaterTokenM3 - 0.01 }),
       });
       const anomalies = service.detectAll(context);
-      expect(anomalies.some((a) => a.anomalyType === 'low_water_token')).toBe(true);
+      expect(anomalies.some((a) => a.anomalyType === 'low_water_token')).toBe(
+        true,
+      );
     });
 
     it('does not trigger when token_water equals threshold', () => {
@@ -108,7 +120,9 @@ describe('AnomalyDetectionService', () => {
         unit: makeUnit({ token_water: CFG.lowWaterTokenM3 }),
       });
       const anomalies = service.detectAll(context);
-      expect(anomalies.some((a) => a.anomalyType === 'low_water_token')).toBe(false);
+      expect(anomalies.some((a) => a.anomalyType === 'low_water_token')).toBe(
+        false,
+      );
     });
 
     it('does not trigger when token_water is zero', () => {
@@ -116,7 +130,9 @@ describe('AnomalyDetectionService', () => {
         unit: makeUnit({ token_water: 0 }),
       });
       const anomalies = service.detectAll(context);
-      expect(anomalies.some((a) => a.anomalyType === 'low_water_token')).toBe(false);
+      expect(anomalies.some((a) => a.anomalyType === 'low_water_token')).toBe(
+        false,
+      );
     });
 
     it('low_electricity_token and low_water_token anomalies are both detected simultaneously', () => {
@@ -127,8 +143,12 @@ describe('AnomalyDetectionService', () => {
         }),
       });
       const anomalies = service.detectAll(context);
-      expect(anomalies.some((a) => a.anomalyType === 'low_electricity_token')).toBe(true);
-      expect(anomalies.some((a) => a.anomalyType === 'low_water_token')).toBe(true);
+      expect(
+        anomalies.some((a) => a.anomalyType === 'low_electricity_token'),
+      ).toBe(true);
+      expect(anomalies.some((a) => a.anomalyType === 'low_water_token')).toBe(
+        true,
+      );
     });
   });
 
@@ -140,7 +160,9 @@ describe('AnomalyDetectionService', () => {
         latestMqttArrivalMs: Date.now() - CFG.mqttRecentArrivalWindowMs - 1,
       });
       const anomalies = service.detectAll(context);
-      expect(anomalies.some((a) => a.anomalyType === 'device_offline')).toBe(true);
+      expect(anomalies.some((a) => a.anomalyType === 'device_offline')).toBe(
+        true,
+      );
     });
 
     it('does not trigger when MQTT arrived within the recent window', () => {
@@ -150,7 +172,9 @@ describe('AnomalyDetectionService', () => {
         latestMqttArrivalMs: Date.now() - 30_000,
       });
       const anomalies = service.detectAll(context);
-      expect(anomalies.some((a) => a.anomalyType === 'device_offline')).toBe(false);
+      expect(anomalies.some((a) => a.anomalyType === 'device_offline')).toBe(
+        false,
+      );
     });
 
     it('does not trigger when DB reading is recent', () => {
@@ -160,7 +184,9 @@ describe('AnomalyDetectionService', () => {
         latestMqttArrivalMs: 0,
       });
       const anomalies = service.detectAll(context);
-      expect(anomalies.some((a) => a.anomalyType === 'device_offline')).toBe(false);
+      expect(anomalies.some((a) => a.anomalyType === 'device_offline')).toBe(
+        false,
+      );
     });
 
     it('sets target to admin only', () => {
@@ -185,7 +211,9 @@ describe('AnomalyDetectionService', () => {
         }),
       });
       const anomalies = service.detectAll(context);
-      expect(anomalies.some((a) => a.anomalyType === 'sensor_malfunction')).toBe(true);
+      expect(
+        anomalies.some((a) => a.anomalyType === 'sensor_malfunction'),
+      ).toBe(true);
     });
 
     it('does not trigger when any reading has a value of 0 (valid zero is not null)', () => {
@@ -197,25 +225,39 @@ describe('AnomalyDetectionService', () => {
       readings[0] = makeReading({ power: 0, voltage: null, water_flow: null });
       const context = makeContext({ readings });
       const anomalies = service.detectAll(context);
-      expect(anomalies.some((a) => a.anomalyType === 'sensor_malfunction')).toBe(false);
+      expect(
+        anomalies.some((a) => a.anomalyType === 'sensor_malfunction'),
+      ).toBe(false);
     });
 
     it('does not trigger with fewer than minimum required readings', () => {
       const context = makeContext({
-        readings: makeReadings(4, { power: null, voltage: null, water_flow: null }),
+        readings: makeReadings(4, {
+          power: null,
+          voltage: null,
+          water_flow: null,
+        }),
       });
       const anomalies = service.detectAll(context);
-      expect(anomalies.some((a) => a.anomalyType === 'sensor_malfunction')).toBe(false);
+      expect(
+        anomalies.some((a) => a.anomalyType === 'sensor_malfunction'),
+      ).toBe(false);
     });
 
     it('stops further detection when sensor malfunction is found', () => {
       const context = makeContext({
         unit: makeUnit({ token_electricity: 2 }),
-        readings: makeReadings(10, { power: null, voltage: null, water_flow: null }),
+        readings: makeReadings(10, {
+          power: null,
+          voltage: null,
+          water_flow: null,
+        }),
       });
       const anomalies = service.detectAll(context);
       expect(anomalies.some((a) => a.anomalyType === 'mcb_trip')).toBe(false);
-      expect(anomalies.some((a) => a.anomalyType === 'voltage_anomaly')).toBe(false);
+      expect(anomalies.some((a) => a.anomalyType === 'voltage_anomaly')).toBe(
+        false,
+      );
     });
   });
 
@@ -232,7 +274,9 @@ describe('AnomalyDetectionService', () => {
     it('triggers water bypass when water token zero, valve CLOSED, but flow above threshold', () => {
       const context = makeContext({
         unit: makeUnit({ token_water: 0, valve_status: false }),
-        readings: [makeReading({ water_flow: CFG.jailbreakMinFlowLitresPerMin + 0.1 })],
+        readings: [
+          makeReading({ water_flow: CFG.jailbreakMinFlowLitresPerMin + 0.1 }),
+        ],
       });
       const anomalies = service.detectAll(context);
       expect(anomalies.some((a) => a.anomalyType === 'jailbreak')).toBe(true);
@@ -338,7 +382,9 @@ describe('AnomalyDetectionService', () => {
         readings: [makeReading({ voltage: 220 })],
       });
       const anomalies = service.detectAll(context);
-      expect(anomalies.some((a) => a.anomalyType === 'voltage_anomaly')).toBe(false);
+      expect(anomalies.some((a) => a.anomalyType === 'voltage_anomaly')).toBe(
+        false,
+      );
     });
 
     it('does not trigger when voltage is null', () => {
@@ -346,7 +392,9 @@ describe('AnomalyDetectionService', () => {
         readings: [makeReading({ voltage: null })],
       });
       const anomalies = service.detectAll(context);
-      expect(anomalies.some((a) => a.anomalyType === 'voltage_anomaly')).toBe(false);
+      expect(anomalies.some((a) => a.anomalyType === 'voltage_anomaly')).toBe(
+        false,
+      );
     });
   });
 
@@ -365,18 +413,29 @@ describe('AnomalyDetectionService', () => {
         ],
       });
       const anomalies = service.detectAll(context);
-      expect(anomalies.some((a) => a.anomalyType === 'low_power_factor')).toBe(true);
+      expect(anomalies.some((a) => a.anomalyType === 'low_power_factor')).toBe(
+        true,
+      );
     });
 
     it('does not trigger when power factor equals threshold exactly', () => {
       const voltageVolts = 220;
       const currentAmps = 1;
-      const powerWatts = voltageVolts * currentAmps * CFG.lowPowerFactorThreshold;
+      const powerWatts =
+        voltageVolts * currentAmps * CFG.lowPowerFactorThreshold;
       const context = makeContext({
-        readings: [makeReading({ power: powerWatts, voltage: voltageVolts, current: currentAmps })],
+        readings: [
+          makeReading({
+            power: powerWatts,
+            voltage: voltageVolts,
+            current: currentAmps,
+          }),
+        ],
       });
       const anomalies = service.detectAll(context);
-      expect(anomalies.some((a) => a.anomalyType === 'low_power_factor')).toBe(false);
+      expect(anomalies.some((a) => a.anomalyType === 'low_power_factor')).toBe(
+        false,
+      );
     });
 
     it('does not trigger when power is at or below minimum threshold', () => {
@@ -390,7 +449,9 @@ describe('AnomalyDetectionService', () => {
         ],
       });
       const anomalies = service.detectAll(context);
-      expect(anomalies.some((a) => a.anomalyType === 'low_power_factor')).toBe(false);
+      expect(anomalies.some((a) => a.anomalyType === 'low_power_factor')).toBe(
+        false,
+      );
     });
 
     it('does not trigger when current is at or below minimum threshold', () => {
@@ -404,7 +465,9 @@ describe('AnomalyDetectionService', () => {
         ],
       });
       const anomalies = service.detectAll(context);
-      expect(anomalies.some((a) => a.anomalyType === 'low_power_factor')).toBe(false);
+      expect(anomalies.some((a) => a.anomalyType === 'low_power_factor')).toBe(
+        false,
+      );
     });
   });
 
@@ -412,7 +475,9 @@ describe('AnomalyDetectionService', () => {
     it('triggers when current power exceeds spike multiplier times baseline', () => {
       const baselineWatts = CFG.usageSpikeMinBaselineWatts + 50;
       const spikePower = baselineWatts * CFG.usageSpikeMultiplier + 100;
-      const readings = makeReadings(CFG.usageSpikeReadingWindowSize, { power: baselineWatts });
+      const readings = makeReadings(CFG.usageSpikeReadingWindowSize, {
+        power: baselineWatts,
+      });
       readings[0] = makeReading({ power: spikePower });
       const context = makeContext({ readings });
       const anomalies = service.detectAll(context);
@@ -422,30 +487,42 @@ describe('AnomalyDetectionService', () => {
     it('does not trigger when spike ratio is below multiplier threshold', () => {
       const baselineWatts = 200;
       const subSpikePower = baselineWatts * (CFG.usageSpikeMultiplier - 0.1);
-      const readings = makeReadings(CFG.usageSpikeReadingWindowSize, { power: baselineWatts });
+      const readings = makeReadings(CFG.usageSpikeReadingWindowSize, {
+        power: baselineWatts,
+      });
       readings[0] = makeReading({ power: subSpikePower });
       const context = makeContext({ readings });
       const anomalies = service.detectAll(context);
-      expect(anomalies.some((a) => a.anomalyType === 'usage_spike')).toBe(false);
+      expect(anomalies.some((a) => a.anomalyType === 'usage_spike')).toBe(
+        false,
+      );
     });
 
     it('does not trigger when baseline is at or below minimum baseline threshold', () => {
       const baselineWatts = CFG.usageSpikeMinBaselineWatts;
       const spikePower = baselineWatts * CFG.usageSpikeMultiplier + 100;
-      const readings = makeReadings(CFG.usageSpikeReadingWindowSize, { power: baselineWatts });
+      const readings = makeReadings(CFG.usageSpikeReadingWindowSize, {
+        power: baselineWatts,
+      });
       readings[0] = makeReading({ power: spikePower });
       const context = makeContext({ readings });
       const anomalies = service.detectAll(context);
-      expect(anomalies.some((a) => a.anomalyType === 'usage_spike')).toBe(false);
+      expect(anomalies.some((a) => a.anomalyType === 'usage_spike')).toBe(
+        false,
+      );
     });
 
     it('does not trigger when current power is at or below minimum spike watt threshold', () => {
       const baselineWatts = 200;
-      const readings = makeReadings(CFG.usageSpikeReadingWindowSize, { power: baselineWatts });
+      const readings = makeReadings(CFG.usageSpikeReadingWindowSize, {
+        power: baselineWatts,
+      });
       readings[0] = makeReading({ power: CFG.usageSpikeMinCurrentWatts });
       const context = makeContext({ readings });
       const anomalies = service.detectAll(context);
-      expect(anomalies.some((a) => a.anomalyType === 'usage_spike')).toBe(false);
+      expect(anomalies.some((a) => a.anomalyType === 'usage_spike')).toBe(
+        false,
+      );
     });
   });
 
@@ -454,7 +531,10 @@ describe('AnomalyDetectionService', () => {
       const steadyFlowReadings = makeReadings(CFG.waterLeakMinReadingCount, {
         water_flow: 0.5,
       });
-      const result = service.detectWaterLeak(steadyFlowReadings, new Date().toISOString());
+      const result = service.detectWaterLeak(
+        steadyFlowReadings,
+        new Date().toISOString(),
+      );
       expect(result).not.toBeNull();
       expect(result?.anomalyType).toBe('water_leak');
     });
@@ -464,13 +544,21 @@ describe('AnomalyDetectionService', () => {
         ...makeReadings(15, { water_flow: 0.5 }),
         ...makeReadings(15, { water_flow: 2.5 }),
       ];
-      const result = service.detectWaterLeak(variableFlowReadings, new Date().toISOString());
+      const result = service.detectWaterLeak(
+        variableFlowReadings,
+        new Date().toISOString(),
+      );
       expect(result).toBeNull();
     });
 
     it('does not trigger with fewer than minimum required readings', () => {
-      const fewReadings = makeReadings(CFG.waterLeakMinReadingCount - 1, { water_flow: 0.5 });
-      const result = service.detectWaterLeak(fewReadings, new Date().toISOString());
+      const fewReadings = makeReadings(CFG.waterLeakMinReadingCount - 1, {
+        water_flow: 0.5,
+      });
+      const result = service.detectWaterLeak(
+        fewReadings,
+        new Date().toISOString(),
+      );
       expect(result).toBeNull();
     });
 
@@ -478,17 +566,25 @@ describe('AnomalyDetectionService', () => {
       const lowFlowReadings = makeReadings(CFG.waterLeakMinReadingCount, {
         water_flow: CFG.waterLeakMinFlowLitresPerMin - 0.1,
       });
-      const result = service.detectWaterLeak(lowFlowReadings, new Date().toISOString());
+      const result = service.detectWaterLeak(
+        lowFlowReadings,
+        new Date().toISOString(),
+      );
       expect(result).toBeNull();
     });
 
     it('does not trigger when fewer than 90% of readings are non-zero', () => {
-      const mixedReadings = makeReadings(CFG.waterLeakMinReadingCount, { water_flow: 0.5 });
+      const mixedReadings = makeReadings(CFG.waterLeakMinReadingCount, {
+        water_flow: 0.5,
+      });
       mixedReadings[0] = makeReading({ water_flow: 0 });
       mixedReadings[1] = makeReading({ water_flow: 0 });
       mixedReadings[2] = makeReading({ water_flow: 0 });
       mixedReadings[3] = makeReading({ water_flow: 0 });
-      const result = service.detectWaterLeak(mixedReadings, new Date().toISOString());
+      const result = service.detectWaterLeak(
+        mixedReadings,
+        new Date().toISOString(),
+      );
       expect(result).toBeNull();
     });
   });
@@ -545,7 +641,9 @@ describe('AnomalyDetectionService', () => {
   describe('detectBackflow', () => {
     it('triggers when water flow is below backflow threshold', () => {
       const context = makeContext({
-        readings: [makeReading({ water_flow: CFG.backflowThresholdLitresPerMin - 0.01 })],
+        readings: [
+          makeReading({ water_flow: CFG.backflowThresholdLitresPerMin - 0.01 }),
+        ],
       });
       const anomalies = service.detectAll(context);
       expect(anomalies.some((a) => a.anomalyType === 'backflow')).toBe(true);
@@ -553,7 +651,9 @@ describe('AnomalyDetectionService', () => {
 
     it('does not trigger at exactly the threshold value', () => {
       const context = makeContext({
-        readings: [makeReading({ water_flow: CFG.backflowThresholdLitresPerMin })],
+        readings: [
+          makeReading({ water_flow: CFG.backflowThresholdLitresPerMin }),
+        ],
       });
       const anomalies = service.detectAll(context);
       expect(anomalies.some((a) => a.anomalyType === 'backflow')).toBe(false);
@@ -584,7 +684,13 @@ describe('AnomalyDetectionService', () => {
         voltageVolts: 220,
         flowLitresPerMin: 0,
       });
-      expect(commands.some((c) => c.actuatorType === 'relay' && c.triggerReason === 'jailbreak_electricity')).toBe(true);
+      expect(
+        commands.some(
+          (c) =>
+            c.actuatorType === 'relay' &&
+            c.triggerReason === 'jailbreak_electricity',
+        ),
+      ).toBe(true);
     });
 
     it('emits relay command for MCB overload', () => {
@@ -594,7 +700,11 @@ describe('AnomalyDetectionService', () => {
         voltageVolts: 220,
         flowLitresPerMin: 0,
       });
-      expect(commands.some((c) => c.actuatorType === 'relay' && c.triggerReason === 'mcb_trip')).toBe(true);
+      expect(
+        commands.some(
+          (c) => c.actuatorType === 'relay' && c.triggerReason === 'mcb_trip',
+        ),
+      ).toBe(true);
     });
 
     it('emits relay command for critical overvoltage', () => {
@@ -604,7 +714,12 @@ describe('AnomalyDetectionService', () => {
         voltageVolts: CFG.criticalVoltageMaxVolts + 1,
         flowLitresPerMin: 0,
       });
-      expect(commands.some((c) => c.actuatorType === 'relay' && c.triggerReason === 'overvoltage')).toBe(true);
+      expect(
+        commands.some(
+          (c) =>
+            c.actuatorType === 'relay' && c.triggerReason === 'overvoltage',
+        ),
+      ).toBe(true);
     });
 
     it('emits valve command for water jailbreak', () => {
@@ -614,12 +729,22 @@ describe('AnomalyDetectionService', () => {
         voltageVolts: 220,
         flowLitresPerMin: CFG.jailbreakMinFlowLitresPerMin + 0.1,
       });
-      expect(commands.some((c) => c.actuatorType === 'valve' && c.triggerReason === 'jailbreak_water')).toBe(true);
+      expect(
+        commands.some(
+          (c) =>
+            c.actuatorType === 'valve' && c.triggerReason === 'jailbreak_water',
+        ),
+      ).toBe(true);
     });
 
     it('does not emit any command when all readings are nominal', () => {
       const commands = service.detectSafetyCommands({
-        unit: makeUnit({ token_electricity: 100, token_water: 50, relay_status: true, valve_status: true }),
+        unit: makeUnit({
+          token_electricity: 100,
+          token_water: 50,
+          relay_status: true,
+          valve_status: true,
+        }),
         powerWatts: 200,
         voltageVolts: 220,
         flowLitresPerMin: 0.5,
@@ -629,7 +754,11 @@ describe('AnomalyDetectionService', () => {
 
     it('does not emit commands when device_id is null', () => {
       const commands = service.detectSafetyCommands({
-        unit: makeUnit({ device_id: null, token_electricity: 0, relay_status: false }),
+        unit: makeUnit({
+          device_id: null,
+          token_electricity: 0,
+          relay_status: false,
+        }),
         powerWatts: 200,
         voltageVolts: 220,
         flowLitresPerMin: 0,

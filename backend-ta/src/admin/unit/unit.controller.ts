@@ -36,10 +36,7 @@ export class UnitController {
 
   @UseGuards(JwtAuthGuard)
   @Get('dashboard/:unitNo')
-  dashboard(
-    @Param('unitNo') unitNo: string,
-    @CurrentUser() user: JwtPayload,
-  ) {
+  dashboard(@Param('unitNo') unitNo: string, @CurrentUser() user: JwtPayload) {
     assertUnitAccess(user, unitNo);
     return this.unitService.getOwnerDashboard(unitNo);
   }
