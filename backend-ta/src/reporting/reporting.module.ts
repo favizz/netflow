@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { MeterReading } from '../device/entities/device.entity';
-import { Unit } from '../unit/entities/unit.entity';
+import { Unit } from '../admin/unit/entities/unit.entity';
 import { ReportingController } from './reporting.controller';
 import { ReportingService } from './reporting.service';
 

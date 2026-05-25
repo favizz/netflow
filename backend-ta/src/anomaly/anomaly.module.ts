@@ -1,47 +1,32 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { ConfigModule, ConfigService } from '@nestjs/config';
-import { ClientsModule, Transport } from '@nestjs/microservices';
+import { ConfigModule } from '@nestjs/config';
 import { Anomaly } from './entities/anomaly.entity';
-import { UnitModule } from '../unit/unit.module';
-import { ResidentsModule } from '../residents/residents.module';
-import { AnomalyService } from './anomaly.service';
+import { MeterReading } from '../device/entities/device.entity';
+import { UnitModule } from '../admin/unit/unit.module';
+import { ResidentsModule } from '../admin/residents/residents.module';
 import { NotificationModule } from '../notification/notification.module';
+import { SharedMqttClientModule } from '../common/shared-mqtt-client.module';
+import { AnomalyService } from './anomaly.service';
+import { AnomalyDetectionService } from './anomaly-detection.service';
+import { AnomalyNotificationService } from './anomaly-notification.service';
+import { AnomalyController } from './anomaly.controller';
 
 @Module({
   imports: [
     ConfigModule,
-    // UnitModule exports UnitService + TypeOrmModule (includes MeterReading repository)
     UnitModule,
     ResidentsModule,
-    TypeOrmModule.forFeature([Anomaly]),
     NotificationModule,
-    ClientsModule.registerAsync([
-      {
-        name: 'MQTT_CLIENT',
-        imports: [ConfigModule],
-        useFactory: (configService: ConfigService) => ({
-          transport: Transport.MQTT,
-          options: {
-            url: configService.get<string>('MQTT_BROKER_URL'),
-            username: configService.get<string>('MQTT_USERNAME') || undefined,
-            password: configService.get<string>('MQTT_PASSWORD') || undefined,
-            rejectUnauthorized: false,
-            serializer: {
-              serialize: (value: { data: unknown }): Buffer => {
-                const d = value.data;
-                if (Buffer.isBuffer(d)) return d;
-                if (d instanceof Uint8Array) return Buffer.from(d);
-                return Buffer.from(JSON.stringify(d));
-              },
-            },
-          },
-        }),
-        inject: [ConfigService],
-      },
-    ]),
+    TypeOrmModule.forFeature([Anomaly, MeterReading]),
+    SharedMqttClientModule,
   ],
-  providers: [AnomalyService],
+  controllers: [AnomalyController],
+  providers: [
+    AnomalyService,
+    AnomalyDetectionService,
+    AnomalyNotificationService,
+  ],
   exports: [AnomalyService],
 })
 export class AnomalyModule {}

@@ -4,7 +4,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { UnitService } from './unit.service';
 import { Unit } from './entities/unit.entity';
-import { MeterReading } from '../device/entities/device.entity';
+import { MeterReading } from '../../device/entities/device.entity';
 import { TariffService } from '../tariff/tariff.service';
 import { AuditLogService } from '../audit-log/audit-log.service';
 

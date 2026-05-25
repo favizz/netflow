@@ -2,13 +2,13 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { AnomalyService } from './anomaly.service';
+import { AnomalyDetectionService } from './anomaly-detection.service';
+import { AnomalyNotificationService } from './anomaly-notification.service';
 import { MeterReading } from '../device/entities/device.entity';
 import { Anomaly } from './entities/anomaly.entity';
-import { UnitService } from '../unit/unit.service';
-import { NotificationService } from '../notification/notification.service';
-import { ResidentsService } from '../residents/residents.service';
-
-// ── Test helpers ──────────────────────────────────────────────────────────────
+import { UnitService } from '../admin/unit/unit.service';
+import { ANOMALY_DETECTION_CONFIG as CFG } from './anomaly.constants';
+import type { AnomalyItem } from './anomaly.types';
 
 function makeReading(overrides: Partial<MeterReading> = {}): MeterReading {
   return {
@@ -24,10 +24,6 @@ function makeReading(overrides: Partial<MeterReading> = {}): MeterReading {
   } as MeterReading;
 }
 
-function makeReadings(count: number, overrides: Partial<MeterReading> = {}): MeterReading[] {
-  return Array.from({ length: count }, () => makeReading(overrides));
-}
-
 function makeUnit(overrides: Partial<any> = {}) {
   return {
     id: 1,
@@ -36,34 +32,44 @@ function makeUnit(overrides: Partial<any> = {}) {
     token_electricity: 100,
     token_water: 50,
     relay_status: true,
+    valve_status: true,
     resident_email: 'resident@test.com',
     ...overrides,
   };
 }
 
-// ── Suite ─────────────────────────────────────────────────────────────────────
+function makeAnomalyItem(overrides: Partial<AnomalyItem> = {}): AnomalyItem {
+  return {
+    anomalyType: 'voltage_anomaly',
+    severity: 'warning',
+    target: 'both',
+    message: 'Test anomaly',
+    metadata: {},
+    detectedAt: new Date().toISOString(),
+    ...overrides,
+  };
+}
 
 describe('AnomalyService', () => {
   let service: AnomalyService;
   let mockUnitService: any;
-  let mockMeterRepo: any;
+  let mockMeterReadingRepo: any;
   let mockAnomalyRepo: any;
   let mockMqttClient: any;
+  let mockDetectionService: any;
   let mockNotificationService: any;
-  let mockResidentsService: any;
 
   beforeEach(async () => {
     jest.useFakeTimers();
 
     mockUnitService = {
-      findAll: jest.fn().mockResolvedValue([]),
       findByUnitNo: jest.fn().mockResolvedValue(makeUnit()),
       streamAllWithDevice: jest.fn().mockImplementation(async function* () {
         yield [makeUnit()];
       }),
     };
 
-    mockMeterRepo = {
+    mockMeterReadingRepo = {
       find: jest.fn().mockResolvedValue([makeReading()]),
       findOne: jest.fn().mockResolvedValue(makeReading()),
     };
@@ -71,29 +77,31 @@ describe('AnomalyService', () => {
     mockAnomalyRepo = {
       find: jest.fn().mockResolvedValue([]),
       findOne: jest.fn().mockResolvedValue(null),
-      save: jest.fn().mockImplementation((e) => Promise.resolve(e)),
+      save: jest.fn().mockImplementation((entity) => Promise.resolve(entity)),
     };
 
     mockMqttClient = { emit: jest.fn() };
 
-    mockNotificationService = {
-      sendResidentNotification: jest.fn().mockResolvedValue(undefined),
-      sendTelegram: jest.fn().mockResolvedValue(undefined),
+    mockDetectionService = {
+      detectAll: jest.fn().mockReturnValue([]),
+      detectSafetyCommands: jest.fn().mockReturnValue([]),
     };
 
-    mockResidentsService = {
-      findAdmins: jest.fn().mockResolvedValue([]),
+    mockNotificationService = {
+      notifyResidentOfAnomaly: jest.fn().mockResolvedValue(undefined),
+      notifyAdminsOfAnomaly: jest.fn().mockResolvedValue(undefined),
+      notifyAdminsOfOfflineUnits: jest.fn().mockResolvedValue(undefined),
     };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AnomalyService,
         { provide: UnitService, useValue: mockUnitService },
-        { provide: getRepositoryToken(MeterReading), useValue: mockMeterRepo },
+        { provide: getRepositoryToken(MeterReading), useValue: mockMeterReadingRepo },
         { provide: getRepositoryToken(Anomaly), useValue: mockAnomalyRepo },
         { provide: 'MQTT_CLIENT', useValue: mockMqttClient },
-        { provide: NotificationService, useValue: mockNotificationService },
-        { provide: ResidentsService, useValue: mockResidentsService },
+        { provide: AnomalyDetectionService, useValue: mockDetectionService },
+        { provide: AnomalyNotificationService, useValue: mockNotificationService },
       ],
     }).compile();
 
@@ -105,105 +113,232 @@ describe('AnomalyService', () => {
     jest.restoreAllMocks();
   });
 
-  describe('low_token', () => {
-    it('triggers when token_electricity is < 5', async () => {
-      mockUnitService.findByUnitNo.mockResolvedValue(makeUnit({ token_electricity: 3 }));
-      const results = await service['computeAll']('A-101');
-      expect(results.some((a) => a.anomalyType === 'low_token')).toBe(true);
+  describe('getAnomaliesForUnit', () => {
+    it('filters out admin-only anomalies from resident view', async () => {
+      const adminAnomaly = makeAnomalyItem({ anomalyType: 'device_offline', target: 'admin' });
+      const residentAnomaly = makeAnomalyItem({ anomalyType: 'low_electricity_token', target: 'resident' });
+      mockDetectionService.detectAll.mockReturnValue([adminAnomaly, residentAnomaly]);
+
+      const results = await service.getAnomaliesForUnit('A-101');
+
+      expect(results).not.toContain(adminAnomaly);
+      expect(results).toContain(residentAnomaly);
     });
 
-    it('triggers when token_water is < 1', async () => {
-      mockUnitService.findByUnitNo.mockResolvedValue(makeUnit({ token_water: 0.5 }));
-      const results = await service['computeAll']('A-101');
-      expect(results.some((a) => a.anomalyType === 'low_token')).toBe(true);
+    it('populates cache on first call and returns from cache on second call', async () => {
+      mockDetectionService.detectAll.mockReturnValue([makeAnomalyItem()]);
+
+      await service.getAnomaliesForUnit('A-101');
+      await service.getAnomaliesForUnit('A-101');
+
+      expect(mockUnitService.findByUnitNo).toHaveBeenCalledTimes(1);
     });
   });
 
-  describe('jailbreak', () => {
-    it('triggers when tokens are 0, relay OFF, but power > 5W', async () => {
-      mockUnitService.findByUnitNo.mockResolvedValue(makeUnit({ token_electricity: 0, relay_status: false }));
-      mockMeterRepo.find.mockResolvedValue([makeReading({ power: 100 })]);
+  describe('syncAnomaliesToDatabase', () => {
+    it('inserts both low_electricity_token and low_water_token independently', async () => {
+      const electricAnomaly = makeAnomalyItem({ anomalyType: 'low_electricity_token' });
+      const waterAnomaly = makeAnomalyItem({ anomalyType: 'low_water_token' });
 
-      const results = await service['computeAll']('A-101');
-      expect(results.some((a) => a.anomalyType === 'jailbreak')).toBe(true);
+      await service['syncAnomaliesToDatabase']('A-101', [electricAnomaly, waterAnomaly]);
+
+      const savedTypes = mockAnomalyRepo.save.mock.calls.map(
+        (callArgs: any[]) => callArgs[0].type,
+      );
+      expect(savedTypes).toContain('low_electricity_token');
+      expect(savedTypes).toContain('low_water_token');
+    });
+
+    it('resolves DB anomalies that are no longer in the computed set', async () => {
+      const activeDbAnomaly = {
+        id: 1,
+        device_id: 'DEV-A-101',
+        type: 'mcb_trip',
+        severity: 'critical',
+        resolved_at: null,
+      };
+      mockAnomalyRepo.find.mockResolvedValue([activeDbAnomaly]);
+
+      await service['syncAnomaliesToDatabase']('A-101', []);
+
+      const savedEntity = mockAnomalyRepo.save.mock.calls[0][0];
+      expect(savedEntity.resolved_at).toBeInstanceOf(Date);
+    });
+
+    it('does not insert anomalies that already exist as unresolved in DB', async () => {
+      const existingDbAnomaly = {
+        id: 1,
+        device_id: 'DEV-A-101',
+        type: 'voltage_anomaly',
+        severity: 'warning',
+        resolved_at: null,
+      };
+      mockAnomalyRepo.find.mockResolvedValue([existingDbAnomaly]);
+
+      await service['syncAnomaliesToDatabase']('A-101', [
+        makeAnomalyItem({ anomalyType: 'voltage_anomaly' }),
+      ]);
+
+      expect(mockAnomalyRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('sends resident notification for new critical anomalies targeting resident', async () => {
+      const criticalAnomaly = makeAnomalyItem({
+        anomalyType: 'mcb_trip',
+        severity: 'critical',
+        target: 'both',
+      });
+
+      await service['syncAnomaliesToDatabase']('A-101', [criticalAnomaly]);
+
+      expect(mockNotificationService.notifyResidentOfAnomaly).toHaveBeenCalledWith(
+        'resident@test.com',
+        criticalAnomaly,
+        'A-101',
+      );
+    });
+
+    it('does not send resident notification for admin-only anomalies', async () => {
+      const adminOnlyAnomaly = makeAnomalyItem({
+        anomalyType: 'jailbreak',
+        severity: 'critical',
+        target: 'admin',
+      });
+
+      await service['syncAnomaliesToDatabase']('A-101', [adminOnlyAnomaly]);
+
+      expect(mockNotificationService.notifyResidentOfAnomaly).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('checkOnTelemetry', () => {
+    it('emits safety commands returned by the detection service', () => {
+      mockDetectionService.detectSafetyCommands.mockReturnValue([
+        { deviceId: 'DEV-A-101', actuatorType: 'relay', triggerReason: 'mcb_trip' },
+      ]);
+
+      service.checkOnTelemetry('DEV-A-101', 'A-101', 1500, 0, 220, 100, 50, true, true);
+
+      expect(mockMqttClient.emit).toHaveBeenCalledWith(
+        'device/DEV-A-101/command',
+        expect.any(Buffer),
+      );
+    });
+
+    it('does not re-emit safety commands within the cooldown window', () => {
+      mockDetectionService.detectSafetyCommands.mockReturnValue([
+        { deviceId: 'DEV-A-101', actuatorType: 'relay', triggerReason: 'mcb_trip' },
+      ]);
+
+      service.checkOnTelemetry('DEV-A-101', 'A-101', 1500, 0, 220, 100, 50, true, true);
+      service.checkOnTelemetry('DEV-A-101', 'A-101', 1500, 0, 220, 100, 50, true, true);
+
+      expect(mockMqttClient.emit).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not throw when an internal error occurs', () => {
+      mockDetectionService.detectSafetyCommands.mockImplementation(() => {
+        throw new Error('Unexpected failure');
+      });
+
+      expect(() =>
+        service.checkOnTelemetry('DEV-A-101', 'A-101', 200, 0.5, 220, 100, 50, true, true),
+      ).not.toThrow();
     });
   });
 
   describe('checkOfflineUnits', () => {
-    it('saves anomaly to DB for offline devices', async () => {
+    it('saves a device_offline anomaly to DB for offline devices', async () => {
       jest.useRealTimers();
-      mockUnitService.streamAllWithDevice.mockImplementation(async function* () {
-        yield [makeUnit({ device_id: 'DEV-OFFLINE', unit_no: 'A-101' })];
-      });
-      // Last reading 15 mins ago
-      mockMeterRepo.findOne.mockResolvedValue(makeReading({ time: new Date(Date.now() - 15 * 60_000) }));
+      const offlineTime = new Date(Date.now() - CFG.offlineThresholdMs - 60_000);
+      mockMeterReadingRepo.findOne.mockResolvedValue(makeReading({ time: offlineTime }));
       mockAnomalyRepo.findOne.mockResolvedValue(null);
 
       await service['checkOfflineUnits']();
 
-      expect(mockAnomalyRepo.save).toHaveBeenCalled();
+      expect(mockAnomalyRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'device_offline' }),
+      );
     });
 
-    it('sends one admin summary when multiple units go offline', async () => {
+    it('does not save duplicate anomaly if one already exists in DB', async () => {
       jest.useRealTimers();
+      const offlineTime = new Date(Date.now() - CFG.offlineThresholdMs - 60_000);
+      mockMeterReadingRepo.findOne.mockResolvedValue(makeReading({ time: offlineTime }));
+      mockAnomalyRepo.findOne.mockResolvedValue({ id: 1, type: 'device_offline', resolved_at: null });
+
+      await service['checkOfflineUnits']();
+
+      expect(mockAnomalyRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('sends batched admin offline notification after processing all units', async () => {
+      jest.useRealTimers();
+      const offlineTime = new Date(Date.now() - CFG.offlineThresholdMs - 60_000);
+      mockMeterReadingRepo.findOne.mockResolvedValue(makeReading({ time: offlineTime }));
+      mockAnomalyRepo.findOne.mockResolvedValue(null);
       mockUnitService.streamAllWithDevice.mockImplementation(async function* () {
         yield [
           makeUnit({ device_id: 'DEV-A-101', unit_no: 'A-101' }),
           makeUnit({ device_id: 'DEV-A-102', unit_no: 'A-102' }),
         ];
       });
-      mockMeterRepo.findOne.mockResolvedValue(
-        makeReading({ time: new Date(Date.now() - 15 * 60_000) }),
-      );
-      mockAnomalyRepo.findOne.mockResolvedValue(null);
-      mockResidentsService.findAdmins.mockResolvedValue([
-        { telegram_chat_id: 'admin-chat' },
-      ]);
 
       await service['checkOfflineUnits']();
-      await Promise.resolve();
 
-      expect(mockNotificationService.sendTelegram).toHaveBeenCalledTimes(1);
-      expect(mockNotificationService.sendTelegram).toHaveBeenCalledWith(
-        'admin-chat',
-        expect.stringContaining('2 unit offline: A-101, A-102'),
+      expect(mockNotificationService.notifyAdminsOfOfflineUnits).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({ unitNumber: 'A-101' }),
+          expect.objectContaining({ unitNumber: 'A-102' }),
+        ]),
       );
     });
-  });
 
-  describe('syncAnomaliesToDb', () => {
-    it('caches admins and cools down repeated admin alerts by anomaly type', async () => {
+    it('does not call notifyAdminsOfOfflineUnits when no units newly went offline', async () => {
       jest.useRealTimers();
-      mockResidentsService.findAdmins.mockResolvedValue([
-        { telegram_chat_id: 'admin-chat' },
-      ]);
-      const voltageAnomaly = {
-        anomalyType: 'voltage_anomaly',
-        severity: 'warning',
-        target: 'both',
-        message: 'Voltage dip',
-        metadata: {},
-        detectedAt: new Date().toISOString(),
-      };
+      const recentTime = new Date(Date.now() - 60_000);
+      mockMeterReadingRepo.findOne.mockResolvedValue(makeReading({ time: recentTime }));
 
-      await service['syncAnomaliesToDb']('A-101', [voltageAnomaly]);
-      await service['syncAnomaliesToDb']('A-102', [voltageAnomaly]);
+      await service['checkOfflineUnits']();
 
-      expect(mockResidentsService.findAdmins).toHaveBeenCalledTimes(1);
-      expect(mockNotificationService.sendTelegram).toHaveBeenCalledTimes(1);
+      expect(mockNotificationService.notifyAdminsOfOfflineUnits).not.toHaveBeenCalled();
     });
   });
 
-  describe('checkOnTelemetry', () => {
-    it('emits relay OFF for safety when power > MCB limit', () => {
-      service.checkOnTelemetry('DEV-A-101', 'A-101', 1500, 0, 220, 100, 50, true);
-      expect(mockMqttClient.emit).toHaveBeenCalled();
+  describe('pruneMaps', () => {
+    it('removes stale entries from timestamp maps after 24 hours', () => {
+      jest.useRealTimers();
+      const staleTimestamp = Date.now() - CFG.memoryPruneAgeMs - 1;
+      service['lastTelemetryArrivalMs'].set('A-101', staleTimestamp);
+      service['lastTelemetryRefreshMs'].set('A-101', staleTimestamp);
+      service['lastSafetyCommandMs'].set('DEV-A-101', staleTimestamp);
+
+      service['pruneMaps']();
+
+      expect(service['lastTelemetryArrivalMs'].has('A-101')).toBe(false);
+      expect(service['lastTelemetryRefreshMs'].has('A-101')).toBe(false);
+      expect(service['lastSafetyCommandMs'].has('DEV-A-101')).toBe(false);
     });
 
-    it('emits relay OFF for safety during jailbreak', () => {
-      // Tokens 0, relay status is supposed to be OFF (false), but it's drawing 100W
-      service.checkOnTelemetry('DEV-A-101', 'A-101', 100, 0, 220, 0, 0, false);
-      expect(mockMqttClient.emit).toHaveBeenCalled();
+    it('retains recent entries in timestamp maps', () => {
+      jest.useRealTimers();
+      const recentTimestamp = Date.now() - 60_000;
+      service['lastTelemetryArrivalMs'].set('A-101', recentTimestamp);
+
+      service['pruneMaps']();
+
+      expect(service['lastTelemetryArrivalMs'].has('A-101')).toBe(true);
+    });
+
+    it('clears anomaly cache when it exceeds the maximum size', () => {
+      jest.useRealTimers();
+      for (let index = 0; index <= CFG.anomalyCacheMaxSize; index++) {
+        service['anomalyCache'].set(`unit-${index}`, []);
+      }
+
+      service['pruneMaps']();
+
+      expect(service['anomalyCache'].size).toBe(0);
     });
   });
 });

@@ -1,652 +1,444 @@
-import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
+import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ClientProxy } from '@nestjs/microservices';
 import { Repository, IsNull } from 'typeorm';
 import { MeterReading } from '../device/entities/device.entity';
-import { UnitService } from '../unit/unit.service';
+import { UnitService } from '../admin/unit/unit.service';
+import { encodeCommand } from '../common/binary-codec';
+import { ANOMALY_DETECTION_CONFIG as CFG } from './anomaly.constants';
 import type { AnomalyItem, AnomalyType } from './anomaly.types';
 import { Anomaly } from './entities/anomaly.entity';
-import { encodeCommand } from '../common/binary-codec';
-import { NotificationService } from '../notification/notification.service';
-import { ResidentsService } from '../residents/residents.service';
-import { Resident } from '../residents/resident.entity';
+import { AnomalyDetectionService } from './anomaly-detection.service';
+import {
+  AnomalyNotificationService,
+  OfflineUnitSummary,
+} from './anomaly-notification.service';
 
-// ── Detection thresholds ────────────────────────────────────────────────────
-const MCB_WATT_LIMIT = 1300;
-const LOW_TOKEN_THRESHOLD_KWH = 5;
-const LOW_TOKEN_THRESHOLD_M3 = 1;
-const OFFLINE_THRESHOLD_MS = 10 * 60 * 1_000;
-const VOLTAGE_MIN = 198;
-const VOLTAGE_MAX = 242;
-const VOLTAGE_CRITICAL_LOW = 180;
-const VOLTAGE_CRITICAL_HIGH = 250;
-const WATER_LEAK_MAX_COV = 0.2;
-const WATER_LEAK_MIN_FLOW_LPM = 0.3;
-const LOW_PF_THRESHOLD = 0.6;
-const LOW_PF_MIN_POWER_W = 50;
-const SPIKE_MULTIPLIER = 3.0;
-const SPIKE_MIN_BASELINE_W = 100;
-const SPIKE_MIN_W = 500;
-
-const TELEMETRY_REFRESH_THROTTLE_MS = 30_000;
-const ADMIN_ALERT_COOLDOWN_MS = 15 * 60 * 1_000;
-
+/**
+ * Orchestrates the anomaly detection lifecycle:
+ * scheduling, in-memory caching, DB persistence, safety actuation, and notification routing.
+ * Detection logic is delegated to AnomalyDetectionService.
+ * Notification dispatch is delegated to AnomalyNotificationService.
+ */
 @Injectable()
 export class AnomalyService implements OnModuleInit {
+  private readonly logger = new Logger(AnomalyService.name);
+
   private readonly anomalyCache = new Map<string, AnomalyItem[]>();
-  private readonly lastTelemetryRefresh = new Map<string, number>();
-  // Updated on every telemetry frame (not just when the throttled computeAll fires).
-  // Used to suppress device_offline during the BullMQ processing window.
+  private readonly lastTelemetryRefreshMs = new Map<string, number>();
   private readonly lastTelemetryArrivalMs = new Map<string, number>();
-  private cachedAdmins: Resident[] | null = null;
-  private adminsCachedAt = 0;
-  private readonly adminAlertCooldown = new Map<AnomalyType, number>();
+  private readonly lastSafetyCommandMs = new Map<string, number>();
 
   constructor(
     private readonly unitService: UnitService,
     @InjectRepository(MeterReading)
-    private readonly meterRepo: Repository<MeterReading>,
+    private readonly meterReadingRepo: Repository<MeterReading>,
     @InjectRepository(Anomaly)
     private readonly anomalyRepo: Repository<Anomaly>,
     @Inject('MQTT_CLIENT') private readonly mqttClient: ClientProxy,
-    private readonly notificationService: NotificationService,
-    private readonly residentsService: ResidentsService,
+    private readonly detectionService: AnomalyDetectionService,
+    private readonly notificationService: AnomalyNotificationService,
   ) {}
 
-  private readonly lastSafetyCommandMs = new Map<string, number>();
-
-  onModuleInit() {
-    // Lightweight offline check only — does NOT run computeAll for every unit.
-    // All other anomaly types are detected on-demand when telemetry arrives.
-    setTimeout(() => void this.checkOfflineUnits(), 10_000);
-    setInterval(() => void this.checkOfflineUnits(), 5 * 60 * 1_000);
-  }
-
-  // ── Public API ─────────────────────────────────────────────────────────────
-
-  async getAnomaliesForUnit(unitNo: string): Promise<AnomalyItem[]> {
-    if (!this.anomalyCache.has(unitNo)) {
-      const all = await this.computeAll(unitNo);
-      this.anomalyCache.set(unitNo, all);
-    }
-    return (this.anomalyCache.get(unitNo) ?? []).filter(
-      (a) => a.target !== 'admin',
+  onModuleInit(): void {
+    setTimeout(
+      () => void this.checkOfflineUnits(),
+      CFG.offlineCheckInitialDelayMs,
+    );
+    setInterval(
+      () => void this.checkOfflineUnits(),
+      CFG.offlineCheckIntervalMs,
     );
   }
 
-  async getAllAnomaliesForUnit(unitNo: string): Promise<AnomalyItem[]> {
-    return await this.computeAll(unitNo);
+  /**
+   * Returns the cached anomaly list for a unit, filtered to resident-visible anomalies only.
+   * Triggers a synchronous cache population on first call for a given unit.
+   *
+   * @param unitNumber - The unit identifier to query.
+   * @returns Array of anomalies visible to the resident (excludes admin-only items).
+   */
+  async getAnomaliesForUnit(unitNumber: string): Promise<AnomalyItem[]> {
+    if (!this.anomalyCache.has(unitNumber)) {
+      const detectedAnomalies = await this.computeAndCacheAnomalies(unitNumber);
+      return detectedAnomalies.filter((anomaly) => anomaly.target !== 'admin');
+    }
+    return (this.anomalyCache.get(unitNumber) ?? []).filter(
+      (anomaly) => anomaly.target !== 'admin',
+    );
   }
 
+  /**
+   * Returns the full anomaly list for a unit including admin-only anomalies.
+   * Forces a fresh computation regardless of cache state.
+   *
+   * @param unitNumber - The unit identifier to query.
+   * @returns Complete array of all detected anomalies for the unit.
+   */
+  async getAllAnomaliesForUnit(unitNumber: string): Promise<AnomalyItem[]> {
+    return this.computeAndCacheAnomalies(unitNumber);
+  }
+
+  /**
+   * Hot-path entry point called synchronously after every telemetry DB commit.
+   * Performs immediate safety actuation checks and throttled anomaly cache refresh.
+   * Must never throw — any error is silently swallowed to protect the telemetry pipeline.
+   *
+   * @param deviceId - Hardware device identifier.
+   * @param unitNumber - Unit identifier mapped to this device.
+   * @param powerWatts - Current active power reading in Watts, null if unavailable.
+   * @param flowLitresPerMin - Current water flow rate in L/min, null if unavailable.
+   * @param voltageVolts - Current line voltage in Volts, null if unavailable.
+   * @param tokenElectricityKwh - Remaining electricity token balance in kWh.
+   * @param tokenWaterM3 - Remaining water token balance in m³.
+   * @param relayStatus - Current relay state (true = ON).
+   * @param valveStatus - Current valve state (true = OPEN).
+   */
   checkOnTelemetry(
     deviceId: string,
-    unitNo: string,
-    power: number | null,
-    waterFlow: number | null,
-    voltage: number | null,
-    tokenElec: number,
-    tokenWater: number,
+    unitNumber: string,
+    powerWatts: number | null,
+    flowLitresPerMin: number | null,
+    voltageVolts: number | null,
+    tokenElectricityKwh: number,
+    tokenWaterM3: number,
     relayStatus: boolean,
     valveStatus: boolean,
   ): void {
     try {
-      const pw = power ?? 0;
-      const vv = voltage ?? 0;
-      const wf = waterFlow ?? 0;
+      this.emitSafetyCommandsIfRequired(deviceId, {
+        unit: {
+          unit_no: unitNumber,
+          device_id: deviceId,
+          token_electricity: tokenElectricityKwh,
+          token_water: tokenWaterM3,
+          relay_status: relayStatus,
+          valve_status: valveStatus,
+          resident_email: null,
+        },
+        powerWatts: powerWatts ?? 0,
+        voltageVolts: voltageVolts ?? 0,
+        flowLitresPerMin: flowLitresPerMin ?? 0,
+      });
 
-      // Re-send cutoff commands if device didn't acknowledge: relay off when
-      // token depleted or MCB/overvoltage; valve close when water token gone.
-      const lastCmd = this.lastSafetyCommandMs.get(deviceId) ?? 0;
-      const relayShouldCut =
-        (tokenElec <= 0 && !relayStatus && pw > 5) ||
-        pw > MCB_WATT_LIMIT ||
-        vv > VOLTAGE_CRITICAL_HIGH;
-      const valveShouldCut = tokenWater <= 0 && !valveStatus && wf > 0.1;
+      this.lastTelemetryArrivalMs.set(unitNumber, Date.now());
+      void this.resolveOfflineAnomaly(deviceId, unitNumber);
 
-      if (
-        (relayShouldCut || valveShouldCut) &&
-        Date.now() - lastCmd > 5 * 60 * 1000
-      ) {
-        this.lastSafetyCommandMs.set(deviceId, Date.now());
-        if (relayShouldCut) {
-          this.mqttClient.emit(
-            `device/${deviceId}/command`,
-            encodeCommand('relay', 0),
+      const lastRefreshMs = this.lastTelemetryRefreshMs.get(unitNumber) ?? 0;
+      const throttleWindowExpired =
+        Date.now() - lastRefreshMs > CFG.telemetryThrottleMs;
+
+      if (!throttleWindowExpired) return;
+
+      this.lastTelemetryRefreshMs.set(unitNumber, Date.now());
+      void this.computeAndCacheAnomalies(unitNumber)
+        .then((detectedAnomalies) =>
+          this.syncAnomaliesToDatabase(unitNumber, detectedAnomalies),
+        )
+        .catch((error: unknown) => {
+          this.logger.warn(
+            `Throttled anomaly sync failed for ${unitNumber}: ${(error as Error).message}`,
           );
-        }
-        if (valveShouldCut) {
-          this.mqttClient.emit(
-            `device/${deviceId}/command`,
-            encodeCommand('valve', 0),
-          );
-        }
-      }
-
-      // Receiving telemetry proves the device is online.
-      this.lastTelemetryArrivalMs.set(unitNo, Date.now());
-      void this.resolveOfflineAnomaly(deviceId, unitNo);
-
-      // Throttled full check for all other anomaly types
-      const last = this.lastTelemetryRefresh.get(unitNo) ?? 0;
-      if (Date.now() - last > TELEMETRY_REFRESH_THROTTLE_MS) {
-        this.lastTelemetryRefresh.set(unitNo, Date.now());
-        void this.computeAll(unitNo)
-          .then(async (a) => {
-            await this.syncAnomaliesToDb(unitNo, a);
-            this.anomalyCache.set(unitNo, a);
-          })
-          .catch(() => {});
-      }
-    } catch {
-      // Must not propagate to telemetry pipeline
+        });
+    } catch (error: unknown) {
+      this.logger.warn(
+        `checkOnTelemetry error for ${unitNumber}: ${(error as Error).message}`,
+      );
     }
   }
 
-  // ── Offline background check ───────────────────────────────────────────────
-  // Runs every 5 min. Only checks device_offline — one indexed findOne per unit,
-  // no full computeAll. All other anomaly types are detected via checkOnTelemetry.
+  private emitSafetyCommandsIfRequired(
+    deviceId: string,
+    context: {
+      unit: Parameters<
+        AnomalyDetectionService['detectSafetyCommands']
+      >[0]['unit'];
+      powerWatts: number;
+      voltageVolts: number;
+      flowLitresPerMin: number;
+    },
+  ): void {
+    const safetyCommands = this.detectionService.detectSafetyCommands(context);
+
+    for (const command of safetyCommands) {
+      const lastCommandMs = this.lastSafetyCommandMs.get(command.deviceId) ?? 0;
+      const cooldownElapsed =
+        Date.now() - lastCommandMs > CFG.safetyCommandCooldownMs;
+
+      if (!cooldownElapsed) continue;
+
+      this.lastSafetyCommandMs.set(command.deviceId, Date.now());
+      this.mqttClient.emit(
+        `device/${command.deviceId}/command`,
+        encodeCommand(command.actuatorType, 0),
+      );
+      this.logger.warn(
+        `Safety command emitted: actuator=${command.actuatorType} reason=${command.triggerReason} device=${command.deviceId}`,
+      );
+    }
+  }
 
   private async checkOfflineUnits(): Promise<void> {
     try {
-      // Periodic cleanup of stale memory maps to prevent RAM growth
       this.pruneMaps();
-      const newlyOfflineUnits: Array<{ unitNo: string; ageMinutes: number }> =
-        [];
+      const newlyOfflineUnitSummaries: OfflineUnitSummary[] = [];
 
-      // Use the generator to stream units in chunks, preventing RAM spikes.
-      for await (const units of this.unitService.streamAllWithDevice(100)) {
-        for (const unit of units) {
+      for await (const unitBatch of this.unitService.streamAllWithDevice(
+        CFG.offlineStreamChunkSize,
+      )) {
+        for (const unit of unitBatch) {
           if (!unit.device_id) continue;
-          try {
-            const latest = await this.meterRepo.findOne({
-              where: { device_id: unit.device_id },
-              order: { time: 'DESC' },
-            });
-            const ageMs = latest
-              ? Date.now() - new Date(latest.time).getTime()
-              : Infinity;
-            if (ageMs < OFFLINE_THRESHOLD_MS) continue;
-
-            // Unit is offline — insert DB anomaly and notify once (deduplicated)
-            const existing = await this.anomalyRepo.findOne({
-              where: {
-                device_id: unit.device_id,
-                type: 'device_offline',
-                resolved_at: IsNull(),
-              },
-            });
-            if (!existing) {
-              await this.anomalyRepo.save({
-                device_id: unit.device_id,
-                type: 'device_offline',
-                severity: 'critical',
-                description: `Perangkat unit ${unit.unit_no} offline. Tidak ada data masuk selama ${Math.floor(ageMs / 60_000)} menit.`,
-                action_taken: JSON.stringify({
-                  last_seen_ms: ageMs,
-                  offline_threshold_ms: OFFLINE_THRESHOLD_MS,
-                }),
-              });
-              newlyOfflineUnits.push({
-                unitNo: unit.unit_no,
-                ageMinutes: Math.floor(ageMs / 60_000),
-              });
-              if (unit.resident_email) {
-                void this.notificationService
-                  .sendResidentNotification(
-                    unit.resident_email,
-                    `[NetFlow Alert] DEVICE_OFFLINE — Unit ${unit.unit_no}`,
-                    `Perangkat unit ${unit.unit_no} offline. Tidak ada data masuk selama ${Math.floor(ageMs / 60_000)} menit.`,
-                  )
-                  .catch(() => {});
-              }
-            }
-          } catch {
-            // Skip unit on error, continue others
-          }
+          await this.processOfflineCheckForUnit(
+            { ...unit, device_id: unit.device_id },
+            newlyOfflineUnitSummaries,
+          );
         }
-        // Small yield to event loop
-        await new Promise((resolve) => setTimeout(resolve, 20));
+        await new Promise<void>((resolve) => setTimeout(resolve, 20));
       }
 
-      if (newlyOfflineUnits.length > 0) {
-        void this.getAdmins()
-          .then((admins) => {
-            const message =
-              newlyOfflineUnits.length === 1
-                ? `🚨 *[Admin Alert]* DEVICE_OFFLINE — Unit ${newlyOfflineUnits[0].unitNo}\n\nTidak ada data masuk selama ${newlyOfflineUnits[0].ageMinutes} menit.`
-                : this.formatOfflineSummary(newlyOfflineUnits);
-
-            for (const admin of admins) {
-              if (admin.telegram_chat_id) {
-                void this.notificationService
-                  .sendTelegram(admin.telegram_chat_id, message)
-                  .catch(() => {});
-              }
-            }
-          })
-          .catch(() => {});
+      if (newlyOfflineUnitSummaries.length > 0) {
+        void this.notificationService
+          .notifyAdminsOfOfflineUnits(newlyOfflineUnitSummaries)
+          .catch((error: unknown) => {
+            this.logger.warn(
+              `Admin offline batch notification failed: ${(error as Error).message}`,
+            );
+          });
       }
-    } catch {
-      // DB not ready — retry on next interval
+    } catch (error: unknown) {
+      this.logger.warn(
+        `checkOfflineUnits failed (DB may not be ready): ${(error as Error).message}`,
+      );
     }
   }
 
-  // Clears the device_offline anomaly from cache and DB the moment telemetry
-  // is received, so the admin view reflects online status without delay.
-  private async resolveOfflineAnomaly(
-    deviceId: string,
-    unitNo: string,
+  private async processOfflineCheckForUnit(
+    unit: { device_id: string; unit_no: string; resident_email: string | null },
+    newlyOfflineUnitSummaries: OfflineUnitSummary[],
   ): Promise<void> {
     try {
-      const cached = this.anomalyCache.get(unitNo);
-      if (cached?.some((a) => a.anomalyType === 'device_offline')) {
+      const latestReading = await this.meterReadingRepo.findOne({
+        where: { device_id: unit.device_id },
+        order: { time: 'DESC' },
+      });
+
+      const offlineDurationMs = latestReading
+        ? Date.now() - new Date(latestReading.time).getTime()
+        : Infinity;
+
+      if (offlineDurationMs < CFG.offlineThresholdMs) return;
+
+      const existingOfflineAnomaly = await this.anomalyRepo.findOne({
+        where: {
+          device_id: unit.device_id,
+          type: 'device_offline',
+          resolved_at: IsNull(),
+        },
+      });
+
+      if (existingOfflineAnomaly) return;
+
+      const offlineDurationMinutes = Math.floor(offlineDurationMs / 60_000);
+
+      await this.anomalyRepo.save({
+        device_id: unit.device_id,
+        type: 'device_offline',
+        severity: 'critical',
+        description: `Perangkat unit ${unit.unit_no} offline. Tidak ada data masuk selama ${offlineDurationMinutes} menit.`,
+        action_taken: JSON.stringify({
+          lastSeenMs: offlineDurationMs,
+          offlineThresholdMs: CFG.offlineThresholdMs,
+        }),
+      });
+
+      newlyOfflineUnitSummaries.push({
+        unitNumber: unit.unit_no,
+        offlineDurationMinutes,
+      });
+
+      if (unit.resident_email) {
+        void this.notificationService
+          .notifyResidentOfAnomaly(
+            unit.resident_email,
+            {
+              anomalyType: 'device_offline',
+              severity: 'critical',
+              target: 'admin',
+              message: `Perangkat unit ${unit.unit_no} offline. Tidak ada data masuk selama ${offlineDurationMinutes} menit.`,
+              metadata: { offlineDurationMinutes },
+              detectedAt: new Date().toISOString(),
+            },
+            unit.unit_no,
+          )
+          .catch(() => {});
+      }
+    } catch (error: unknown) {
+      this.logger.warn(
+        `Offline check failed for unit ${unit.unit_no}: ${(error as Error).message}`,
+      );
+    }
+  }
+
+  private async resolveOfflineAnomaly(
+    deviceId: string,
+    unitNumber: string,
+  ): Promise<void> {
+    try {
+      const cachedAnomalies = this.anomalyCache.get(unitNumber);
+      if (
+        cachedAnomalies?.some(
+          (anomaly) => anomaly.anomalyType === 'device_offline',
+        )
+      ) {
         this.anomalyCache.set(
-          unitNo,
-          cached.filter((a) => a.anomalyType !== 'device_offline'),
+          unitNumber,
+          cachedAnomalies.filter(
+            (anomaly) => anomaly.anomalyType !== 'device_offline',
+          ),
         );
       }
-      const active = await this.anomalyRepo.findOne({
+
+      const activeOfflineAnomaly = await this.anomalyRepo.findOne({
         where: {
           device_id: deviceId,
           type: 'device_offline',
           resolved_at: IsNull(),
         },
       });
-      if (active) {
-        active.resolved_at = new Date();
-        await this.anomalyRepo.save(active);
-      }
-    } catch {
-      // Best-effort — do not propagate
+
+      if (!activeOfflineAnomaly) return;
+
+      activeOfflineAnomaly.resolved_at = new Date();
+      await this.anomalyRepo.save(activeOfflineAnomaly);
+    } catch (error: unknown) {
+      this.logger.warn(
+        `resolveOfflineAnomaly failed for ${deviceId}: ${(error as Error).message}`,
+      );
     }
   }
 
-  private async syncAnomaliesToDb(
-    unitNo: string,
-    computed: AnomalyItem[],
+  private async syncAnomaliesToDatabase(
+    unitNumber: string,
+    computedAnomalies: AnomalyItem[],
   ): Promise<void> {
     try {
-      const unit = await this.unitService.findByUnitNo(unitNo);
-      if (!unit || !unit.device_id) return;
+      const unit = await this.unitService.findByUnitNo(unitNumber);
+      if (!unit?.device_id) return;
 
-      const activeAnomalies = await this.anomalyRepo.find({
+      const activeAnomaliesInDb = await this.anomalyRepo.find({
         where: { device_id: unit.device_id, resolved_at: IsNull() },
       });
 
-      const computedTypes = computed.map((c) => c.anomalyType);
-      const activeTypes = activeAnomalies.map((a) => a.type);
+      const computedAnomalyTypes = computedAnomalies.map(
+        (anomaly) => anomaly.anomalyType,
+      );
+      const activeAnomalyTypesInDb = activeAnomaliesInDb.map(
+        (anomaly) => anomaly.type as AnomalyType,
+      );
 
-      // Mark resolved
-      for (const active of activeAnomalies) {
-        if (!computedTypes.includes(active.type as AnomalyType)) {
-          active.resolved_at = new Date();
-          await this.anomalyRepo.save(active);
-        }
+      for (const activeAnomaly of activeAnomaliesInDb) {
+        if (computedAnomalyTypes.includes(activeAnomaly.type as AnomalyType))
+          continue;
+        activeAnomaly.resolved_at = new Date();
+        await this.anomalyRepo.save(activeAnomaly);
       }
 
-      // Insert new
-      for (const comp of computed) {
-        if (!activeTypes.includes(comp.anomalyType)) {
-          await this.anomalyRepo.save({
-            device_id: unit.device_id,
-            type: comp.anomalyType,
-            severity: comp.severity,
-            description: comp.message,
-            action_taken: JSON.stringify(comp.metadata),
-          });
+      for (const computedAnomaly of computedAnomalies) {
+        if (activeAnomalyTypesInDb.includes(computedAnomaly.anomalyType))
+          continue;
 
-          // Proactive Resident Notification (Spec 2.1.8)
-          if (
-            unit.resident_email &&
-            (comp.severity === 'critical' || comp.severity === 'warning')
-          ) {
-            const subject = `[NetFlow Alert] ${comp.anomalyType.toUpperCase()} on Unit ${unitNo}`;
-            void this.notificationService
-              .sendResidentNotification(
-                unit.resident_email,
-                subject,
-                comp.message,
-              )
-              .catch(() => {});
-          }
+        await this.anomalyRepo.save({
+          device_id: unit.device_id,
+          type: computedAnomaly.anomalyType,
+          severity: computedAnomaly.severity,
+          description: computedAnomaly.message,
+          action_taken: JSON.stringify(computedAnomaly.metadata),
+        });
 
-          // Admin Telegram Notification
-          if (comp.severity === 'critical' || comp.severity === 'warning') {
-            const lastAdminAlert =
-              this.adminAlertCooldown.get(comp.anomalyType) ?? 0;
-            if (Date.now() - lastAdminAlert > ADMIN_ALERT_COOLDOWN_MS) {
-              await this.getAdmins()
-                .then(async (admins) => {
-                  const sends: Promise<void>[] = [];
-                  for (const admin of admins) {
-                    if (admin.telegram_chat_id) {
-                      sends.push(
-                        this.notificationService.sendTelegram(
-                          admin.telegram_chat_id,
-                          `🚨 *[Admin Alert]* ${comp.anomalyType.toUpperCase()} — Unit ${unitNo}\n\n${comp.message}`,
-                        ),
-                      );
-                    }
-                  }
-                  await Promise.allSettled(sends);
-                  this.adminAlertCooldown.set(comp.anomalyType, Date.now());
-                })
-                .catch(() => {});
-            }
-          }
+        const shouldNotifyResident =
+          unit.resident_email &&
+          (computedAnomaly.severity === 'critical' ||
+            computedAnomaly.severity === 'warning') &&
+          computedAnomaly.target !== 'admin';
+
+        if (shouldNotifyResident) {
+          void this.notificationService
+            .notifyResidentOfAnomaly(
+              unit.resident_email as string,
+              computedAnomaly,
+              unitNumber,
+            )
+            .catch(() => {});
+        }
+
+        const shouldNotifyAdmin =
+          computedAnomaly.severity === 'critical' ||
+          computedAnomaly.severity === 'warning';
+
+        if (shouldNotifyAdmin) {
+          void this.notificationService
+            .notifyAdminsOfAnomaly(computedAnomaly, unitNumber)
+            .catch(() => {});
         }
       }
-    } catch {
-      // Best-effort sync
+    } catch (error: unknown) {
+      this.logger.warn(
+        `syncAnomaliesToDatabase failed for ${unitNumber}: ${(error as Error).message}`,
+      );
     }
+  }
+
+  private async computeAndCacheAnomalies(
+    unitNumber: string,
+  ): Promise<AnomalyItem[]> {
+    const unit = await this.unitService.findByUnitNo(unitNumber);
+
+    const readings = unit.device_id
+      ? await this.meterReadingRepo.find({
+          where: { device_id: unit.device_id },
+          order: { time: 'DESC' },
+          take: CFG.meterReadingsWindowSize,
+        })
+      : [];
+
+    const detectionContext = {
+      unit: {
+        unit_no: unit.unit_no,
+        device_id: unit.device_id,
+        token_electricity: Number(unit.token_electricity),
+        token_water: Number(unit.token_water),
+        relay_status: unit.relay_status,
+        valve_status: unit.valve_status,
+        resident_email: unit.resident_email,
+      },
+      readings,
+      latestMqttArrivalMs: this.lastTelemetryArrivalMs.get(unitNumber) ?? 0,
+      detectionTimestamp: new Date().toISOString(),
+    };
+
+    const detectedAnomalies = this.detectionService.detectAll(detectionContext);
+    this.anomalyCache.set(unitNumber, detectedAnomalies);
+    return detectedAnomalies;
   }
 
   private pruneMaps(): void {
     const now = Date.now();
-    const staleThreshold = 24 * 60 * 60 * 1000; // 24 hours
+    const staleThresholdMs = CFG.memoryPruneAgeMs;
 
-    const prune = (map: Map<string, number | any[]>) => {
-      for (const [key, value] of map.entries()) {
-        const timestamp = typeof value === 'number' ? value : now; // Fallback for cache
-        if (now - timestamp > staleThreshold) map.delete(key);
-      }
-    };
-
-    prune(this.lastTelemetryArrivalMs);
-    prune(this.lastTelemetryRefresh);
-    prune(this.lastSafetyCommandMs);
-
-    // Manual prune for anomalyCache since it stores objects, not timestamps
-    if (this.anomalyCache.size > 5000) this.anomalyCache.clear();
-  }
-
-  private async getAdmins(): Promise<Resident[]> {
-    if (!this.cachedAdmins || Date.now() - this.adminsCachedAt > 60 * 1_000) {
-      this.cachedAdmins = await this.residentsService.findAdmins();
-      this.adminsCachedAt = Date.now();
+    for (const [key, timestamp] of this.lastTelemetryArrivalMs.entries()) {
+      if (now - timestamp > staleThresholdMs)
+        this.lastTelemetryArrivalMs.delete(key);
     }
-    return this.cachedAdmins;
-  }
-
-  private formatOfflineSummary(
-    newlyOfflineUnits: Array<{ unitNo: string }>,
-  ): string {
-    const shownUnits = newlyOfflineUnits
-      .slice(0, 10)
-      .map((unit) => unit.unitNo)
-      .join(', ');
-    const hiddenCount = newlyOfflineUnits.length - 10;
-    const suffix = hiddenCount > 0 ? ` (+${hiddenCount} more)` : '';
-    return `\u{1F6A8} ${newlyOfflineUnits.length} unit offline: ${shownUnits}${suffix}`;
-  }
-
-  // ── Core detection ─────────────────────────────────────────────────────────
-
-  private async computeAll(unitNo: string): Promise<AnomalyItem[]> {
-    const unit = await this.unitService.findByUnitNo(unitNo);
-
-    const anomalies: AnomalyItem[] = [];
-    const now = new Date().toISOString();
-
-    // No device assigned → cannot determine online status; skip device_offline.
-    if (!unit.device_id) {
-      if (
-        unit.token_electricity > 0 &&
-        unit.token_electricity < LOW_TOKEN_THRESHOLD_KWH
-      ) {
-        anomalies.push({
-          anomalyType: 'low_token',
-          severity: 'warning',
-          target: 'resident',
-          message: `Token listrik hampir habis: ${Number(unit.token_electricity).toFixed(2)} kWh. Segera top-up.`,
-          metadata: {
-            token_kwh: unit.token_electricity,
-            threshold_kwh: LOW_TOKEN_THRESHOLD_KWH,
-          },
-          detectedAt: now,
-        });
-      }
-      return anomalies;
+    for (const [key, timestamp] of this.lastTelemetryRefreshMs.entries()) {
+      if (now - timestamp > staleThresholdMs)
+        this.lastTelemetryRefreshMs.delete(key);
     }
-
-    const readings = await this.meterRepo.find({
-      where: { device_id: unit.device_id },
-      order: { time: 'DESC' },
-      take: 60,
-    });
-
-    const latest = readings[0] ?? null;
-    const arrivalMs = this.lastTelemetryArrivalMs.get(unit.unit_no) ?? 0;
-    const dbAgeMs = latest
-      ? Date.now() - new Date(latest.time).getTime()
-      : Infinity;
-
-    // Logic fix: A device is truly offline ONLY if no MQTT has arrived recently
-    // AND the DB readings are old. This handles timezone mismatches better.
-    const isMqttRecent = Date.now() - arrivalMs < 60_000;
-    const isOnline = isMqttRecent || dbAgeMs < OFFLINE_THRESHOLD_MS;
-
-    if (!isOnline) {
-      anomalies.push({
-        anomalyType: 'device_offline',
-        severity: 'critical',
-        target: 'admin',
-        message: `Perangkat unit ${unitNo} offline. Tidak ada data masuk selama ${Math.floor(dbAgeMs / 60_000)} menit.`,
-        metadata: {
-          last_seen_ms: dbAgeMs,
-          offline_threshold_ms: OFFLINE_THRESHOLD_MS,
-        },
-        detectedAt: now,
-      });
+    for (const [key, timestamp] of this.lastSafetyCommandMs.entries()) {
+      if (now - timestamp > staleThresholdMs)
+        this.lastSafetyCommandMs.delete(key);
     }
-
-    if (unit.token_electricity > 0 && unit.token_electricity < 5) {
-      anomalies.push({
-        anomalyType: 'low_token',
-        severity: 'warning',
-        target: 'resident',
-        message: `Token listrik hampir habis: ${Number(unit.token_electricity).toFixed(2)} kWh. Segera top-up.`,
-        metadata: {
-          token_kwh: unit.token_electricity,
-          threshold_kwh: 5,
-        },
-        detectedAt: now,
-      });
+    if (this.anomalyCache.size > CFG.anomalyCacheMaxSize) {
+      this.anomalyCache.clear();
     }
-
-    if (unit.token_water > 0 && unit.token_water < LOW_TOKEN_THRESHOLD_M3) {
-      anomalies.push({
-        anomalyType: 'low_token',
-        severity: 'warning',
-        target: 'resident',
-        message: `Token air hampir habis: ${Number(unit.token_water).toFixed(2)} m³. Segera top-up.`,
-        metadata: {
-          token_m3: unit.token_water,
-          threshold_m3: LOW_TOKEN_THRESHOLD_M3,
-        },
-        detectedAt: now,
-      });
-    }
-
-    // Don't return early if offline! We still want to see the last detected
-    // anomalies from the data we DO have.
-    if (!latest) return anomalies;
-
-    const last10 = readings.slice(0, 10);
-    if (last10.length >= 5) {
-      // Logic fix: 0 is a VALID reading (sensor is alive, just no load).
-      // Sensor malfunction only fires if data is strictly NULL or NaN (missing).
-      const allNull = last10.every((r) => {
-        const isNull = (v: unknown) =>
-          v === null || v === undefined || isNaN(Number(v));
-        return isNull(r.power) && isNull(r.voltage) && isNull(r.water_flow);
-      });
-
-      if (allNull) {
-        anomalies.push({
-          anomalyType: 'sensor_malfunction',
-          severity: 'warning',
-          target: 'both',
-          message: `Sensor tidak merespons: ${last10.length} pembacaan terakhir semua kosong.`,
-          metadata: { readings_checked: last10.length },
-          detectedAt: now,
-        });
-        return anomalies;
-      }
-    }
-
-    const pw = latest.power ?? 0;
-    const wf = latest.water_flow ?? 0;
-
-    const elecBypassed =
-      Number(unit.token_electricity) <= 0 && !unit.relay_status && pw > 5;
-    const waterBypassed =
-      Number(unit.token_water) <= 0 && !unit.valve_status && wf > 0.1;
-    if (elecBypassed || waterBypassed) {
-      const parts: string[] = [];
-      if (elecBypassed) parts.push(`listrik: ${pw.toFixed(0)} W (relay OFF)`);
-      if (waterBypassed)
-        parts.push(`air: ${wf.toFixed(2)} L/min (valve CLOSE)`);
-      anomalies.push({
-        anomalyType: 'jailbreak',
-        severity: 'critical',
-        target: 'admin',
-        message: `Bypass terdeteksi pada unit ${unitNo}: cutoff aktif tapi sensor masih aktif — ${parts.join(', ')}.`,
-        metadata: {
-          token_kwh: unit.token_electricity,
-          token_m3: unit.token_water,
-          relay_status: unit.relay_status,
-          valve_status: unit.valve_status,
-          power_w: pw,
-          flow_lpm: wf,
-        },
-        detectedAt: now,
-      });
-    }
-
-    if (pw > MCB_WATT_LIMIT) {
-      anomalies.push({
-        anomalyType: 'mcb_trip',
-        severity: 'critical',
-        target: 'both',
-        message: `Daya melebihi kapasitas MCB: ${pw.toFixed(0)} W (batas ${MCB_WATT_LIMIT} W).`,
-        metadata: { power_w: pw, limit_w: MCB_WATT_LIMIT },
-        detectedAt: now,
-      });
-    }
-
-    if (latest.voltage !== null && latest.voltage > 0) {
-      const v = latest.voltage;
-      if (v < VOLTAGE_MIN || v > VOLTAGE_MAX) {
-        const isCritical =
-          v < VOLTAGE_CRITICAL_LOW || v > VOLTAGE_CRITICAL_HIGH;
-        anomalies.push({
-          anomalyType: 'voltage_anomaly',
-          severity: isCritical ? 'critical' : 'warning',
-          target: 'both',
-          message:
-            v > VOLTAGE_MAX
-              ? `Tegangan terlalu tinggi: ${v.toFixed(1)} V (aman: ${VOLTAGE_MIN}–${VOLTAGE_MAX} V).`
-              : `Tegangan terlalu rendah: ${v.toFixed(1)} V (aman: ${VOLTAGE_MIN}–${VOLTAGE_MAX} V).`,
-          metadata: {
-            voltage_v: v,
-            safe_min_v: VOLTAGE_MIN,
-            safe_max_v: VOLTAGE_MAX,
-          },
-          detectedAt: now,
-        });
-      }
-    }
-
-    if (
-      latest.power !== null &&
-      latest.voltage !== null &&
-      latest.current !== null &&
-      latest.current > 0.1 &&
-      latest.power > LOW_PF_MIN_POWER_W
-    ) {
-      const apparent = latest.voltage * latest.current;
-      if (apparent > 0) {
-        const pf = latest.power / apparent;
-        if (pf < LOW_PF_THRESHOLD) {
-          anomalies.push({
-            anomalyType: 'low_power_factor',
-            severity: 'warning',
-            target: 'both',
-            message: `Faktor daya rendah: ${(pf * 100).toFixed(0)}% (minimum ${LOW_PF_THRESHOLD * 100}%).`,
-            metadata: {
-              power_factor: parseFloat(pf.toFixed(3)),
-              real_w: latest.power,
-              apparent_va: parseFloat(apparent.toFixed(2)),
-            },
-            detectedAt: now,
-          });
-        }
-      }
-    }
-
-    const powerReadings = readings
-      .map((r) => r.power)
-      .filter((p): p is number => p !== null && p >= 0);
-    if (powerReadings.length >= 10 && (latest.power ?? 0) > 0) {
-      const baseline = powerReadings.slice(5);
-      if (baseline.length >= 5) {
-        const avgBaseline =
-          baseline.reduce((a, b) => a + b, 0) / baseline.length;
-        const currentPower = latest.power ?? 0;
-        if (
-          avgBaseline > SPIKE_MIN_BASELINE_W &&
-          currentPower > avgBaseline * SPIKE_MULTIPLIER &&
-          currentPower > SPIKE_MIN_W
-        ) {
-          anomalies.push({
-            anomalyType: 'usage_spike',
-            severity: 'warning',
-            target: 'both',
-            message: `Lonjakan konsumsi: ${currentPower.toFixed(0)} W (${(currentPower / avgBaseline).toFixed(1)}× rata-rata ${avgBaseline.toFixed(0)} W).`,
-            metadata: {
-              current_w: currentPower,
-              baseline_avg_w: parseFloat(avgBaseline.toFixed(2)),
-              multiplier: parseFloat((currentPower / avgBaseline).toFixed(2)),
-            },
-            detectedAt: now,
-          });
-        }
-      }
-    }
-
-    const leakAnomaly = this.detectWaterLeak(readings);
-    if (leakAnomaly) anomalies.push(leakAnomaly);
-
-    return anomalies;
-  }
-
-  private detectWaterLeak(readings: MeterReading[]): AnomalyItem | null {
-    if (readings.length < 30) return null;
-    const flows = readings
-      .map((r) => r.water_flow)
-      .filter((f): f is number => f !== null);
-    const nonZero = flows.filter((f) => f > 0.05);
-    if (nonZero.length < readings.length * 0.9 || nonZero.length < 30)
-      return null;
-    const mean = nonZero.reduce((a, b) => a + b, 0) / nonZero.length;
-    if (mean < WATER_LEAK_MIN_FLOW_LPM) return null;
-    const variance =
-      nonZero.reduce((sum, f) => sum + Math.pow(f - mean, 2), 0) /
-      nonZero.length;
-    const cov = Math.sqrt(variance) / mean;
-    if (cov >= WATER_LEAK_MAX_COV) return null;
-    return {
-      anomalyType: 'water_leak',
-      severity: 'warning',
-      target: 'both',
-      message: `Kemungkinan kebocoran: debit rata-rata ${mean.toFixed(2)} L/menit konstan dalam ${readings.length} pembacaan.`,
-      metadata: {
-        mean_lpm: parseFloat(mean.toFixed(3)),
-        cov: parseFloat(cov.toFixed(3)),
-        readings_checked: readings.length,
-      },
-      detectedAt: new Date().toISOString(),
-    };
   }
 }

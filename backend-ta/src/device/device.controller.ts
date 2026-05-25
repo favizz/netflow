@@ -9,7 +9,7 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { DeviceService } from './device.service';
 import { TELEMETRY_QUEUE } from './telemetry.processor';
-import { AuditLogService } from '../audit-log/audit-log.service';
+import { AuditLogService } from '../admin/audit-log/audit-log.service';
 
 /**
  * MQTT ingestion controller.
@@ -152,10 +152,6 @@ export class DeviceController {
     const topic: string = ctx.getTopic();
     const deviceId = topic.split('/')[1] ?? null;
 
-    this.logger.warn(`TYPE=${typeof data}`);
-    this.logger.warn(`BUFFER=${Buffer.isBuffer(data)}`);
-    this.logger.warn(`RAW=${JSON.stringify(data)}`);
-
     let buf: Buffer | null = null;
     const d = data as Record<string, unknown>;
 
@@ -181,12 +177,10 @@ export class DeviceController {
       // Catch the case where NestJS passes an object like { "0": 0, "1": 0, ... }
       const values = Object.values(d);
       if (values.every((v) => typeof v === 'number')) {
-        buf = Buffer.from(values as number[]);
+        buf = Buffer.from(values);
       }
     }
 
-    // Merge device_id so downstream code does not need to parse the topic.
-    this.logger.warn(`BUF_LEN=${buf?.length}`);
     let payload: Record<string, unknown>;
     if (buf) {
       // Serialize buffer as base64 so BullMQ can store it in Redis JSON.
@@ -196,7 +190,7 @@ export class DeviceController {
         _deviceId: deviceId,
       };
     } else {
-      payload = { ...(d as Record<string, unknown>), _deviceId: deviceId };
+      payload = { ...d, _deviceId: deviceId };
     }
 
     try {
@@ -212,9 +206,10 @@ export class DeviceController {
         `Queue unavailable, processing inline: ${(queueErr as Error).message}`,
       );
       try {
-        // Pass the raw data buffer and explicitly pass the deviceId 
+        // Pass the raw data buffer and explicitly pass the deviceId
         await this.deviceService.saveSensorData(buf || data, deviceId);
-      } catch (err) {        this.logger.error(
+      } catch (err) {
+        this.logger.error(
           `Inline telemetry error for ${deviceId}: ${(err as Error).message}`,
         );
       }

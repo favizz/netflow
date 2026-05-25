@@ -11,14 +11,14 @@ import { Repository } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
-import { AuditLogService } from '../audit-log/audit-log.service';
+import { AuditLogService } from '../admin/audit-log/audit-log.service';
 import { Transaction } from './entities/transaction.entity';
 import { InitiateTopupDto } from './dto/initiate-topup.dto';
 import { PAYMENT_EXPIRY_QUEUE } from './payment-expiry.processor';
 import { createHash } from 'crypto';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PaymentCompletedEvent } from './events/payment-completed.event';
-import { Unit } from '../unit/entities/unit.entity';
+import { Unit } from '../admin/unit/entities/unit.entity';
 
 const PAYMENT_EXPIRY_MS = 30 * 60 * 1_000; // 30 minutes
 
@@ -160,6 +160,14 @@ export class PaymentsService {
       where: { webhook_event_id: eventId },
     });
     if (alreadyProcessed) {
+      void this.auditLogService.log(
+        'midtrans',
+        'TOKEN_PURCHASE',
+        'transaction',
+        alreadyProcessed.id,
+        { event: eventId, status: 'duplicate_webhook' },
+        'info',
+      );
       return { ...this.toResponse(alreadyProcessed), idempotent: true };
     }
 
@@ -207,6 +215,11 @@ export class PaymentsService {
 
     if (finalStatus === 'success') {
       tx.confirmed_at = new Date();
+    }
+
+    await this.txRepo.save(tx);
+
+    if (finalStatus === 'success') {
       this.eventEmitter.emit(
         'payment.completed',
         new PaymentCompletedEvent(
@@ -215,12 +228,10 @@ export class PaymentsService {
           Number(tx.electricity_amount_rp),
           Number(tx.water_amount_rp),
           tx.method,
-          tx.confirmed_at,
+          tx.confirmed_at!,
         ),
       );
     }
-
-    await this.txRepo.save(tx);
 
     if (finalStatus === 'failed') {
       const totalRp =
@@ -254,6 +265,8 @@ export class PaymentsService {
     tx.status = 'success';
     tx.confirmed_at = new Date();
 
+    await this.txRepo.save(tx);
+
     this.eventEmitter.emit(
       'payment.completed',
       new PaymentCompletedEvent(
@@ -265,8 +278,6 @@ export class PaymentsService {
         tx.confirmed_at,
       ),
     );
-
-    await this.txRepo.save(tx);
 
     const totalRp =
       Number(tx.electricity_amount_rp) + Number(tx.water_amount_rp);

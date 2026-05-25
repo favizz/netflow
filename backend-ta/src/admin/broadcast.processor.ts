@@ -3,7 +3,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { encodeCommand } from '../common/binary-codec';
 import { AdminService } from './admin.service';
-import { UnitService } from '../unit/unit.service';
+import { UnitService } from './unit/unit.service';
 
 interface CommandJobData {
   commandType: 'relay' | 'valve';

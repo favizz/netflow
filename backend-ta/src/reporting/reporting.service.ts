@@ -2,7 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { MeterReading } from '../device/entities/device.entity';
-import { Unit } from '../unit/entities/unit.entity';
+import { Unit } from '../admin/unit/entities/unit.entity';
 
 export interface TrendPoint {
   bucket: string;
@@ -34,13 +34,21 @@ export class ReportingService {
         ? `DATE_FORMAT(time, '%Y-%m-%d')`
         : `DATE_FORMAT(time, '%Y-%m')`;
 
-    const intervalExpr =
+    // Fetch one extra period so the LAG() for the first row in the window has a
+    // valid previous value. Without this, the first bucket always shows delta=0.
+    const fetchInterval =
+      period === 'daily'
+        ? `DATE_SUB(NOW(), INTERVAL 31 DAY)`
+        : `DATE_SUB(NOW(), INTERVAL 13 MONTH)`;
+
+    const windowStart =
       period === 'daily'
         ? `DATE_SUB(NOW(), INTERVAL 30 DAY)`
         : `DATE_SUB(NOW(), INTERVAL 12 MONTH)`;
 
-    // Single aggregation query - partition elimination applies automatically.
-    // Energy delta (MAX – MIN) is the physically correct consumption per period.
+    // Use LAG() to compute per-row deltas. GREATEST(0, delta) discards sensor-reset
+    // rows where energy_total or water_total drops, so the aggregated consumption
+    // is correct even when the sensor counter resets mid-period.
     const rows: Array<{
       bucket: string;
       kwh: string;
@@ -50,17 +58,31 @@ export class ReportingService {
       cnt: string;
     }> = await this.meterRepo.query(
       `SELECT
-         ${bucketExpr}                                                                    AS bucket,
-         GREATEST(0, COALESCE(MAX(energy_total), 0) - COALESCE(MIN(energy_total), 0))  AS kwh,
-         GREATEST(0, COALESCE(MAX(water_total),  0) - COALESCE(MIN(water_total),  0))  AS water_m3,
-         AVG(power)                                                                     AS avg_power,
-         AVG(water_flow)                                                                AS avg_flow,
-         COUNT(*)                                                                       AS cnt
-       FROM meter_readings
-       WHERE device_id = ?
-         AND time >= ${intervalExpr}
-       GROUP BY ${bucketExpr}
-       ORDER BY bucket ASC
+         sub.bucket                              AS bucket,
+         SUM(GREATEST(0, sub.energy_delta))      AS kwh,
+         SUM(GREATEST(0, sub.water_delta))       AS water_m3,
+         AVG(sub.power)                          AS avg_power,
+         AVG(sub.water_flow)                     AS avg_flow,
+         COUNT(*)                                AS cnt
+       FROM (
+         SELECT
+           ${bucketExpr}                                                          AS bucket,
+           time,
+           COALESCE(energy_total, 0)
+             - LAG(COALESCE(energy_total, 0), 1, COALESCE(energy_total, 0))
+               OVER (ORDER BY time)                                               AS energy_delta,
+           COALESCE(water_total, 0)
+             - LAG(COALESCE(water_total, 0), 1, COALESCE(water_total, 0))
+               OVER (ORDER BY time)                                               AS water_delta,
+           power,
+           water_flow
+         FROM meter_readings
+         WHERE device_id = ?
+           AND time >= ${fetchInterval}
+       ) sub
+       WHERE sub.time >= ${windowStart}
+       GROUP BY sub.bucket
+       ORDER BY sub.bucket ASC
        LIMIT 30`,
       [unit.device_id],
     );

@@ -1,26 +1,60 @@
 export type AnomalyType =
-  | 'jailbreak' // tokens=0 but sensors show consumption (admin)
-  | 'water_leak' // constant flow CoV test (both)
-  | 'device_offline' // no telemetry > 10 min (admin)
-  | 'mcb_trip' // power > 1300 W (both)
-  | 'low_token' // tokens < threshold (resident)
-  | 'voltage_anomaly' // voltage outside 198–242 V (both)
-  | 'sensor_malfunction' // all sensor values null (both)
-  | 'low_power_factor' // PF = P/(V×I) < 0.6 (both)
-  | 'usage_spike' // power > 3× historical average (both)
-  | 'topup_success'; // topup confirmed (resident) — reserved for future use
+  | 'jailbreak'
+  | 'water_leak'
+  | 'device_offline'
+  | 'mcb_trip'
+  | 'low_electricity_token'
+  | 'low_water_token'
+  | 'voltage_anomaly'
+  | 'sensor_malfunction'
+  | 'low_power_factor'
+  | 'usage_spike'
+  | 'zero_flow'
+  | 'backflow';
 
 export type AnomalySeverity = 'critical' | 'warning';
 
-/** Who receives this anomaly in their view */
 export type AnomalyTarget = 'resident' | 'admin' | 'both';
 
 export interface AnomalyItem {
   anomalyType: AnomalyType;
   severity: AnomalySeverity;
-  /** Filtered out of resident responses when target === 'admin' */
   target: AnomalyTarget;
   message: string;
   metadata: Record<string, unknown>;
   detectedAt: string;
+}
+
+export interface AnomalyDetectionContext {
+  unit: {
+    unit_no: string;
+    device_id: string | null;
+    token_electricity: number;
+    token_water: number;
+    relay_status: boolean;
+    valve_status: boolean;
+    resident_email: string | null;
+  };
+  readings: Array<{
+    time: Date;
+    device_id: string;
+    voltage: number | null;
+    current: number | null;
+    power: number | null;
+    water_flow: number | null;
+    energy_total: number | null;
+    water_total: number | null;
+  }>;
+  latestMqttArrivalMs: number;
+  detectionTimestamp: string;
+}
+
+export interface SafetyCommand {
+  deviceId: string;
+  actuatorType: 'relay' | 'valve';
+  triggerReason:
+    | 'jailbreak_electricity'
+    | 'jailbreak_water'
+    | 'mcb_trip'
+    | 'overvoltage';
 }

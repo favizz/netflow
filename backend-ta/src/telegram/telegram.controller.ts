@@ -1,5 +1,12 @@
-import { Body, Controller, HttpCode, Post } from '@nestjs/common';
-import { ResidentsService } from '../residents/residents.service';
+import {
+  Body,
+  Controller,
+  Headers,
+  HttpCode,
+  Post,
+  UnauthorizedException,
+} from '@nestjs/common';
+import { ResidentsService } from '../admin/residents/residents.service';
 import { NotificationService } from '../notification/notification.service';
 import { ConfigService } from '@nestjs/config';
 import { Logger } from '@nestjs/common';
@@ -28,7 +35,16 @@ export class TelegramController {
 
   @Post('webhook')
   @HttpCode(200)
-  async handleWebhook(@Body() update: TelegramUpdate): Promise<void> {
+  async handleWebhook(
+    @Body() update: TelegramUpdate,
+    @Headers('x-telegram-bot-api-secret-token') secretHeader?: string,
+  ): Promise<void> {
+    const expectedSecret = this.configService.get<string>(
+      'TELEGRAM_WEBHOOK_SECRET',
+    );
+    if (expectedSecret && secretHeader !== expectedSecret) {
+      throw new UnauthorizedException('Invalid Telegram webhook secret');
+    }
     const msg = update.message;
     if (!msg?.text) return;
 

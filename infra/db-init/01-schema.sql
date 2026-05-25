@@ -120,13 +120,14 @@ CREATE TABLE IF NOT EXISTS auth_refresh_tokens (
 CREATE TABLE IF NOT EXISTS anomalies (
   id           INT AUTO_INCREMENT PRIMARY KEY COMMENT 'Unique identifier for the anomaly event.',
   device_id    VARCHAR(100) NOT NULL           COMMENT 'Hardware ID where the anomaly was detected.',
-  type         VARCHAR(50)  NOT NULL           COMMENT 'Categorization of the event, e.g., leak or offline.',
-  severity     VARCHAR(20)  NOT NULL           COMMENT 'Impact level of the event, e.g., critical.',
+  type         VARCHAR(50)  NOT NULL           COMMENT 'Categorization of the event: jailbreak | water_leak | device_offline | mcb_trip | low_electricity_token | low_water_token | voltage_anomaly | sensor_malfunction | low_power_factor | usage_spike | zero_flow | backflow.',
+  severity     VARCHAR(20)  NOT NULL           COMMENT 'Impact level: critical | warning.',
   description  TEXT         NOT NULL           COMMENT 'Human-readable details of the detection.',
   action_taken TEXT         NULL               COMMENT 'Notes on remediation or admin response.',
   created_at   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Timestamp of initial detection.',
-  resolved_at  DATETIME     NULL               COMMENT 'Timestamp when the event was closed.',
-  CONSTRAINT fk_anomalies_device FOREIGN KEY (device_id) REFERENCES units(device_id) ON DELETE CASCADE
+  resolved_at  DATETIME     NULL               COMMENT 'Timestamp when the event was closed. NULL = still active.',
+  CONSTRAINT fk_anomalies_device FOREIGN KEY (device_id) REFERENCES units(device_id) ON DELETE CASCADE,
+  INDEX idx_anomalies_device_resolved_type (device_id, resolved_at, type)
 );
 
 -- 9. AUDIT LOGS

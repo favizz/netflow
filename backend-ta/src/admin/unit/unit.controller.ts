@@ -9,13 +9,14 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { AdminJwtGuard } from '../common/guards/admin-jwt.guard';
-import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { AdminJwtGuard } from '../../common/guards/admin-jwt.guard';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CreateUnitDto } from './dto/create-unit.dto';
 import { UpdateUnitDto } from './dto/update-unit.dto';
 import { UnitService } from './unit.service';
-import { CurrentUser } from '../auth/current-user.decorator';
-import type { JwtPayload } from '../auth/interfaces/jwt-payload.interface';
+import { CurrentUser } from '../../auth/current-user.decorator';
+import type { JwtPayload } from '../../auth/interfaces/jwt-payload.interface';
+import { assertUnitAccess } from '../../common/assert-unit-access';
 
 @Controller('unit')
 export class UnitController {
@@ -35,11 +36,12 @@ export class UnitController {
 
   @UseGuards(JwtAuthGuard)
   @Get('dashboard/:unitNo')
-  dashboard(@Param('unitNo') unitNo: string) {
+  dashboard(@Param('unitNo') unitNo: string, @CurrentUser() user: JwtPayload) {
+    assertUnitAccess(user, unitNo);
     return this.unitService.getOwnerDashboard(unitNo);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(AdminJwtGuard)
   @Get('connectivity')
   connectivity(@Query('tower') tower?: string) {
     return this.unitService.getTowerConnectivity(tower);
@@ -93,7 +95,11 @@ export class UnitController {
 
   @UseGuards(JwtAuthGuard)
   @Get(':unitNo/notifications')
-  notifications(@Param('unitNo') unitNo: string) {
+  notifications(
+    @Param('unitNo') unitNo: string,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    assertUnitAccess(user, unitNo);
     return this.unitService.getUnitNotifications(unitNo);
   }
 }

@@ -1,8 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { DataSource } from 'typeorm';
-import { MeterReading } from '../device/entities/device.entity';
-import { Transaction } from '../payments/entities/transaction.entity';
+import { MeterReading } from '../../device/entities/device.entity';
+import { Transaction } from '../../payments/entities/transaction.entity';
 
 @Injectable()
 export class RetentionService {
