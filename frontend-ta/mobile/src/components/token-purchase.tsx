@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { CheckCircle, Zap, Droplets, QrCode, Building2, Copy, Check, ArrowLeft, Info, Clock, Wallet } from "lucide-react"
 import { toast } from "sonner"
 import { Card } from "@/components/ui/card"
@@ -70,6 +70,7 @@ const BCA_STEPS = {
 }
 
 type Step = "amount" | "method" | "instruction" | "success"
+type TopupStatus = "pending" | "success" | "failed" | "expired" | string
 
 interface TokenPurchaseProps {
   unitId: string
@@ -101,6 +102,32 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
   const elecAmount  = parseRp(electricityRaw)
   const waterAmount = parseRp(waterRaw)
   const totalAmount = elecAmount + waterAmount
+
+  const completePayment = useCallback((paidTransactionId: string, automatic = false) => {
+    setTransactionId(paidTransactionId)
+    setStep("success")
+    if (automatic) {
+      toast.success("Pembayaran terkonfirmasi otomatis")
+    }
+  }, [])
+
+  const handleTopupStatus = useCallback((status: TopupStatus, paidTransactionId: string, silent = false): boolean => {
+    if (status === "success") {
+      completePayment(paidTransactionId, silent)
+      return true
+    }
+
+    if (status === "expired" || status === "failed") {
+      toast.error("Transaksi sudah tidak aktif. Silakan buat transaksi baru.")
+      return true
+    }
+
+    if (!silent) {
+      toast.error("Pembayaran belum terkonfirmasi. Selesaikan pembayaran lalu coba lagi.")
+    }
+
+    return false
+  }, [completePayment])
 
   useEffect(() => {
     if (step !== "instruction") return
@@ -172,20 +199,59 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
     setLoading(true)
     try {
       const result = await api.getTopupStatus(unitId, initResult.transactionId)
-      if (result.status === 'success') {
-        setTransactionId(initResult.transactionId)
-        setStep("success")
-      } else if (result.status === 'expired') {
-        toast.error("Transaksi sudah kadaluarsa. Silakan buat transaksi baru.")
-      } else {
-        toast.error("Pembayaran belum terkonfirmasi. Selesaikan pembayaran lalu coba lagi.")
-      }
+      handleTopupStatus(result.status, initResult.transactionId)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Gagal memeriksa status. Coba lagi.")
     } finally {
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    if (step !== "instruction" || !initResult) return
+
+    let active = true
+    let checking = false
+    let intervalId: number | undefined
+
+    const checkStatus = async () => {
+      if (checking) return
+      checking = true
+      try {
+        const result = await api.getTopupStatus(unitId, initResult.transactionId)
+        if (!active) return
+        const done = handleTopupStatus(result.status, initResult.transactionId, true)
+        if (done) {
+          active = false
+          if (intervalId !== undefined) {
+            window.clearInterval(intervalId)
+          }
+        }
+      } catch {
+        // Keep waiting; the manual button still surfaces errors to the user.
+      } finally {
+        checking = false
+      }
+    }
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void checkStatus()
+      }
+    }
+
+    void checkStatus()
+    intervalId = window.setInterval(() => void checkStatus(), 5_000)
+    document.addEventListener("visibilitychange", onVisibilityChange)
+
+    return () => {
+      active = false
+      if (intervalId !== undefined) {
+        window.clearInterval(intervalId)
+      }
+      document.removeEventListener("visibilitychange", onVisibilityChange)
+    }
+  }, [handleTopupStatus, initResult, step, unitId])
 
   const copyVA = (text: string) => {
     void navigator.clipboard.writeText(text).then(() => {
@@ -546,7 +612,7 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
             )}
 
             <p className="text-xs text-center text-muted-foreground px-4">
-              Tekan konfirmasi setelah pembayaran selesai. Status akan diperbarui otomatis.
+              Status akan diperbarui otomatis. Anda juga bisa menekan konfirmasi setelah pembayaran selesai.
             </p>
           </>
         )}

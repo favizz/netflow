@@ -47,6 +47,12 @@ export class TelemetryProcessor
       const payload = job.data;
       if (payload?._isBuffer && typeof payload._data === 'string') {
         const buf = Buffer.from(payload._data as string, 'base64');
+        if (buf.length !== 21 && buf.length !== 25) {
+          this.logger.warn(
+            `Telemetry job ${job.id} ignored invalid binary length: ${buf.length}`,
+          );
+          return;
+        }
         const deviceId = payload._deviceId as string;
         await this.deviceService.saveSensorData({
           ...decodeBinaryPayload(buf),

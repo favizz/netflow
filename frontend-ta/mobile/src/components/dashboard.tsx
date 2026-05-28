@@ -252,9 +252,10 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
         let p: any = null
         const uint8 = new Uint8Array(msg)
 
-        // 1. Try 21-byte custom binary frame
-        if (uint8.length >= 21) {
+        // 1. Try custom binary telemetry frame
+        if (uint8.length === 21 || uint8.length === 25) {
           const view = new DataView(uint8.buffer, uint8.byteOffset, uint8.byteLength)
+          const flagsOffset = uint8.length >= 25 ? 24 : 20
           p = {
             et: view.getUint32(0, false) / 100,
             p:  view.getUint16(4, false) / 10,
@@ -262,8 +263,10 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
             c:  view.getUint16(8, false) / 1000,
             wf: view.getUint16(10, false) / 100,
             wt: view.getUint32(12, false) / 1000,
-            rs: uint8[20] & 1,
-            vs: (uint8[20] >> 1) & 1,
+            te: uint8.length >= 25 ? view.getUint32(16, false) / 1000 : undefined,
+            tw: uint8.length >= 25 ? view.getUint32(20, false) / 1000 : undefined,
+            rs: uint8[flagsOffset] & 1,
+            vs: (uint8[flagsOffset] >> 1) & 1,
           }
         }
 

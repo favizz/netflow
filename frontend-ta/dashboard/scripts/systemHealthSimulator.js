@@ -50,17 +50,18 @@ const ADMIN_TOKEN = process.env.ADMIN_TOKEN     || '';
 const TEST_DEVICE = `DEV-${process.env.TEST_UNIT_NO || 'A-0001'}`;
 const TEST_UNIT   = process.env.TEST_UNIT_NO    || 'A-0001';
 
-// 21-byte binary frame
+// 25-byte binary frame
 function encode(t) {
-  const b = Buffer.allocUnsafe(21);
+  const b = Buffer.allocUnsafe(25);
   b.writeUInt32BE(Math.round((t.et ?? 100) * 100),   0);
   b.writeUInt16BE(Math.round((t.p  ?? 200) * 10),    4);
   b.writeUInt16BE(Math.round((t.v  ?? 220) * 10),    6);
   b.writeUInt16BE(Math.round((t.c  ?? 0.9) * 1000),  8);
   b.writeUInt16BE(Math.round((t.wf ?? 1)   * 100),  10);
   b.writeUInt32BE(Math.round((t.wt ?? 10)  * 1000), 12);
-  b.writeUInt32BE(Math.round( t.b  ?? 50000),       16);
-  b[20] = ((t.rs ?? 1) & 1) | (((t.vs ?? 1) & 1) << 1) | (((t.tamper ?? 0) & 1) << 2);
+  b.writeUInt32BE(Math.round((t.te ?? 50) * 1000),  16);
+  b.writeUInt32BE(Math.round((t.tw ?? 10) * 1000),  20);
+  b[24] = ((t.rs ?? 1) & 1) | (((t.vs ?? 1) & 1) << 1) | (((t.tamper ?? 0) & 1) << 2);
   return b;
 }
 

@@ -67,7 +67,7 @@ const FAQ_DATA: FAQSection[] = [
             },
             {
                 question: "What format is the telemetry payload?",
-                answer: "The backend and devices use a compact 21-byte binary frame. The dashboard decodes it in three stages: MessagePack → 21-byte binary (energy×100, power×10, voltage×10, current×1000, waterFlow×100, waterTotal×1000, balance, flags) → JSON fallback. This minimizes MQTT bandwidth.",
+                answer: "The backend and devices use a compact 25-byte binary frame. The dashboard decodes it as fixed-width binary (energy×100, power×10, voltage×10, current×1000, waterFlow×100, waterTotal×1000, electricity token kWh×1000, water token m³×1000, flags) with JSON fallback. This minimizes MQTT bandwidth.",
             },
             {
                 question: "What do the charts on Unit Detail show?",
