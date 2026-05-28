@@ -33,9 +33,19 @@ type LivePoint = {
   kwh: number
   water: number
   watts: number
+  voltage: number
+  current: number
   flowRate: number
   fullDate: string
 }
+
+type LiveMetric = "power" | "voltage" | "current"
+
+const LIVE_METRICS: { id: LiveMetric; label: string }[] = [
+  { id: "power",   label: "Daya"     },
+  { id: "voltage", label: "Tegangan" },
+  { id: "current", label: "Arus"     },
+]
 
 type TrendPoint = {
   date: string
@@ -96,6 +106,7 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
   // ── Konsumsi section ─────────────────────────────────────────────────────
   const [period, setPeriod]             = useState<TimePeriod>("daily")
   const [chartUtility, setChartUtility] = useState<"electricity" | "water">("electricity")
+  const [liveMeterMetric, setLiveMeterMetric] = useState<LiveMetric>("power")
   const [trendData, setTrendData]       = useState<TrendPoint[]>([])
   const [trendLoading, setTrendLoading] = useState(false)
   const [periodKey, setPeriodKey]       = useState(() => getDefaultPeriodKey("daily"))
@@ -243,7 +254,12 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
 
     client.on("error", (err) => {
       setMqttConnected(false)
-      toast.error(`MQTT Error: ${err.message}`)
+      const raw = err?.message ?? String(err)
+      if (raw.includes("Bad username") || raw.includes("Not authorized") || raw.includes("Connection refused")) {
+        toast.error("Data live tidak tersedia. Hubungi pengelola gedung.")
+      } else {
+        toast.error("Koneksi data live terputus. Periksa internet Anda.")
+      }
     })
 
     client.on("message", (t, msg) => {
@@ -283,6 +299,8 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
 
         const now = new Date()
         const watts    = Number(p.p ?? p.active_power_w ?? 0)
+        const voltage  = Number(p.v ?? 0)
+        const current  = Number(p.c ?? 0)
         const flowRate = Number(p.wf ?? p.flow_rate_lpm ?? 0)
         const et       = Number(p.et ?? p.total_energy_kwh ?? 0)
         const wt       = Number(p.wt ?? p.total_volume_m3 ?? 0)
@@ -294,6 +312,8 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
             kwh:      et > 0 ? et : (last?.kwh ?? 0) + watts / 1_000 / 720,
             water:    wt > 0 ? wt : (last?.water ?? 0) + flowRate / 1_000,
             watts,
+            voltage:  Number(voltage.toFixed(1)),
+            current:  Number(current.toFixed(3)),
             flowRate,
             fullDate: now.toISOString(),
           }
@@ -330,11 +350,15 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
   const displayData = isLive ? liveData : trendData
 
   const chartDataKey = isLive
-    ? (chartUtility === "electricity" ? "watts"    : "flowRate")
-    : (chartUtility === "electricity" ? "kwh"      : "water")
+    ? (chartUtility === "electricity"
+        ? (liveMeterMetric === "power" ? "watts" : liveMeterMetric === "voltage" ? "voltage" : "current")
+        : "flowRate")
+    : (chartUtility === "electricity" ? "kwh" : "water")
   const chartUnit = isLive
-    ? (chartUtility === "electricity" ? "W"        : "L/min")
-    : (chartUtility === "electricity" ? "KWh"      : "m³")
+    ? (chartUtility === "electricity"
+        ? (liveMeterMetric === "power" ? "W" : liveMeterMetric === "voltage" ? "V" : "A")
+        : "L/min")
+    : (chartUtility === "electricity" ? "kWh" : "m³")
 
   const latestLive    = liveData[liveData.length - 1]
   const currentWatts  = latestLive?.watts    ?? 0
@@ -481,15 +505,40 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
           </div>
         )}
 
-        {/* Live current metrics */}
+        {/* Live metric sub-selector (electricity only) */}
+        {isLive && chartUtility === "electricity" && (
+          <div className="flex gap-0.5 p-1 bg-muted rounded-xl">
+            {LIVE_METRICS.map(({ id, label }) => (
+              <button
+                key={id}
+                onClick={() => setLiveMeterMetric(id)}
+                className={`flex-1 flex items-center justify-center py-2 px-3 rounded-lg text-xs font-semibold transition-all duration-150 active:scale-95 ${
+                  liveMeterMetric === id
+                    ? "bg-card text-primary shadow-sm"
+                    : "text-muted-foreground active:bg-muted-foreground/10"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Live current value chip */}
         {isLive && (
           <div className="bg-muted/40 rounded-xl p-3">
             {chartUtility === "electricity" ? (
               <>
-                <p className="text-xs text-muted-foreground mb-0.5">Daya Saat Ini</p>
+                <p className="text-xs text-muted-foreground mb-0.5">
+                  {liveMeterMetric === "power" ? "Daya Saat Ini" : liveMeterMetric === "voltage" ? "Tegangan Saat Ini" : "Arus Saat Ini"}
+                </p>
                 <p className="text-xl font-bold text-foreground leading-none">
-                  {currentWatts.toFixed(0)}
-                  <span className="text-xs font-normal text-muted-foreground ml-1">W</span>
+                  {liveMeterMetric === "power"
+                    ? currentWatts.toFixed(0)
+                    : liveMeterMetric === "voltage"
+                      ? (latestLive?.voltage ?? 0).toFixed(1)
+                      : (latestLive?.current ?? 0).toFixed(3)}
+                  <span className="text-xs font-normal text-muted-foreground ml-1">{chartUnit}</span>
                 </p>
               </>
             ) : (
@@ -508,7 +557,7 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
         {isLive && !mqttConnected && (
           <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/40 rounded-xl px-3 py-2">
             <WifiOff size={14} />
-            Menghubungkan ke broker MQTT...
+            Menghubungkan ke perangkat...
           </div>
         )}
 
@@ -535,24 +584,17 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
 
         {/* Stats row */}
         {displayData.length > 0 && (
-          <div className="grid grid-cols-2 gap-3 pt-1 border-t border-border">
-            <div>
-              <p className="text-xs text-muted-foreground">{isLive ? "Maks" : "Total"}</p>
-              <p className="font-bold text-foreground">
-                {isLive
-                  ? Math.max(...displayData.map((d) => (d as unknown as Record<string, number>)[chartDataKey] ?? 0)).toFixed(1)
-                  : totalChart.toFixed(2)
-                }{" "}
-                <span className="text-xs font-normal text-muted-foreground">{chartUnit}</span>
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Rata-rata</p>
-              <p className="font-bold text-foreground">
-                {avgChart.toFixed(2)}{" "}
-                <span className="text-xs font-normal text-muted-foreground">{chartUnit}</span>
-              </p>
-            </div>
+          <div className="pt-1 border-t border-border">
+            <p className="text-xs text-muted-foreground">{isLive ? "Puncak" : "Total"}</p>
+            <p className="font-bold text-foreground">
+              {isLive
+                ? Math.max(...displayData.map((d) => (d as unknown as Record<string, number>)[chartDataKey] ?? 0)).toFixed(
+                    liveMeterMetric === "current" ? 3 : liveMeterMetric === "voltage" ? 1 : chartUtility === "water" ? 2 : 0
+                  )
+                : totalChart.toFixed(2)
+              }{" "}
+              <span className="text-xs font-normal text-muted-foreground">{chartUnit}</span>
+            </p>
           </div>
         )}
       </div>
