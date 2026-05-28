@@ -38,15 +38,16 @@
 //   ESP32 uses HTTPUpdate to fetch and flash; auto-reboots on success.
 
 // ─────────────────────────────────────────────────────────────
-// TELEMETRY FRAME  (21 bytes)  device → backend
+// TELEMETRY FRAME  (25 bytes)  device → backend
 //   bytes  [0:3]  uint32 BE  et × 100     energy_total (kWh, 0.01 precision)
 //   bytes  [4:5]  uint16 BE  p  × 10      power        (W,   0.1  precision)
 //   bytes  [6:7]  uint16 BE  v  × 10      voltage      (V,   0.1  precision)
 //   bytes  [8:9]  uint16 BE  c  × 1000    current      (A,   0.001 precision)
 //   bytes [10:11] uint16 BE  wf × 100     water_flow   (L/min, 0.01 precision)
 //   bytes [12:15] uint32 BE  wt × 1000    water_total  (m³,  0.001 precision)
-//   bytes [16:19] uint32 BE  t            tokens       (kWh, integer portion or combined)
-//   byte  [20]    uint8      flags        bit0=relay_status, bit1=valve_status
+//   bytes [16:19] uint32 BE  te × 1000    electricity token remaining (kWh)
+//   bytes [20:23] uint32 BE  tw × 1000    water token remaining (m³)
+//   byte  [24]    uint8      flags        bit0=relay_status, bit1=valve_status
 
 export interface TelemetryPayload {
   et: number; // energy_total kWh
@@ -55,12 +56,19 @@ export interface TelemetryPayload {
   c: number; // current      A
   wf: number; // water_flow   L/min
   wt: number; // water_total  m³
-  t: number; // tokens       kWh
+  te: number; // electricity token remaining kWh
+  tw: number; // water token remaining mÂ³
   rs: number; // relay_status 0|1
   vs: number; // valve_status 0|1
 }
 
 export function decodeTelemetry(buf: Buffer): TelemetryPayload {
+  if (buf.length < 21) {
+    throw new RangeError(`Telemetry frame too short: ${buf.length} bytes`);
+  }
+
+  const flagsOffset = buf.length >= 25 ? 24 : 20;
+
   return {
     et: buf.readUInt32BE(0) / 100,
     p: buf.readUInt16BE(4) / 10,
@@ -68,22 +76,24 @@ export function decodeTelemetry(buf: Buffer): TelemetryPayload {
     c: buf.readUInt16BE(8) / 1000,
     wf: buf.readUInt16BE(10) / 100,
     wt: buf.readUInt32BE(12) / 1000,
-    t: buf.readUInt32BE(16),
-    rs: buf[20] & 1,
-    vs: (buf[20] >> 1) & 1,
+    te: buf.length >= 25 ? buf.readUInt32BE(16) / 1000 : 0,
+    tw: buf.length >= 25 ? buf.readUInt32BE(20) / 1000 : 0,
+    rs: buf[flagsOffset] & 1,
+    vs: (buf[flagsOffset] >> 1) & 1,
   };
 }
 
 export function encodeTelemetry(t: TelemetryPayload): Buffer {
-  const buf = Buffer.allocUnsafe(21);
+  const buf = Buffer.allocUnsafe(25);
   buf.writeUInt32BE(Math.round(t.et * 100), 0);
   buf.writeUInt16BE(Math.round(t.p * 10), 4);
   buf.writeUInt16BE(Math.round(t.v * 10), 6);
   buf.writeUInt16BE(Math.round(t.c * 1000), 8);
   buf.writeUInt16BE(Math.round(t.wf * 100), 10);
   buf.writeUInt32BE(Math.round(t.wt * 1000), 12);
-  buf.writeUInt32BE(Math.round(t.t), 16);
-  buf[20] = (t.rs & 1) | ((t.vs & 1) << 1);
+  buf.writeUInt32BE(Math.round(t.te * 1000), 16);
+  buf.writeUInt32BE(Math.round(t.tw * 1000), 20);
+  buf[24] = (t.rs & 1) | ((t.vs & 1) << 1);
   return buf;
 }
 

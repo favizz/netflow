@@ -3,7 +3,7 @@
  * EMQX Load Simulator - Spec 3 (broker ACK ratio and sampled E2E latency)
  *
  * Spawns N concurrent MQTT clients (default 2,444), each publishing one
- * 21-byte binary telemetry frame every INTERVAL_MS at QoS 1.
+ * 25-byte binary telemetry frame every INTERVAL_MS at QoS 1.
  *
  * Improvements over the earlier version:
  * - per-device publish jitter to avoid thundering herd bursts
@@ -65,15 +65,16 @@ const PASSWORD =
   process.env.MQTT_DEVICE_SECRET || process.env.MQTT_PASSWORD || undefined;
 
 function encode(reading) {
-  const buffer = Buffer.allocUnsafe(21);
+  const buffer = Buffer.allocUnsafe(25);
   buffer.writeUInt32BE(Math.round(reading.et * 100), 0);
   buffer.writeUInt16BE(Math.round(reading.p * 10), 4);
   buffer.writeUInt16BE(Math.round(reading.v * 10), 6);
   buffer.writeUInt16BE(Math.round(reading.c * 1000), 8);
   buffer.writeUInt16BE(Math.round(reading.wf * 100), 10);
   buffer.writeUInt32BE(Math.round(reading.wt * 1000), 12);
-  buffer.writeUInt32BE(Math.round(reading.b), 16);
-  buffer[20] = (reading.rs & 1) | ((reading.vs & 1) << 1);
+  buffer.writeUInt32BE(Math.round(reading.te * 1000), 16);
+  buffer.writeUInt32BE(Math.round(reading.tw * 1000), 20);
+  buffer[24] = (reading.rs & 1) | ((reading.vs & 1) << 1);
   return buffer;
 }
 
@@ -96,7 +97,8 @@ function nextReading(state) {
     c: power / 220,
     wf: waterFlow,
     wt: state.wt,
-    b: 50000,
+    te: 50,
+    tw: 10,
     rs: 1,
     vs: 1,
   };
@@ -382,7 +384,7 @@ console.log(' Load Simulator | Spec 3: broker ACK loss and sampled E2E ');
 console.log('------------------------------------------------------------');
 console.log(` Broker   : ${BROKER_URL}`);
 console.log(` Units    : ${TOTAL_UNITS}`);
-console.log(` Interval : ${INTERVAL_MS / 1000}s | QoS 1 | 21-byte binary`);
+console.log(` Interval : ${INTERVAL_MS / 1000}s | QoS 1 | 25-byte binary`);
 console.log(` Jitter   : up to ${JITTER_MS}ms`);
 console.log(
   ` E2E URL  : ${HISTORY_URL_TEMPLATE || 'disabled (set LOAD_SIM_HISTORY_URL_TEMPLATE)'}`,

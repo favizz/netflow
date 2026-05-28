@@ -27,7 +27,7 @@ export class DeviceService {
     let data: Record<string, any>;
     if (Buffer.isBuffer(payload) || payload instanceof Uint8Array) {
       const buf = Buffer.isBuffer(payload) ? payload : Buffer.from(payload);
-      if (buf.length < 21) return;
+      if (buf.length !== 21 && buf.length !== 25) return;
       data = decodeTelemetry(buf) as Record<string, any>;
     } else if (typeof payload === 'object' && payload !== null) {
       data = payload as Record<string, any>;

@@ -4,7 +4,7 @@ import { ServerMqtt, MqttContext, ReadPacket } from '@nestjs/microservices';
  * Extends the default NestJS MQTT server to preserve raw binary payloads.
  *
  * Problem: ServerMqtt.handleMessage() calls `buffer.toString()` before parsing,
- * which irreversibly corrupts non-UTF-8 binary data (e.g. the custom 21-byte
+ * which irreversibly corrupts non-UTF-8 binary data (e.g. the custom 25-byte
  * telemetry frame from ESP32 devices).
  *
  * Fix: Try JSON.parse first; on failure, pass the raw Buffer to the handler

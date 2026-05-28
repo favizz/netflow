@@ -15,8 +15,9 @@ function encodeCommand(type: 'relay' | 'valve', value: 0 | 1): Uint8Array {
 }
 
 function decodeTelemetry(buf: Uint8Array): IoTPayload | null {
-    if (buf.length < 21) return null;
+    if (buf.length !== 21 && buf.length !== 25) return null;
     const view = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    const flagsOffset = buf.length >= 25 ? 24 : 20;
     return {
         et: view.getUint32(0, false)  / 100,
         p:  view.getUint16(4, false)  / 10,
@@ -24,8 +25,10 @@ function decodeTelemetry(buf: Uint8Array): IoTPayload | null {
         c:  view.getUint16(8, false)  / 1000,
         wf: view.getUint16(10, false) / 100,
         wt: view.getUint32(12, false) / 1000,
-        rs: buf[20] & 1,
-        vs: (buf[20] >> 1) & 1,
+        te: buf.length >= 25 ? view.getUint32(16, false) / 1000 : undefined,
+        tw: buf.length >= 25 ? view.getUint32(20, false) / 1000 : undefined,
+        rs: buf[flagsOffset] & 1,
+        vs: (buf[flagsOffset] >> 1) & 1,
     };
 }
 
@@ -53,6 +56,8 @@ interface IoTPayload {
     c?: number;
     wf?: number;
     wt?: number;
+    te?: number;
+    tw?: number;
     rs?: number;
     vs?: number;
 }
