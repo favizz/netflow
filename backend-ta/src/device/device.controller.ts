@@ -168,16 +168,18 @@ export class DeviceController {
       (d.data as unknown[]).every((v) => typeof v === 'number')
     ) {
       buf = Buffer.from(d.data as number[]);
-    } else if (
-      typeof data === 'object' &&
-      data !== null &&
-      Object.keys(data).length > 0 &&
-      !('et' in d)
-    ) {
-      // Catch the case where NestJS passes an object like { "0": 0, "1": 0, ... }
-      const values = Object.values(d);
-      if (values.every((v) => typeof v === 'number')) {
-        buf = Buffer.from(values);
+    } else if (typeof data === 'object' && data !== null) {
+      // Catch the case where NestJS passes a raw Buffer as { "0": 0, ... }.
+      // Do not convert arbitrary numeric JSON such as { temperature, humidity }.
+      const keys = Object.keys(d);
+      const isIndexedBuffer =
+        (keys.length === 21 || keys.length === 25) &&
+        keys.every((key, index) => key === String(index));
+      if (isIndexedBuffer) {
+        const values = keys.map((key) => d[key]);
+        if (values.every((v) => typeof v === 'number')) {
+          buf = Buffer.from(values as number[]);
+        }
       }
     }
 

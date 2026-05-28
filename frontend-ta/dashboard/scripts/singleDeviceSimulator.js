@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Single Device Simulator
- * Dev/QA tool: simulates one meter publishing 21-byte binary telemetry frames.
+ * Dev/QA tool: simulates one meter publishing 25-byte binary telemetry frames.
  * Supports interactive anomaly injection (overvoltage, overcurrent, leakage,
  * tamper, trip) and listens for relay/valve commands from the backend.
  *
@@ -45,32 +45,35 @@ console.log(`   Broker: ${BROKER_URL}`);
 console.log(`   Interval: ${INTERVAL_MS / 1000}s`);
 console.log('====================================================\n');
 
-// 21-byte binary protocol matching binary-codec.ts
+// 25-byte binary protocol matching binary-codec.ts
 //   [0:3]  uint32 BE  et × 100     energy_total (kWh)
 //   [4:5]  uint16 BE  p  × 10      power (W)
 //   [6:7]  uint16 BE  v  × 10      voltage (V)
 //   [8:9]  uint16 BE  c  × 1000    current (A)
 //   [10:11] uint16 BE wf × 100     water_flow (L/min)
 //   [12:15] uint32 BE wt × 1000    water_total (m³)
-//   [16:19] uint32 BE b            balance (Rp)
-//   [20]    uint8     flags        bit0=relay, bit1=valve
+//   [16:19] uint32 BE te × 1000    electricity token remaining (kWh)
+//   [20:23] uint32 BE tw × 1000    water token remaining (m3)
+//   [24]    uint8     flags        bit0=relay, bit1=valve
 function encodeTelemetry(t) {
-    const buf = Buffer.allocUnsafe(21);
+    const buf = Buffer.allocUnsafe(25);
     buf.writeUInt32BE(Math.round(t.et * 100), 0);
     buf.writeUInt16BE(Math.round(t.p * 10), 4);
     buf.writeUInt16BE(Math.round(t.v * 10), 6);
     buf.writeUInt16BE(Math.round(t.c * 1000), 8);
     buf.writeUInt16BE(Math.round(t.wf * 100), 10);
     buf.writeUInt32BE(Math.round(t.wt * 1000), 12);
-    buf.writeUInt32BE(Math.round(t.b), 16);
-    buf[20] = (t.rs & 1) | ((t.vs & 1) << 1);
+    buf.writeUInt32BE(Math.round((t.te ?? t.b ?? 0) * 1000), 16);
+    buf.writeUInt32BE(Math.round((t.tw ?? 0) * 1000), 20);
+    buf[24] = (t.rs & 1) | ((t.vs & 1) << 1);
     return buf;
 }
 
 const state = {
     energyTotal: 120.50, // kWh — non-zero start so first frames don't encode as zero and trigger sensor_malfunction
     waterTotal: 45.230,  // m³
-    balance: 100000,     // Rp — simulator-side tracking (backend is authoritative)
+    elecTokenKwh: 68.966,
+    waterTokenM3: 20.000,
     relayOn: true,
     valveOpen: true,
     anomaly: null,
@@ -114,7 +117,8 @@ const generatePayload = () => {
         c:  parseFloat((power / voltage).toFixed(3)),
         wf: parseFloat(flowRate.toFixed(2)),
         wt: parseFloat(state.waterTotal.toFixed(6)),
-        b:  Math.round(state.balance),
+        te: parseFloat(state.elecTokenKwh.toFixed(3)),
+        tw: parseFloat(state.waterTokenM3.toFixed(3)),
         rs: state.relayOn ? 1 : 0,
         vs: state.valveOpen ? 1 : 0,
     };
@@ -129,7 +133,7 @@ client.on('connect', () => {
         const payload = generatePayload();
         client.publish(`device/${DEVICE_ID}/data`, encodeTelemetry(payload), { qos: 0 });
         process.stdout.write(
-            `\r📡 v=${payload.v}V p=${payload.p}W wf=${payload.wf}L/min et=${payload.et}kWh b=Rp${payload.b} | Anomaly: ${state.anomaly || 'none'}   `
+            `\r📡 v=${payload.v}V p=${payload.p}W wf=${payload.wf}L/min et=${payload.et}kWh te=${payload.te}kWh tw=${payload.tw}m3 | Anomaly: ${state.anomaly || 'none'}   `
         );
     }, INTERVAL_MS);
 

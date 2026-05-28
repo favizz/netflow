@@ -1,5 +1,4 @@
 const mqtt = require('mqtt');
-const { encode } = require('@msgpack/msgpack');
 require('dotenv').config({ path: '../.env' });
 
 const brokerUrl = process.env.MQTT_BROKER_URL || 'mqtt://broker.emqx.io:1883';
@@ -11,6 +10,8 @@ const client = mqtt.connect(brokerUrl);
 
 let energyTotal = 1250;
 let waterTotal = 180;
+let electricTokenKwh = 50;
+let waterTokenM3 = 10;
 
 // Device Physical States
 let relayOn = true;
@@ -50,13 +51,13 @@ client.on('connect', () => {
             rs: relayOn ? 1 : 0,
             wt: parseFloat(waterTotal.toFixed(4)),
             wf: parseFloat(flow.toFixed(2)),
-            vs: valveOpen ? 1 : 0
+            vs: valveOpen ? 1 : 0,
+            te: electricTokenKwh,
+            tw: waterTokenM3,
         };
 
         const topic = `device/${deviceId}/data`;
-        // Encode as MessagePack binary
-        const msgpackPayload = Buffer.from(encode(payload));
-        client.publish(topic, msgpackPayload);
+        client.publish(topic, encodeTelemetry(payload));
         // console.log(`[Telemetry] -> ${topic} | Power: ${power.toFixed(1)}W | Flow: ${flow.toFixed(2)}L/min`);
     }, intervalMs);
 });
@@ -135,3 +136,17 @@ client.on('message', (topic, message) => {
 client.on('error', (err) => {
     console.error('MQTT Connection Error:', err.message);
 });
+
+function encodeTelemetry(t) {
+    const buf = Buffer.allocUnsafe(25);
+    buf.writeUInt32BE(Math.round(t.et * 100), 0);
+    buf.writeUInt16BE(Math.round(t.p * 10), 4);
+    buf.writeUInt16BE(Math.round(t.v * 10), 6);
+    buf.writeUInt16BE(Math.round(t.c * 1000), 8);
+    buf.writeUInt16BE(Math.round(t.wf * 100), 10);
+    buf.writeUInt32BE(Math.round(t.wt * 1000), 12);
+    buf.writeUInt32BE(Math.round(t.te * 1000), 16);
+    buf.writeUInt32BE(Math.round(t.tw * 1000), 20);
+    buf[24] = (t.rs & 1) | ((t.vs & 1) << 1);
+    return buf;
+}
