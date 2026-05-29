@@ -816,6 +816,18 @@ export default function UnitDetailPage() {
                             <div className="h-[250px] flex items-center justify-center text-sm text-gray-400">Loading...</div>
                         ) : (
                             <div className="w-full">
+                                {displayPowerData.length > 0 && (
+                                    <div className="mb-3 flex items-baseline gap-1.5">
+                                        <span className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                                            {isLive
+                                                ? Math.max(...displayPowerData.map(d => d.value)).toFixed(livePowerMetric === "current" ? 3 : livePowerMetric === "voltage" ? 1 : 0)
+                                                : historicalTrends.reduce((s, t) => s + t.powerVal, 0).toFixed(2)}
+                                        </span>
+                                        <span className="text-sm text-gray-500 dark:text-gray-400">
+                                            {isLive ? `${activeLiveMetric.unit} peak` : "kWh total"}
+                                        </span>
+                                    </div>
+                                )}
                                 <ResponsiveContainer width="100%" height={250}>
                                     <AreaChart data={displayPowerData}>
                                         <defs>
@@ -840,8 +852,8 @@ export default function UnitDetailPage() {
 
                     {/* Water Chart */}
                     <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm p-6">
-                        <div className="flex items-center justify-between mb-6">
-                            <h3 className="font-semibold text-gray-900 dark:text-gray-100">Water Consumption</h3>
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="font-semibold text-gray-900 dark:text-gray-100">Water</h3>
                             <span className="text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
                                 {isLive ? "Live (L/min)" : period === "yearly" ? "Tahunan (m³)" : period === "monthly" ? "Bulanan (m³)" : "Harian (m³)"}
                             </span>
@@ -850,6 +862,18 @@ export default function UnitDetailPage() {
                             <div className="h-[250px] flex items-center justify-center text-sm text-gray-400">Loading...</div>
                         ) : (
                             <div className="w-full">
+                                {displayWaterData.length > 0 && (
+                                    <div className="mb-3 flex items-baseline gap-1.5">
+                                        <span className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                                            {isLive
+                                                ? Math.max(...displayWaterData.map(d => d.value)).toFixed(2)
+                                                : historicalTrends.reduce((s, t) => s + t.waterVal, 0).toFixed(3)}
+                                        </span>
+                                        <span className="text-sm text-gray-500 dark:text-gray-400">
+                                            {isLive ? "L/min peak" : "m³ total"}
+                                        </span>
+                                    </div>
+                                )}
                                 <ResponsiveContainer width="100%" height={250}>
                                     <LineChart data={displayWaterData}>
                                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
