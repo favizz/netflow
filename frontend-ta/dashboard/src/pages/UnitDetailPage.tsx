@@ -33,12 +33,19 @@ function decodeTelemetry(buf: Uint8Array): IoTPayload | null {
 }
 
 type TimePeriod = "live" | "daily" | "yearly" | "monthly";
+type LiveMetric = "power" | "voltage" | "current";
 
 const PERIODS: { id: TimePeriod; label: string }[] = [
     { id: "daily",   label: "Harian"  },
     { id: "monthly", label: "Bulanan" },
     { id: "yearly",  label: "Tahunan" },
     { id: "live",    label: "Live"    },
+];
+
+const LIVE_METRICS: { id: LiveMetric; label: string; unit: string; color: string }[] = [
+    { id: "power",   label: "Power",   unit: "W",   color: "#3b82f6" },
+    { id: "voltage", label: "Voltage", unit: "V",   color: "#f59e0b" },
+    { id: "current", label: "Current", unit: "A",   color: "#8b5cf6" },
 ];
 
 interface LogEntry {
@@ -186,9 +193,11 @@ export default function UnitDetailPage() {
     const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
     const [actionPending, setActionPending] = useState(false);
 
+    const [livePowerMetric, setLivePowerMetric] = useState<LiveMetric>("power");
+
     const [isConnected, setIsConnected] = useState(false);
     const [mqttClient, setMqttClient] = useState<mqtt.MqttClient | null>(null);
-    const [realTimePower, setRealTimePower] = useState<{ time: string; value: number; timestamp: string }[]>([]);
+    const [realTimePower, setRealTimePower] = useState<{ time: string; watts: number; voltage: number; current: number; timestamp: string }[]>([]);
     const [realTimeWater, setRealTimeWater] = useState<{ time: string; value: number; timestamp: string }[]>([]);
     const [liveLogs, setLiveLogs] = useState<LogEntry[]>([]);
 
@@ -199,7 +208,7 @@ export default function UnitDetailPage() {
     const [hasNext, setHasNext] = useState(false);
     const [trendLoading, setTrendLoading] = useState(false);
 
-    const [energyStats, setEnergyStats] = useState({ total_kwh: 0, active_power_w: 0 });
+    const [energyStats, setEnergyStats] = useState({ total_kwh: 0, active_power_w: 0, voltage_v: 0, current_a: 0 });
     const [waterStats, setWaterStats] = useState({ total_m3: 0, flow_rate_lpm: 0 });
     const [electricityTariff, setElectricityTariff] = useState(1444.7);
     const [waterTariff, setWaterTariff] = useState(5000);
@@ -217,7 +226,7 @@ export default function UnitDetailPage() {
                     token_electricity: Number(data.token_electricity || 0),
                     token_water: Number(data.token_water || 0),
                 });
-                setEnergyStats({ total_kwh: Number(data.last_energy_reading || 0), active_power_w: 0 });
+                setEnergyStats({ total_kwh: Number(data.last_energy_reading || 0), active_power_w: 0, voltage_v: 0, current_a: 0 });
                 setWaterStats({ total_m3: Number(data.last_water_reading || 0), flow_rate_lpm: 0 });
                 setPowerState(!!data.relay_status);
                 setWaterState(!!data.valve_status);
@@ -379,11 +388,19 @@ export default function UnitDetailPage() {
                     setEnergyStats({
                         total_kwh: parsed.et ?? energyStats.total_kwh,
                         active_power_w: parsed.p ?? 0,
+                        voltage_v: parsed.v ?? 0,
+                        current_a: parsed.c ?? 0,
                     });
                     if (parsed.rs !== undefined) setPowerState(parsed.rs === 1);
 
-                    if (parsed.p !== undefined) {
-                        setRealTimePower(prev => [...prev.slice(-59), { time: timeStr, value: parsed!.p ?? 0, timestamp: now.toISOString() }]);
+                    if (parsed.p !== undefined || parsed.v !== undefined || parsed.c !== undefined) {
+                        setRealTimePower(prev => [...prev.slice(-59), {
+                            time: timeStr,
+                            watts:   parsed!.p ?? 0,
+                            voltage: parsed!.v ?? 0,
+                            current: parsed!.c ?? 0,
+                            timestamp: now.toISOString(),
+                        }]);
                     }
                     if (parsed.wf !== undefined) {
                         setRealTimeWater(prev => [...prev.slice(-59), { time: timeStr, value: parsed!.wf ?? 0, timestamp: now.toISOString() }]);
@@ -404,9 +421,15 @@ export default function UnitDetailPage() {
             } catch { /* malformed frame */ }
         });
 
-        client.on('error', () => {
+        client.on('error', (err) => {
             setIsConnected(false);
             setUnitInfo((prev: UnitInfoState | null) => (prev ? { ...prev, status: "Offline" } : null));
+            const raw = err?.message ?? String(err);
+            if (raw.includes("Bad username") || raw.includes("Not authorized") || raw.includes("Connection refused")) {
+                toast.error("MQTT authentication failed. Check broker credentials in environment config.");
+            } else {
+                toast.error("Live connection lost. Reconnecting...");
+            }
         });
 
         setMqttClient(client);
@@ -478,7 +501,13 @@ export default function UnitDetailPage() {
 
     const isOnline = unitInfo.status === "Online";
     const isLive = period === "live";
-    const displayPowerData = isLive ? realTimePower : historicalTrends.map(t => ({ time: t.time, value: t.powerVal }));
+    const activeLiveMetric = LIVE_METRICS.find(m => m.id === livePowerMetric) ?? LIVE_METRICS[0];
+    const displayPowerData = isLive
+        ? realTimePower.map(p => ({
+              time: p.time,
+              value: livePowerMetric === "power" ? p.watts : livePowerMetric === "voltage" ? p.voltage : p.current,
+          }))
+        : historicalTrends.map(t => ({ time: t.time, value: t.powerVal }));
     const displayWaterData = isLive ? realTimeWater : historicalTrends.map(t => ({ time: t.time, value: t.waterVal }));
 
     return (
@@ -641,11 +670,25 @@ export default function UnitDetailPage() {
                                 <h3 className="font-semibold text-gray-900 dark:text-gray-100">Electricity</h3>
                             </div>
                             <div className="space-y-3">
-                                <div>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400 uppercase font-medium">Active Power</p>
-                                    <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                                        {energyStats.active_power_w.toFixed(2)} <span className="text-sm font-medium text-gray-500 dark:text-gray-400">W</span>
-                                    </p>
+                                <div className="grid grid-cols-3 gap-2">
+                                    <div>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 uppercase font-medium">Power</p>
+                                        <p className="text-lg font-bold text-gray-900 dark:text-gray-100">
+                                            {energyStats.active_power_w.toFixed(1)} <span className="text-xs font-medium text-gray-500 dark:text-gray-400">W</span>
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 uppercase font-medium">Voltage</p>
+                                        <p className="text-lg font-bold text-gray-900 dark:text-gray-100">
+                                            {energyStats.voltage_v.toFixed(1)} <span className="text-xs font-medium text-gray-500 dark:text-gray-400">V</span>
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 uppercase font-medium">Current</p>
+                                        <p className="text-lg font-bold text-gray-900 dark:text-gray-100">
+                                            {energyStats.current_a.toFixed(2)} <span className="text-xs font-medium text-gray-500 dark:text-gray-400">A</span>
+                                        </p>
+                                    </div>
                                 </div>
                                 <div>
                                     <p className="text-xs text-gray-500 dark:text-gray-400 uppercase font-medium">Total Energy</p>
@@ -741,12 +784,34 @@ export default function UnitDetailPage() {
 
                     {/* Power Chart */}
                     <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-6">
-                        <div className="flex items-center justify-between mb-6">
-                            <h3 className="font-semibold text-gray-900 dark:text-gray-100">Power Consumption</h3>
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="font-semibold text-gray-900 dark:text-gray-100">Electricity</h3>
                             <span className="text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
-                                {isLive ? "Live (W)" : period === "yearly" ? "Tahunan (KWh)" : period === "monthly" ? "Bulanan (KWh)" : "Harian (KWh)"}
+                                {isLive
+                                    ? `Live (${activeLiveMetric.unit})`
+                                    : period === "yearly" ? "Tahunan (kWh)" : period === "monthly" ? "Bulanan (kWh)" : "Harian (kWh)"}
                             </span>
                         </div>
+
+                        {/* Live metric sub-selector */}
+                        {isLive && (
+                            <div className="flex gap-1 mb-4 p-1 bg-gray-100 dark:bg-gray-700 rounded-lg">
+                                {LIVE_METRICS.map(({ id, label }) => (
+                                    <button
+                                        key={id}
+                                        onClick={() => setLivePowerMetric(id)}
+                                        className={`flex-1 py-1.5 px-2 rounded-md text-xs font-semibold transition-colors ${
+                                            livePowerMetric === id
+                                                ? "bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm"
+                                                : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+                                        }`}
+                                    >
+                                        {label}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+
                         {trendLoading ? (
                             <div className="h-[250px] flex items-center justify-center text-sm text-gray-400">Loading...</div>
                         ) : (
@@ -755,15 +820,18 @@ export default function UnitDetailPage() {
                                     <AreaChart data={displayPowerData}>
                                         <defs>
                                             <linearGradient id="colorPower" x1="0" y1="0" x2="0" y2="1">
-                                                <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.2} />
-                                                <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                                                <stop offset="5%" stopColor={activeLiveMetric.color} stopOpacity={0.2} />
+                                                <stop offset="95%" stopColor={activeLiveMetric.color} stopOpacity={0} />
                                             </linearGradient>
                                         </defs>
                                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
                                         <XAxis dataKey="time" axisLine={false} tickLine={false} tick={{ fill: tickColor, fontSize: 11 }} />
                                         <YAxis axisLine={false} tickLine={false} tick={{ fill: tickColor, fontSize: 11 }} width={36} />
-                                        <RechartsTooltip contentStyle={tooltipStyle} />
-                                        <Area type="monotone" dataKey="value" stroke="#3b82f6" strokeWidth={2} fillOpacity={1} fill="url(#colorPower)" dot={false} activeDot={isLive ? false : { r: 4 }} isAnimationActive={!isLive} />
+                                        <RechartsTooltip
+                                            contentStyle={tooltipStyle}
+                                            formatter={(val: unknown) => [`${Number(val ?? 0).toFixed(isLive && livePowerMetric === "current" ? 3 : 2)} ${isLive ? activeLiveMetric.unit : "kWh"}`, isLive ? activeLiveMetric.label : "Consumption"] as [string, string]}
+                                        />
+                                        <Area type="monotone" dataKey="value" stroke={activeLiveMetric.color} strokeWidth={2} fillOpacity={1} fill="url(#colorPower)" dot={false} activeDot={isLive ? false : { r: 4 }} isAnimationActive={!isLive} />
                                     </AreaChart>
                                 </ResponsiveContainer>
                             </div>

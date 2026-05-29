@@ -209,7 +209,7 @@ export function TrendChart() {
                         ))}
                     </div>
 
-                    {period !== 'daily' && (
+                    {period !== 'yearly' && (
                         <div className="flex items-center">
                             <button
                                 onClick={() => setPeriodKey(k => offsetPeriodKey(k, period, -1))}
