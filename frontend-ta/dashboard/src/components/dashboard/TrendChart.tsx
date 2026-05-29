@@ -249,6 +249,12 @@ export function TrendChart() {
             )}
             {!loading && data.length > 0 && (
                 <div className="w-full">
+                    <div className="mb-3 flex items-baseline gap-1.5">
+                        <span className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                            {data.reduce((s, d) => s + (d[utility] as number), 0).toFixed(2)}
+                        </span>
+                        <span className="text-sm text-gray-500 dark:text-gray-400">{LABELS[utility].unit} total</span>
+                    </div>
                     <ResponsiveContainer width="100%" height={288}>
                         <AreaChart data={data} margin={{ top: 5, right: 20, left: 0, bottom: 0 }}>
                             <defs>
