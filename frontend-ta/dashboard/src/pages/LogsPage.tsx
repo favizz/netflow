@@ -167,13 +167,20 @@ export default function LogsPage() {
     const [filterResult, setFilterResult] = useState('All');
     const [page, setPage] = useState(0);
     const [bullBoardOpen, setBullBoardOpen] = useState(false);
+    const [unitNames, setUnitNames] = useState<Map<string, string>>(new Map());
 
     useEffect(() => {
         setLoading(true);
-        fetchApi('/admin/audit-logs')
-            .then((data: Parameters<typeof mapAuditLog>[0][]) => setLogs(Array.isArray(data) ? data.map(mapAuditLog) : []))
-            .catch(() => setLogs([]))
-            .finally(() => setLoading(false));
+        Promise.all([
+            fetchApi('/admin/audit-logs').catch(() => []),
+            fetchApi('/unit').catch(() => []),
+        ]).then(([auditData, units]) => {
+            setLogs(Array.isArray(auditData) ? auditData.map(mapAuditLog) : []);
+            const map = new Map<string, string>();
+            (units as Array<{ id: number; unit_no: string }>).forEach(u => map.set(String(u.id), u.unit_no));
+            setUnitNames(map);
+        }).catch(() => setLogs([]))
+          .finally(() => setLoading(false));
     }, []);
 
     const filtered = logs.filter(l => {
@@ -243,7 +250,11 @@ export default function LogsPage() {
                                     <td className="px-4 py-3 font-mono text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">{log.action}</td>
                                     <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{log.category}</td>
                                     <td className="px-4 py-3 text-xs text-gray-900 dark:text-gray-300">
-                                        {log.target_type}{log.target ? ` #${log.target}` : ''}
+                                        {log.target_type
+                                            ? `${log.target_type}${log.target
+                                                ? ` – ${log.target_type === 'unit' ? (unitNames.get(log.target) || log.target) : log.target}`
+                                                : ''}`
+                                            : '—'}
                                     </td>
                                     <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400">
                                         {log.details ? (

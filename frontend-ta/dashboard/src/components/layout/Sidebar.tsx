@@ -38,7 +38,7 @@ export function Sidebar({ onClose }: SidebarProps) {
 
     const confirmLogout = () => {
         localStorage.removeItem('admin-token');
-        navigate('/');
+        window.location.reload();
     };
 
     return (
