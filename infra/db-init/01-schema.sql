@@ -110,10 +110,12 @@ CREATE TABLE IF NOT EXISTS auth_refresh_tokens (
   id         INT AUTO_INCREMENT PRIMARY KEY COMMENT 'Unique identifier for the token record.',
   token_hash VARCHAR(255) NOT NULL UNIQUE    COMMENT 'Secure hash of the refresh token string.',
   user_sub   VARCHAR(255) NOT NULL           COMMENT 'Email address of the authenticated user.',
+  source     ENUM('mobile','admin') NOT NULL DEFAULT 'mobile' COMMENT 'Origin of the session: mobile app or admin dashboard.',
   expires_at DATETIME     NOT NULL           COMMENT 'Timestamp when the token becomes invalid.',
-  revoked_at DATETIME     NULL               COMMENT 'Timestamp if the token was manually invalidated.',
+  revoked_at DATETIME     NULL               COMMENT 'NULL = token is currently valid. Non-null = revoked or consumed during rotation.',
   created_at DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Timestamp when the session began.',
-  CONSTRAINT fk_refresh_tokens_user FOREIGN KEY (user_sub) REFERENCES residents(email) ON DELETE CASCADE
+  CONSTRAINT fk_refresh_tokens_user FOREIGN KEY (user_sub) REFERENCES residents(email) ON DELETE CASCADE,
+  INDEX idx_refresh_user_source (user_sub, source)
 );
 
 -- 8. ANOMALIES
@@ -138,7 +140,7 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   target_type VARCHAR(100) NOT NULL           COMMENT 'Type of resource being acted on (e.g. unit, resident, device).',
   target      VARCHAR(255) NULL               COMMENT 'Specific identifier of the target resource.',
   details     TEXT         NULL               COMMENT 'Structured JSON or text describing the changes.',
-  result      VARCHAR(20)  NOT NULL DEFAULT 'success' COMMENT 'Outcome of the operation, e.g., success.',
+  result      VARCHAR(20)  NOT NULL DEFAULT 'success' COMMENT 'Outcome: success | failure | info',
   created_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Timestamp of the administrative action.'
 );
 

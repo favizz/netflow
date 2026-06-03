@@ -53,7 +53,7 @@ export class AuthService {
       unitNo: selectedUnit?.unit_no ?? null,
     };
 
-    const tokenPair = await this.issueTokenPair(payload);
+    const tokenPair = await this.issueTokenPair(payload, 'mobile');
     return {
       ...tokenPair,
       name: resident.name ?? null,
@@ -110,7 +110,7 @@ export class AuthService {
       name: googleName,
     };
 
-    const tokenPair = await this.issueTokenPair(payload);
+    const tokenPair = await this.issueTokenPair(payload, 'mobile');
     return {
       ...tokenPair,
       name: googleName,
@@ -134,7 +134,7 @@ export class AuthService {
       name: user.name,
     };
 
-    const tokenPair = await this.issueTokenPair(payload);
+    const tokenPair = await this.issueTokenPair(payload, 'mobile');
     return {
       ...tokenPair,
       name: user.name ?? null,
@@ -173,7 +173,7 @@ export class AuthService {
       unitNo: selectedUnit?.unit_no ?? null,
     };
 
-    return this.issueTokenPair(payload);
+    return this.issueTokenPair(payload, record.source);
   }
 
   async logout(user: JwtPayload, refreshToken?: string) {
@@ -244,7 +244,7 @@ export class AuthService {
       name: googleName,
     };
 
-    return this.issueTokenPair(payload);
+    return this.issueTokenPair(payload, 'admin');
   }
 
   async me(user: JwtPayload) {
@@ -262,7 +262,10 @@ export class AuthService {
     };
   }
 
-  private async issueTokenPair(payload: JwtPayload) {
+  private async issueTokenPair(
+    payload: JwtPayload,
+    source: 'mobile' | 'admin' = 'mobile',
+  ) {
     const accessExpiresInSeconds = Number(
       this.configService.get<string>('JWT_EXPIRES_IN_SECONDS') || 3600,
     );
@@ -270,6 +273,17 @@ export class AuthService {
       this.configService.get<string>('JWT_REFRESH_EXPIRES_IN_SECONDS') ||
         604800,
     );
+
+    // Revoke any existing active token for this user+source so only one row
+    // per (user, source) is ever active at a time.
+    await this.refreshTokenRepo
+      .createQueryBuilder()
+      .update(AuthRefreshToken)
+      .set({ revoked_at: new Date() })
+      .where('user_sub = :sub', { sub: payload.sub })
+      .andWhere('source = :source', { source })
+      .andWhere('revoked_at IS NULL')
+      .execute();
 
     const accessToken = await this.jwtService.signAsync(payload, {
       expiresIn: accessExpiresInSeconds,
@@ -281,6 +295,7 @@ export class AuthService {
     const refreshEntity = this.refreshTokenRepo.create({
       token_hash: refreshKey,
       user_sub: payload.sub,
+      source,
       expires_at: new Date(Date.now() + refreshExpiresInSeconds * 1000),
       revoked_at: null,
     });

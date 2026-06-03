@@ -21,14 +21,9 @@ createRoot(document.getElementById('root')!).render(
         <App />
         <Toaster
           richColors
-          closeButton
           position="top-right"
           offset={72}
-          toastOptions={{
-            classNames: {
-              closeButton: '!top-1.5 !right-1.5 !left-auto !translate-x-0 !translate-y-0 !border-0 !shadow-none !bg-transparent !text-current opacity-60 hover:opacity-100',
-            },
-          }}
+          duration={3500}
         />
       </ThemeProvider>
     </GoogleOAuthProvider>
