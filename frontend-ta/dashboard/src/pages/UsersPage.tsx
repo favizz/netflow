@@ -345,13 +345,13 @@ export default function UsersPage() {
                 </div>
 
                 <div className="overflow-x-auto">
-                    <table className="w-full text-sm text-left">
+                    <table className="w-full text-sm text-left min-w-[600px]">
                         <thead className="bg-gray-50 dark:bg-gray-800 text-xs uppercase text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
                             <tr>
                                 <th className="px-3 sm:px-6 py-3 font-medium">User</th>
                                 <th className="px-3 sm:px-6 py-3 font-medium">Role</th>
-                                <th className="hidden sm:table-cell px-3 sm:px-6 py-3 font-medium">Units</th>
-                                <th className="hidden md:table-cell px-3 sm:px-6 py-3 font-medium">Joined</th>
+                                <th className="px-3 sm:px-6 py-3 font-medium">Units</th>
+                                <th className="px-3 sm:px-6 py-3 font-medium">Joined</th>
                                 <th className="px-3 sm:px-6 py-3 font-medium text-right">Actions</th>
                             </tr>
                         </thead>
@@ -402,7 +402,7 @@ export default function UsersPage() {
                                                 {res.role}
                                             </span>
                                         </td>
-                                        <td className="hidden sm:table-cell px-3 sm:px-6 py-3">
+                                        <td className="px-3 sm:px-6 py-3">
                                             <div className="flex flex-wrap gap-1">
                                                 {assigned.length === 0 && <span className="text-xs text-gray-400 dark:text-gray-500">None</span>}
                                                 {assigned.map(u => (
@@ -415,7 +415,7 @@ export default function UsersPage() {
                                                 ))}
                                             </div>
                                         </td>
-                                        <td className="hidden md:table-cell px-3 sm:px-6 py-3 text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">
+                                        <td className="px-3 sm:px-6 py-3 text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">
                                             {res.created_at ? new Date(res.created_at).toLocaleDateString('id-ID') : '-'}
                                         </td>
                                         <td className="px-3 sm:px-6 py-3 text-right">

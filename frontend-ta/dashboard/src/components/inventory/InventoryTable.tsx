@@ -206,15 +206,15 @@ export function InventoryTable({ data, initialFilter = "", buildings = [], onAdd
             </div>
 
             <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm text-gray-500 dark:text-gray-400">
+                <table className="w-full text-left text-sm text-gray-500 dark:text-gray-400 min-w-[680px]">
                     <thead className="bg-gray-50 dark:bg-gray-800 text-xs uppercase text-gray-700 dark:text-gray-300">
                         <tr>
-                            <th className="hidden sm:table-cell px-3 sm:px-6 py-3 font-medium">Building</th>
+                            <th className="px-3 sm:px-6 py-3 font-medium">Building</th>
                             <th className="px-3 sm:px-6 py-3 font-medium">Unit</th>
                             <th className="px-3 sm:px-6 py-3 font-medium">Tenant</th>
-                            <th className="hidden md:table-cell px-3 sm:px-6 py-3 font-medium">Device ID</th>
+                            <th className="px-3 sm:px-6 py-3 font-medium">Device ID</th>
                             <th className="px-3 sm:px-6 py-3 font-medium">Status</th>
-                            <th className="hidden sm:table-cell px-3 sm:px-6 py-3 font-medium">Utilities</th>
+                            <th className="px-3 sm:px-6 py-3 font-medium">Utilities</th>
                             {onEdit && <th className="px-3 sm:px-6 py-3 font-medium text-right">Actions</th>}
                         </tr>
                     </thead>
@@ -226,7 +226,7 @@ export function InventoryTable({ data, initialFilter = "", buildings = [], onAdd
                                     className="hover:bg-gray-50 dark:hover:bg-gray-800/50 cursor-pointer"
                                     onClick={() => navigate(`/devices/${item.id}`)}
                                 >
-                                    <td className="hidden sm:table-cell px-3 sm:px-6 py-3">
+                                    <td className="px-3 sm:px-6 py-3">
                                         <div className="font-medium text-gray-900 dark:text-gray-100 truncate max-w-[120px]">{item.buildingName || '-'}</div>
                                     </td>
                                     <td className="px-3 sm:px-6 py-3">
@@ -235,7 +235,7 @@ export function InventoryTable({ data, initialFilter = "", buildings = [], onAdd
                                     <td className="px-3 sm:px-6 py-3">
                                         <div className="text-sm text-gray-600 dark:text-gray-300 truncate max-w-[140px]">{item.tenant}</div>
                                     </td>
-                                    <td className="hidden md:table-cell px-3 sm:px-6 py-3 font-mono text-xs">{item.meterSerial}</td>
+                                    <td className="px-3 sm:px-6 py-3 font-mono text-xs">{item.meterSerial}</td>
                                     <td className="px-3 sm:px-6 py-3">
                                         <span className={cn(
                                             "inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ring-1 ring-inset",
@@ -246,7 +246,7 @@ export function InventoryTable({ data, initialFilter = "", buildings = [], onAdd
                                             {item.status}
                                         </span>
                                     </td>
-                                    <td className="hidden sm:table-cell px-3 sm:px-6 py-3">
+                                    <td className="px-3 sm:px-6 py-3">
                                         <div className="flex space-x-2">
                                             <span
                                                 title={item.power ? "Power ON" : "Power OFF"}

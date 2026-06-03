@@ -542,7 +542,7 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
 
                 <div className="p-5 space-y-4">
                   <div className="bg-muted/40 rounded-xl p-4">
-                    <p className="text-xs text-muted-foreground mb-2">Nomor Virtual Account <span className="text-primary">(ketuk untuk salin)</span></p>
+                    <p className="text-xs text-muted-foreground mb-2">Nomor Virtual Account</p>
                     <button
                       onClick={() => copyVA(vaNumber)}
                       className="w-full text-left active:opacity-70 transition-opacity"
