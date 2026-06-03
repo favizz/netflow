@@ -34,34 +34,6 @@ export class NotificationService {
     }
   }
 
-  async sendResidentNotification(
-    email: string,
-    subject: string,
-    message: string,
-  ): Promise<void> {
-    this.logger.log(
-      `[Notification] To: ${email} | Subject: ${subject} | Message: ${message}`,
-    );
-
-    const [resident] = await Promise.allSettled([
-      this.residentsService.findByEmail(email),
-    ]);
-    const chatId =
-      resident.status === 'fulfilled'
-        ? (resident.value?.telegram_chat_id ?? null)
-        : null;
-
-    await Promise.allSettled([
-      this.sendEmail(email, subject, message),
-      chatId
-        ? this.sendTelegram(
-            chatId,
-            `⚠️ <b>${escapeHtml(subject)}</b>\n\n${escapeHtml(message)}`,
-          )
-        : Promise.resolve(),
-    ]);
-  }
-
   async sendTelegram(chatId: string, html: string): Promise<void> {
     const token = this.configService.get<string>('TELEGRAM_BOT_TOKEN');
     if (!token || !chatId) return;
@@ -162,16 +134,6 @@ export class NotificationService {
     ]);
   }
 
-  /** @deprecated Use sendHtmlNotification */
-  async sendPaymentConfirmation(
-    email: string,
-    subject: string,
-    htmlEmail: string,
-    telegramHtml: string,
-  ): Promise<void> {
-    return this.sendHtmlNotification(email, subject, htmlEmail, telegramHtml);
-  }
-
   private async sendEmail(
     email: string,
     subject: string,
@@ -210,11 +172,4 @@ export class NotificationService {
       this.logger.error(`Failed to send email to ${email}:`, error);
     }
   }
-}
-
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
 }

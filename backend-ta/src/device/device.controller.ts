@@ -178,7 +178,7 @@ export class DeviceController {
       if (isIndexedBuffer) {
         const values = keys.map((key) => d[key]);
         if (values.every((v) => typeof v === 'number')) {
-          buf = Buffer.from(values as number[]);
+          buf = Buffer.from(values);
         }
       }
     }

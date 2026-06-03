@@ -8,9 +8,9 @@ import { TariffService } from '../../admin/tariff/tariff.service';
 import { NotificationService } from '../notification.service';
 
 const METHOD_LABEL: Record<string, string> = {
-  qris:     'QRIS',
+  qris: 'QRIS',
   transfer: 'BCA Virtual Account',
-  ewallet:  'Dompet Digital',
+  ewallet: 'Dompet Digital',
 };
 
 function rp(amount: number): string {
@@ -30,13 +30,29 @@ function buildEmailHtml(params: {
   timestamp: Date;
   logoUrl?: string;
 }): string {
-  const { name, unitNo, transactionId, method, electricityRp, waterRp, totalRp,
-          electricityKwh, waterM3, timestamp, logoUrl } = params;
+  const {
+    name,
+    unitNo,
+    transactionId,
+    method,
+    electricityRp,
+    waterRp,
+    totalRp,
+    electricityKwh,
+    waterM3,
+    timestamp,
+    logoUrl,
+  } = params;
 
-  const dateStr = timestamp.toLocaleString('id-ID', {
-    day: '2-digit', month: 'long', year: 'numeric',
-    hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta',
-  }) + ' WIB';
+  const dateStr =
+    timestamp.toLocaleString('id-ID', {
+      day: '2-digit',
+      month: 'long',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: 'Asia/Jakarta',
+    }) + ' WIB';
 
   const logoHtml = logoUrl
     ? `<img src="${logoUrl}" alt="NetFlow" height="36" style="display:block;border:0;max-height:36px;margin-bottom:6px">`
@@ -46,15 +62,15 @@ function buildEmailHtml(params: {
   if (electricityRp > 0) {
     tokenRows.push(
       `<tr><td style="padding:8px 16px;color:#555;border-bottom:1px solid #f3f4f6">&#9889; Token Listrik</td>` +
-      `<td style="padding:8px 16px;text-align:right;color:#333;border-bottom:1px solid #f3f4f6">` +
-      `<strong>${electricityKwh.toFixed(2)} kWh</strong><br><span style="font-size:12px;color:#6b7280">${rp(electricityRp)}</span></td></tr>`,
+        `<td style="padding:8px 16px;text-align:right;color:#333;border-bottom:1px solid #f3f4f6">` +
+        `<strong>${electricityKwh.toFixed(2)} kWh</strong><br><span style="font-size:12px;color:#6b7280">${rp(electricityRp)}</span></td></tr>`,
     );
   }
   if (waterRp > 0) {
     tokenRows.push(
       `<tr><td style="padding:8px 16px;color:#555;border-bottom:1px solid #f3f4f6">&#128167; Token Air</td>` +
-      `<td style="padding:8px 16px;text-align:right;color:#333;border-bottom:1px solid #f3f4f6">` +
-      `<strong>${waterM3.toFixed(3)} m&#179;</strong><br><span style="font-size:12px;color:#6b7280">${rp(waterRp)}</span></td></tr>`,
+        `<td style="padding:8px 16px;text-align:right;color:#333;border-bottom:1px solid #f3f4f6">` +
+        `<strong>${waterM3.toFixed(3)} m&#179;</strong><br><span style="font-size:12px;color:#6b7280">${rp(waterRp)}</span></td></tr>`,
     );
   }
 
@@ -128,18 +144,31 @@ function buildTelegramHtml(params: {
   electricityKwh: number;
   waterM3: number;
 }): string {
-  const { name, unitNo, transactionId, method,
-          electricityRp, waterRp, totalRp, electricityKwh, waterM3 } = params;
+  const {
+    name,
+    unitNo,
+    transactionId,
+    method,
+    electricityRp,
+    waterRp,
+    totalRp,
+    electricityKwh,
+    waterM3,
+  } = params;
   const lines: string[] = [
     `&#9989; <b>Pengisian Token Berhasil</b>`,
     `Unit <b>${unitNo}</b> &mdash; ${name}`,
     ``,
   ];
   if (electricityRp > 0) {
-    lines.push(`&#9889; Token Listrik: <b>${electricityKwh.toFixed(2)} kWh</b> <i>(${rp(electricityRp)})</i>`);
+    lines.push(
+      `&#9889; Token Listrik: <b>${electricityKwh.toFixed(2)} kWh</b> <i>(${rp(electricityRp)})</i>`,
+    );
   }
   if (waterRp > 0) {
-    lines.push(`&#128167; Token Air: <b>${waterM3.toFixed(3)} m&#179;</b> <i>(${rp(waterRp)})</i>`);
+    lines.push(
+      `&#128167; Token Air: <b>${waterM3.toFixed(3)} m&#179;</b> <i>(${rp(waterRp)})</i>`,
+    );
   }
   lines.push(`&#128176; <b>Total: ${rp(totalRp)}</b>`);
   lines.push(``);
@@ -166,7 +195,9 @@ export class PaymentCompletedListener {
       const unit = await this.unitService.findByUnitNo(event.unitNo);
       if (!unit.resident_email) return;
 
-      const resident = await this.residentsService.findByEmail(unit.resident_email);
+      const resident = await this.residentsService.findByEmail(
+        unit.resident_email,
+      );
       const name = resident?.name ?? 'Penghuni';
       const totalRp = event.electricityAmountRp + event.waterAmountRp;
 
@@ -179,15 +210,17 @@ export class PaymentCompletedListener {
           : Promise.resolve(1),
       ]);
 
-      const electricityKwh = event.electricityAmountRp > 0
-        ? event.electricityAmountRp / elecTariff
-        : 0;
-      const waterM3 = event.waterAmountRp > 0
-        ? event.waterAmountRp / waterTariff
-        : 0;
+      const electricityKwh =
+        event.electricityAmountRp > 0
+          ? event.electricityAmountRp / elecTariff
+          : 0;
+      const waterM3 =
+        event.waterAmountRp > 0 ? event.waterAmountRp / waterTariff : 0;
 
       const frontendUrl = this.configService.get<string>('FRONTEND_URL') ?? '';
-      const logoUrl = frontendUrl ? `${frontendUrl}/netflow-logo-white.png` : undefined;
+      const logoUrl = frontendUrl
+        ? `${frontendUrl}/netflow-logo-white.png`
+        : undefined;
 
       const subject = `Pengisian Token Unit ${event.unitNo} Berhasil`;
 

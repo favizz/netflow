@@ -163,13 +163,11 @@ const ANOMALY_META: Record<AnomalyType, AnomalyMeta> = {
     icon: '🚨',
     titleResident: 'Peringatan Sistem',
     titleAdmin: 'Bypass Utilitas Terdeteksi',
-    causeResident:
-      'Sistem mendeteksi anomali pada perangkat meter unit Anda.',
+    causeResident: 'Sistem mendeteksi anomali pada perangkat meter unit Anda.',
     causeAdmin:
       'Sensor masih mendeteksi konsumsi aktif (listrik/air) meskipun relay atau valve dalam status OFF akibat saldo habis. ' +
       'Ini mengindikasikan modifikasi ilegal pada instalasi meter atau bypass perangkat cutoff.',
-    actionResident:
-      'Hubungi pengelola gedung untuk pemeriksaan lebih lanjut.',
+    actionResident: 'Hubungi pengelola gedung untuk pemeriksaan lebih lanjut.',
     actionAdmin:
       'Lakukan inspeksi fisik segera ke unit terkait. Dokumentasikan temuan dan laporkan ke manajemen properti sesuai prosedur.',
   },
@@ -212,10 +210,6 @@ const ANOMALY_META: Record<AnomalyType, AnomalyMeta> = {
 
 // ─── Email builder ────────────────────────────────────────────────────────────
 
-function rp(amount: number): string {
-  return `Rp ${amount.toLocaleString('id-ID')}`;
-}
-
 function buildAnomalyEmailHtml(params: {
   anomaly: AnomalyItem;
   unitNumber: string;
@@ -226,18 +220,23 @@ function buildAnomalyEmailHtml(params: {
   const meta = ANOMALY_META[anomaly.anomalyType];
 
   const isCritical = anomaly.severity === 'critical';
-  const bannerBg    = isCritical ? '#fef2f2' : '#fffbeb';
+  const bannerBg = isCritical ? '#fef2f2' : '#fffbeb';
   const bannerBorder = isCritical ? '#fecaca' : '#fde68a';
-  const bannerColor  = isCritical ? '#dc2626' : '#d97706';
+  const bannerColor = isCritical ? '#dc2626' : '#d97706';
   const severityIcon = isCritical ? '&#128680;' : '&#9888;&#65039;';
   const severityLabel = isCritical ? 'KRITIS' : 'PERINGATAN';
   const severityBadgeBg = isCritical ? '#fee2e2' : '#fef3c7';
   const severityBadgeColor = isCritical ? '#dc2626' : '#d97706';
 
-  const dateStr = new Date(anomaly.detectedAt).toLocaleString('id-ID', {
-    day: '2-digit', month: 'long', year: 'numeric',
-    hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta',
-  }) + ' WIB';
+  const dateStr =
+    new Date(anomaly.detectedAt).toLocaleString('id-ID', {
+      day: '2-digit',
+      month: 'long',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: 'Asia/Jakarta',
+    }) + ' WIB';
 
   const logoHtml = logoUrl
     ? `<img src="${logoUrl}" alt="NetFlow" height="36" style="display:block;border:0;max-height:36px;margin-bottom:6px">`
@@ -338,7 +337,9 @@ function buildAnomalyTelegramHtml(params: {
   const title = isAdmin ? meta.titleAdmin : meta.titleResident;
   const cause = isAdmin ? meta.causeAdmin : meta.causeResident;
   const action = isAdmin ? meta.actionAdmin : meta.actionResident;
-  const headerPrefix = isAdmin ? '&#128680; <b>[Admin Alert]</b>' : '&#9888;&#65039; <b>[NetFlow Alert]</b>';
+  const headerPrefix = isAdmin
+    ? '&#128680; <b>[Admin Alert]</b>'
+    : '&#9888;&#65039; <b>[NetFlow Alert]</b>';
 
   const lines: string[] = [
     `${headerPrefix} ${escapeHtml(title)} &mdash; Unit <b>${escapeHtml(unitNumber)}</b>`,
@@ -374,7 +375,8 @@ export class AnomalyNotificationService {
     unitNumber: string,
   ): Promise<void> {
     const cooldownKey = `${residentEmail}:${anomaly.anomalyType}`;
-    const lastAlertTimestamp = this.residentAlertCooldownMap.get(cooldownKey) ?? 0;
+    const lastAlertTimestamp =
+      this.residentAlertCooldownMap.get(cooldownKey) ?? 0;
     if (Date.now() - lastAlertTimestamp <= CFG.adminAlertCooldownMs) return;
     this.residentAlertCooldownMap.set(cooldownKey, Date.now());
 
@@ -383,7 +385,9 @@ export class AnomalyNotificationService {
       const residentName = resident?.name ?? 'Penghuni';
 
       const frontendUrl = this.configService.get<string>('FRONTEND_URL') ?? '';
-      const logoUrl = frontendUrl ? `${frontendUrl}/netflow-logo-white.png` : undefined;
+      const logoUrl = frontendUrl
+        ? `${frontendUrl}/netflow-logo-white.png`
+        : undefined;
 
       const meta = ANOMALY_META[anomaly.anomalyType];
       const subject = `[NetFlow] ${meta.titleResident} — Unit ${unitNumber}`;
@@ -512,7 +516,11 @@ export class AnomalyNotificationService {
         metadata: { offlineDurationMinutes },
         detectedAt: new Date().toISOString(),
       };
-      return buildAnomalyTelegramHtml({ anomaly: fakeAnomaly, unitNumber, isAdmin: true });
+      return buildAnomalyTelegramHtml({
+        anomaly: fakeAnomaly,
+        unitNumber,
+        isAdmin: true,
+      });
     }
 
     const maximumUnitsShown = 10;

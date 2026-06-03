@@ -1,4 +1,11 @@
-import { IsNotEmpty, IsNumber, IsOptional, IsString, IsInt, Min } from 'class-validator';
+import {
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsString,
+  IsInt,
+  Min,
+} from 'class-validator';
 
 export class CreateUnitDto {
   @IsString()
