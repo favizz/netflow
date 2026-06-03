@@ -21,9 +21,12 @@ static const int   OTA_LED_PIN = 2;          // onboard LED (≠ SSR pin 27)
 static const char* NTP_SERVER  = "id.pool.ntp.org";
 static const long  GMT_OFFSET  = 7 * 3600;   // WIB UTC+7
 
-// MQTT credentials — kept local so they never appear in main.cpp
-static const char* MQTT_USER   = "device_001";
-static const char* MQTT_SECRET = "TA!2025Ok";
+// MQTT credentials — kept local so they never appear in main.cpp.
+// Username MUST be this device's own device_id (the runtime `deviceId` read from
+// SD config, e.g. "DEV-A-101"); the EMQX ACL grants each device access only to
+// device/<device_id>/* topics. Password is the shared device secret, validated
+// by the backend at POST /auth/mqtt (must equal MQTT_DEVICE_SECRET in the server .env).
+static const char* MQTT_SECRET = "f7fde3a818e7a5a29fcc0d995330b025ae358a0f9381b401";
 
 // Let's Encrypt ISRG Root X1 — verify against your broker's cert chain.
 static const char* MQTT_CA_CERT = R"(
@@ -306,7 +309,7 @@ void otaTask(void* arg)
   // Reconnect MQTT just long enough to deliver the ACK.
   char ackTopic[64];
   snprintf(ackTopic, sizeof(ackTopic), "device/%s/ota_ack", deviceId.c_str());
-  if (mqttClient.connect(deviceId.c_str(), MQTT_USER, MQTT_SECRET)) {
+  if (mqttClient.connect(deviceId.c_str(), deviceId.c_str(), MQTT_SECRET)) {
     mqttClient.publish(ackTopic, ackMsg);
     mqttClient.loop();
     delay(500);
@@ -371,7 +374,7 @@ bool ensureMQTT()
   if (mqttClient.connected()) return true;
 
   Serial.print("[MQTT] Connecting...");
-  if (!mqttClient.connect(deviceId.c_str(), MQTT_USER, MQTT_SECRET)) {
+  if (!mqttClient.connect(deviceId.c_str(), deviceId.c_str(), MQTT_SECRET)) {
     Serial.printf(" failed (state=%d)\n", mqttClient.state());
     return false;
   }

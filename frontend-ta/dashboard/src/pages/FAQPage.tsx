@@ -37,6 +37,10 @@ const FAQ_DATA: FAQSection[] = [
         title: "Devices & Units",
         items: [
             {
+                question: "How do I register a unit from scratch (full flow)?",
+                answer: "Complete these steps in order:\n\n1. Buildings — Create a building if one does not exist yet (Buildings page → Add Building, set name and address).\n\n2. Users — Add the resident's email on the Users page so the account exists before you link it to the unit.\n\n3. Tariffs — Confirm at least one active electricity and one active water tariff exists (Tariffs page). The system needs a current tariff to calculate token deduction rates correctly.\n\n4. Devices — On the Devices page, click 'Add Unit'. Fill in: Building (select the one just created), Unit Number (e.g. A-101), Device ID (must match the DEVICE_ID flashed into the ESP32 firmware, e.g. DEV-A-101), initial electricity token balance (kWh), and initial water token balance (m³). Assign the resident account created in step 2.\n\n5. Physical device — Power on the ESP32. It will connect to the MQTT broker and begin publishing telemetry to device/DEV-A-101/data. The unit status will change from Offline to Online within one publish interval (default 60 s) once telemetry is received.\n\n6. Verify — Open the Unit Detail page for the new unit. You should see live sensor values in the Live tab and the token balances decreasing in real time when the relay and valve are open.",
+            },
+            {
                 question: "How do I add a new unit?",
                 answer: "On the Devices page, click 'Add Unit'. A single-page form opens where you search and select a building, enter the unit number and device ID, optionally set an initial balance, and assign the unit to a user (admin or resident). Assignment is required — you cannot add a unit without linking it to someone.",
             },

@@ -21,6 +21,9 @@ export class AnomalyNotificationService {
   private cachedAdminList: Resident[] | null = null;
   private adminListCachedAt = 0;
   private readonly adminAlertCooldownMap = new Map<string, number>();
+  // Per-resident cooldown key: `${email}:${anomalyType}` — same 15-min window as admin.
+  // Prevents email/Telegram spam when an anomaly oscillates near its threshold.
+  private readonly residentAlertCooldownMap = new Map<string, number>();
 
   constructor(
     private readonly notificationService: NotificationService,
@@ -41,6 +44,11 @@ export class AnomalyNotificationService {
     anomaly: AnomalyItem,
     unitNumber: string,
   ): Promise<void> {
+    const cooldownKey = `${residentEmail}:${anomaly.anomalyType}`;
+    const lastAlertTimestamp = this.residentAlertCooldownMap.get(cooldownKey) ?? 0;
+    if (Date.now() - lastAlertTimestamp <= CFG.adminAlertCooldownMs) return;
+    this.residentAlertCooldownMap.set(cooldownKey, Date.now());
+
     const subject = `[NetFlow Alert] ${anomaly.anomalyType.toUpperCase()} — Unit ${unitNumber}`;
     await this.notificationService
       .sendResidentNotification(residentEmail, subject, anomaly.message)

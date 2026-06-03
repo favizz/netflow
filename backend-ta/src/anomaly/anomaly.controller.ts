@@ -119,7 +119,7 @@ export class AnomalyController {
     const [activeCount, resolvedCount, allAnomalies] = await Promise.all([
       this.anomalyRepo.count({ where: { resolved_at: IsNull() } }),
       this.anomalyRepo.count({ where: { resolved_at: Not(IsNull()) } }),
-      this.anomalyRepo.find({ select: ['type', 'severity'] }),
+      this.anomalyRepo.find({ select: { type: true, severity: true } }),
     ]);
 
     const countByType: Record<string, number> = {};

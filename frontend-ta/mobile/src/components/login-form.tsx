@@ -56,7 +56,6 @@ export default function LoginForm({ onGoogleLogin }: LoginFormProps) {
               size="large"
               shape="pill"
               text="continue_with"
-              locale="id"
               width="320"
             />
 
