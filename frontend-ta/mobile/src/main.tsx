@@ -26,7 +26,7 @@ createRoot(document.getElementById('root')!).render(
           offset={72}
           toastOptions={{
             classNames: {
-              closeButton: '!top-2 !right-2 !left-auto !translate-x-0 !translate-y-0',
+              closeButton: '!top-1.5 !right-1.5 !left-auto !translate-x-0 !translate-y-0 !border-0 !shadow-none !bg-transparent !text-current opacity-60 hover:opacity-100',
             },
           }}
         />

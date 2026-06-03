@@ -8,7 +8,6 @@ import {
   YAxis,
   CartesianGrid,
   ResponsiveContainer,
-  Tooltip,
 } from "recharts"
 
 interface ConsumptionChartProps {
@@ -127,11 +126,7 @@ export default function ConsumptionChart({
             axisLine={false}
             width={40}
           />
-          {/* Tooltip only for tap feedback; always-visible value chip above handles display */}
-          <Tooltip
-            content={<MobileTouchLabel unit={unit} />}
-            cursor={{ stroke: color, strokeWidth: 1, strokeDasharray: "4 2" }}
-          />
+          {/* No tooltip — always-visible chip above handles the value display */}
           <Area
             type="monotone"
             dataKey={dataKey}

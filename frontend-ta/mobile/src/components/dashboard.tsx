@@ -668,12 +668,12 @@ function StatCard({ icon, label, value, unit, rate, percentage, status, controlO
         <p className="text-2xl font-bold text-foreground tracking-tight leading-none">{value}</p>
         <p className="text-xs text-muted-foreground mt-0.5">{unit} · {label}</p>
       </div>
-      <div className="flex items-center justify-between">
+      <div className="space-y-1.5">
         <span className={`inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full border ${bgColor} ${textColor} ${borderColor}`}>
           {statusLabel}
         </span>
         {rate && (
-          <span className="text-[10px] text-muted-foreground font-medium">{rate}</span>
+          <p className="text-[10px] text-muted-foreground font-medium">{rate}</p>
         )}
       </div>
       <StatusBar percentage={percentage} status={status} />

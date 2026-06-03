@@ -103,7 +103,7 @@ export default function LoginPage({ onSuccess }: LoginPageProps) {
           <div className="text-center space-y-3">
             <div className="flex justify-center mb-6">
               <img
-                src={`${import.meta.env.BASE_URL}${isDark ? 'netflow-logo-white.png' : 'netflow-logo-black.png'}`}
+                src={`${import.meta.env.BASE_URL}netflow-logo-black.png`}
                 alt="NETFLOW"
                 className="h-20 object-contain"
               />

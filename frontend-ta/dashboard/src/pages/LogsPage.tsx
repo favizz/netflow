@@ -205,24 +205,26 @@ export default function LogsPage() {
                         <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">
                             Audit Trail <span className="ml-2 text-xs font-normal text-gray-400 dark:text-gray-500">{filtered.length} entries</span>
                         </h2>
-                        <div className="flex space-x-3">
-                            <div className="relative">
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:flex-wrap">
+                            <div className="relative w-full sm:w-56">
                                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400 dark:text-gray-500" />
                                 <input
                                     type="text"
                                     value={search}
                                     onChange={e => { setSearch(e.target.value); setPage(0); }}
                                     placeholder="Search logs..."
-                                    className="h-9 w-56 rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 pl-9 pr-4 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary placeholder:text-gray-400 dark:placeholder:text-gray-500"
+                                    className="h-9 w-full rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 pl-9 pr-4 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary placeholder:text-gray-400 dark:placeholder:text-gray-500"
                                 />
                             </div>
-                            <FilterDropdown label="Category" options={CATEGORIES} value={filterCategory} onChange={v => { setFilterCategory(v); setPage(0); }} />
-                            <FilterDropdown label="Result" options={RESULTS} value={filterResult} onChange={v => { setFilterResult(v); setPage(0); }} />
+                            <div className="flex flex-wrap gap-2">
+                                <FilterDropdown label="Category" options={CATEGORIES} value={filterCategory} onChange={v => { setFilterCategory(v); setPage(0); }} />
+                                <FilterDropdown label="Result" options={RESULTS} value={filterResult} onChange={v => { setFilterResult(v); setPage(0); }} />
+                            </div>
                         </div>
                     </div>
                 </div>
                 <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm text-gray-500 dark:text-gray-400">
+                    <table className="w-full text-left text-sm text-gray-500 dark:text-gray-400 min-w-[700px]">
                         <thead className="bg-gray-50 dark:bg-gray-800 text-xs uppercase text-gray-700 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
                             <tr>
                                 <th className="px-4 py-3 font-medium">Timestamp</th>
