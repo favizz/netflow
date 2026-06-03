@@ -149,7 +149,7 @@ export function Header({ theme, toggleTheme }: HeaderProps) {
                     </button>
 
                     {notifOpen && (
-                        <div className="absolute right-0 top-full mt-2 w-80 rounded-xl bg-white dark:bg-gray-800 shadow-xl ring-1 ring-gray-200 dark:ring-gray-700 z-50">
+                        <div className="absolute right-0 top-full mt-2 w-80 max-w-[calc(100vw-1rem)] rounded-xl bg-white dark:bg-gray-800 shadow-xl ring-1 ring-gray-200 dark:ring-gray-700 z-50">
                             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-700">
                                 <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Notifications</h3>
                                 <button onClick={handleBellClick} className="rounded p-1 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700">

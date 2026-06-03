@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import {
     LayoutDashboard,
     Monitor,
@@ -32,7 +32,6 @@ interface SidebarProps {
 
 export function Sidebar({ onClose }: SidebarProps) {
     const { pathname } = useLocation();
-    const navigate = useNavigate();
     const [showLogoutModal, setShowLogoutModal] = useState(false);
     const adminName = getAdminName();
 

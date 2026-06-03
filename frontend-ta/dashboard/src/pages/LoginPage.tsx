@@ -78,7 +78,7 @@ export default function LoginPage({ onSuccess }: LoginPageProps) {
       window.google.accounts.id.renderButton(buttonRef.current, {
         theme: 'outline',
         size: 'large',
-        width: Math.max(Math.round(buttonRef.current.getBoundingClientRect().width), 360),
+        width: Math.max(Math.round(buttonRef.current.getBoundingClientRect().width), Math.min(360, window.innerWidth - 64)),
         text: 'signin_with',
       });
     };
@@ -97,7 +97,7 @@ export default function LoginPage({ onSuccess }: LoginPageProps) {
   return (
     <div className="min-h-screen bg-gradient-to-br from-[color-mix(in_oklch,var(--primary)_10%,transparent)] via-background to-[color-mix(in_oklch,var(--primary)_5%,transparent)] flex items-center justify-center p-4">
       <div className="w-full max-w-md shadow-lg ring-1 ring-[var(--card-border)] bg-[var(--card)]/80 backdrop-blur-xl rounded-2xl">
-        <div className="p-8 md:p-10 space-y-8">
+        <div className="p-6 sm:p-8 md:p-10 space-y-6 sm:space-y-8">
 
           {/* Branding */}
           <div className="text-center space-y-3">

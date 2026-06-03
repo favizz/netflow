@@ -192,10 +192,11 @@ export function InventoryTable({ data, initialFilter = "", buildings = [], onAdd
                         {onAdd && (
                             <button
                                 onClick={onAdd}
+                                aria-label="Add unit"
                                 className="flex items-center gap-1.5 h-9 rounded-md bg-primary px-3 text-sm font-medium text-white hover:bg-primary/90 transition-colors"
                             >
                                 <Plus className="h-4 w-4" />
-                                <span className="hidden sm:inline">Add Unit</span>
+                                <span>Add Unit</span>
                             </button>
                         )}
                     </div>
