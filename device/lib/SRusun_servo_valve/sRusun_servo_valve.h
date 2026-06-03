@@ -6,7 +6,8 @@
 extern bool water_valve_state; // Valve state
 extern int currAngle;     // Current angle
 extern String inputString; // String to hold incoming data
-extern const int servoPin; // Servo control pin (GPIO 26)
+extern const int servoPin; // Servo control pin
+extern const int ledcChannel; // PWM channel
 
 // Function prototypes
 void initServoValve();

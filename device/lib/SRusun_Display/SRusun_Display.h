@@ -2,13 +2,16 @@
 #define SRUSUN_DISPLAY_H
 
 #include <Arduino.h>
-#include <SD.h>
 #include <LiquidCrystal_I2C.h>
 
-extern int selectedDisplay; // 0: flow & volume, 1: energy & power
+// Forward declaration — SensorSnap is defined in sRusun_SDCard.h
+struct SensorSnap;
 
-void showData();
-void lcdShowData();
-void showInitLCD();
+extern LiquidCrystal_I2C lcd;
+extern int lcdPage;
+extern int LCD_PAGES;
+
+void initDisplay();
+void updateLCD(const SensorSnap& s, float wt);
 
 #endif // SRUSUN_DISPLAY_H

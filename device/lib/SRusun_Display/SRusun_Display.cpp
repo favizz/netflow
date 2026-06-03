@@ -1,112 +1,49 @@
-#include <Arduino.h>
-#include <SD.h>
-#include <WiFi.h>
-#include <LiquidCrystal_I2C.h>
-#include <time.h>
-#include <sys/time.h>
-#include <ArduinoJson.h>
-#include <HTTPClient.h>
-#include <PZEM004Tv30.h>
-#include <stdint.h>
-#include "driver/pcnt.h"
-
-
-#include "SRusun_Base_Function.h"
 #include "SRusun_Display.h"
-#include "sRusun_Flowmeter.h"
-#include "sRusun_Kwhmeter.h"
+#include "sRusun_SDCard.h"
 
-void showInitLCD()
+#include <Arduino.h>
+#include <LiquidCrystal_I2C.h>
+
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+
+int lcdPage  = 0;
+int LCD_PAGES = 3;
+
+void initDisplay()
 {
-  if (!initSD()) 
-  {
-    logMsg("SD", "SD Card initialization failed!", enableLogging);
-    lcd.clear();
-    lcd.setCursor(0, 0);
-    lcd.print("SD Init Failed!");
-    while (true) vTaskDelay(1000 / portTICK_PERIOD_MS);
-  }
-
-  logMsg("SD", "SD Card initialized.", enableLogging);
-
-  lcd.clear();
+  lcd.init();
+  lcd.backlight();
   lcd.setCursor(0, 0);
-  lcd.print("SD Card Ready");
+  lcd.print("SRusun NetFlow");
+  lcd.setCursor(0, 1);
+  lcd.print("Starting...");
 }
 
-void showData()
+void updateLCD(const SensorSnap& s, float wt)
 {
-  Serial.print(">");
-
-  Serial.print("volume:");
-  Serial.print(volume);
-  Serial.print(",");
-
-  Serial.print("flowRate:");
-  Serial.print(flowRate);
-  Serial.print(",");
-
-  Serial.print("energy:");
-  Serial.print(energy);
-  Serial.print(",");
-  
-
-  Serial.print("power:");
-  Serial.print(power);
-  Serial.print(",");
-
-  Serial.print("voltage:");
-  Serial.print(voltage);
-
-  Serial.println(); // Writes \r\n
-}
-
-int selectedDisplay = 0;
-void lcdShowData()
-{ 
-  if (selectedDisplay == 1)
+  lcd.clear();
+  switch (lcdPage % LCD_PAGES)
   {
-    lcd.begin(16, 2);
-    lcd.clear();
-    lcd.setCursor(0, 0);
-    lcd.print("F:");
-    lcd.print(flowRate, 1);
-    lcd.print(" L/m");
+    case 0: // Sub-balances (electricity + water)
+      lcd.setCursor(0, 0);
+      lcd.print("E:"); lcd.print((long)electricBalance); lcd.print("Rp");
+      lcd.setCursor(0, 1);
+      lcd.print("W:"); lcd.print((long)waterBalance);    lcd.print("Rp");
+      break;
 
-    lcd.setCursor(0, 1);
-    lcd.print("V:");
-    lcd.print(volume/1000, 1);
-    lcd.print(" m3");
-  }
-  else if (selectedDisplay == 2)
-    {
-    lcd.begin(16, 2);  
-    lcd.setCursor(0, 0);
-    lcd.print("E:");
-    lcd.print(energy, 1);
-    lcd.print(" kWh");
+    case 1: // Power + flowrate
+      lcd.setCursor(0, 0);
+      lcd.print("P:"); lcd.print(s.p, 0); lcd.print("W ");
+      lcd.print("V:"); lcd.print(s.v, 0); lcd.print("V");
+      lcd.setCursor(0, 1);
+      lcd.print("F:"); lcd.print(s.wf, 1); lcd.print("L/m   ");
+      break;
 
-    lcd.setCursor(0, 1);
-    lcd.print("P:");
-    lcd.print(power, 1);
-    lcd.print(" W");
-  }
-
-  else if (selectedDisplay == 3)
-  {
-    lcd.begin(16, 2);
-    lcd.setCursor(0, 0);
-    lcd.print("V:");
-    lcd.print(voltage, 1);
-    lcd.print(" Vrms");
-
-    lcd.setCursor(0, 1);
-    lcd.print("I:");
-    lcd.print(current, 1);
-    lcd.print(" Arms");
-  }
-  else
-  {
-    selectedDisplay = 0;
+    case 2: // Cumulative totals
+      lcd.setCursor(0, 0);
+      lcd.print("E:"); lcd.print(s.et, 2); lcd.print("kWh");
+      lcd.setCursor(0, 1);
+      lcd.print("W:"); lcd.print(wt,   3); lcd.print("m3 ");
+      break;
   }
 }
