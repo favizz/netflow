@@ -2,6 +2,7 @@ import { AnomalyNotificationService } from '../anomaly-notification.service';
 import type { AnomalyItem } from '../anomaly.types';
 import { NotificationService } from '../../notification/notification.service';
 import { ResidentsService } from '../../admin/residents/residents.service';
+import { ConfigService } from '@nestjs/config';
 
 function makeAnomaly(overrides: Partial<AnomalyItem> = {}): AnomalyItem {
   return {
@@ -30,81 +31,120 @@ function makeAdmin(chatId: string | null = 'admin-chat-123') {
 describe('AnomalyNotificationService', () => {
   let service: AnomalyNotificationService;
   let mockNotificationService: {
-    sendResidentNotification: jest.Mock;
+    sendHtmlNotification: jest.Mock;
     sendTelegram: jest.Mock;
   };
   let mockResidentsService: {
     findAdmins: jest.Mock;
+    findByEmail: jest.Mock;
+  };
+  let mockConfigService: {
+    get: jest.Mock;
   };
 
   beforeEach(() => {
     mockNotificationService = {
-      sendResidentNotification: jest.fn().mockResolvedValue(undefined),
+      sendHtmlNotification: jest.fn().mockResolvedValue(undefined),
       sendTelegram: jest.fn().mockResolvedValue(undefined),
     };
 
     mockResidentsService = {
       findAdmins: jest.fn().mockResolvedValue([makeAdmin()]),
+      findByEmail: jest.fn().mockResolvedValue({ name: 'Test Resident', telegram_chat_id: null }),
+    };
+
+    mockConfigService = {
+      get: jest.fn().mockReturnValue(undefined),
     };
 
     service = new AnomalyNotificationService(
       mockNotificationService as unknown as NotificationService,
       mockResidentsService as unknown as ResidentsService,
+      mockConfigService as unknown as ConfigService,
     );
   });
 
   describe('notifyResidentOfAnomaly', () => {
-    it('calls sendResidentNotification with formatted subject and unit context', async () => {
+    it('calls sendHtmlNotification with subject containing the anomaly title and unit number', async () => {
       const anomaly = makeAnomaly({ anomalyType: 'mcb_trip' });
-      await service.notifyResidentOfAnomaly(
-        'resident@test.com',
-        anomaly,
-        'A-101',
-      );
+      await service.notifyResidentOfAnomaly('resident@test.com', anomaly, 'A-101');
 
-      expect(
-        mockNotificationService.sendResidentNotification,
-      ).toHaveBeenCalledWith(
-        'resident@test.com',
-        expect.stringContaining('MCB_TRIP'),
-        anomaly.message,
-      );
-      expect(
-        mockNotificationService.sendResidentNotification,
-      ).toHaveBeenCalledWith(
-        'resident@test.com',
-        expect.stringContaining('A-101'),
-        anomaly.message,
-      );
+      expect(mockNotificationService.sendHtmlNotification).toHaveBeenCalledTimes(1);
+      const [email, subject] =
+        mockNotificationService.sendHtmlNotification.mock.calls[0] as string[];
+      expect(email).toBe('resident@test.com');
+      expect(subject).toContain('A-101');
+      // Subject uses human-readable title, not type code
+      expect(subject).toContain('Beban Listrik Melebihi Kapasitas MCB');
     });
 
-    it('resolves silently when sendResidentNotification throws', async () => {
-      mockNotificationService.sendResidentNotification.mockRejectedValue(
+    it('includes anomaly message data in the HTML email body', async () => {
+      const anomaly = makeAnomaly({ anomalyType: 'mcb_trip', message: 'Daya 1450 W' });
+      await service.notifyResidentOfAnomaly('resident@test.com', anomaly, 'A-101');
+
+      const [, , htmlEmail] =
+        mockNotificationService.sendHtmlNotification.mock.calls[0] as string[];
+      expect(htmlEmail).toContain('Daya 1450 W');
+    });
+
+    it('includes per-type cause and action text in both email and telegram', async () => {
+      const anomaly = makeAnomaly({ anomalyType: 'water_leak' });
+      await service.notifyResidentOfAnomaly('resident@test.com', anomaly, 'B-202');
+
+      const [, , htmlEmail, telegramHtml] =
+        mockNotificationService.sendHtmlNotification.mock.calls[0] as string[];
+      expect(htmlEmail).toContain('Kemungkinan Penyebab');
+      expect(htmlEmail).toContain('Tindakan yang Disarankan');
+      expect(telegramHtml).toContain('Penyebab:');
+      expect(telegramHtml).toContain('Tindakan:');
+    });
+
+    it('resolves silently when sendHtmlNotification throws', async () => {
+      mockNotificationService.sendHtmlNotification.mockRejectedValue(
         new Error('SMTP failure'),
       );
       await expect(
-        service.notifyResidentOfAnomaly(
-          'resident@test.com',
-          makeAnomaly(),
-          'A-101',
-        ),
+        service.notifyResidentOfAnomaly('resident@test.com', makeAnomaly(), 'A-101'),
       ).resolves.toBeUndefined();
+    });
+
+    it('enforces per-resident per-type cooldown and skips duplicate alerts', async () => {
+      const anomaly = makeAnomaly({ anomalyType: 'low_electricity_token' });
+      await service.notifyResidentOfAnomaly('resident@test.com', anomaly, 'A-101');
+      await service.notifyResidentOfAnomaly('resident@test.com', anomaly, 'A-101');
+
+      expect(mockNotificationService.sendHtmlNotification).toHaveBeenCalledTimes(1);
     });
   });
 
   describe('notifyAdminsOfAnomaly', () => {
     it('sends Telegram to all admins with telegram_chat_id on first call', async () => {
-      const anomaly = makeAnomaly({
-        anomalyType: 'jailbreak',
-        severity: 'critical',
-      });
+      const anomaly = makeAnomaly({ anomalyType: 'jailbreak', severity: 'critical' });
       await service.notifyAdminsOfAnomaly(anomaly, 'A-101');
 
       expect(mockNotificationService.sendTelegram).toHaveBeenCalledTimes(1);
       expect(mockNotificationService.sendTelegram).toHaveBeenCalledWith(
         'admin-chat-123',
-        expect.stringContaining('JAILBREAK'),
+        expect.stringContaining('A-101'),
       );
+    });
+
+    it('includes [Admin Alert] prefix and human-readable title in Telegram message', async () => {
+      const anomaly = makeAnomaly({ anomalyType: 'mcb_trip', severity: 'critical' });
+      await service.notifyAdminsOfAnomaly(anomaly, 'A-101');
+
+      const [, message] = mockNotificationService.sendTelegram.mock.calls[0] as string[];
+      expect(message).toContain('[Admin Alert]');
+      expect(message).toContain('Overcurrent MCB');
+    });
+
+    it('includes cause and action text in admin Telegram message', async () => {
+      const anomaly = makeAnomaly({ anomalyType: 'usage_spike' });
+      await service.notifyAdminsOfAnomaly(anomaly, 'A-101');
+
+      const [, message] = mockNotificationService.sendTelegram.mock.calls[0] as string[];
+      expect(message).toContain('Penyebab:');
+      expect(message).toContain('Tindakan:');
     });
 
     it('respects admin alert cooldown and does not send duplicate alerts within cooldown window', async () => {
@@ -146,7 +186,7 @@ describe('AnomalyNotificationService', () => {
   });
 
   describe('notifyAdminsOfOfflineUnits', () => {
-    it('sends a single message for one offline unit with duration', async () => {
+    it('sends a single message for one offline unit containing duration', async () => {
       await service.notifyAdminsOfOfflineUnits([
         { unitNumber: 'A-101', offlineDurationMinutes: 15 },
       ]);
@@ -172,7 +212,7 @@ describe('AnomalyNotificationService', () => {
       expect(mockNotificationService.sendTelegram).toHaveBeenCalledTimes(1);
       const [, messageBody] = mockNotificationService.sendTelegram.mock
         .calls[0] as [string, string];
-      expect(messageBody).toContain('3 unit offline');
+      expect(messageBody).toContain('3 Unit Offline');
       expect(messageBody).toContain('A-101');
       expect(messageBody).toContain('A-102');
       expect(messageBody).toContain('B-201');

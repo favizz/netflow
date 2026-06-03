@@ -40,7 +40,6 @@ export class PaymentsService {
   async initiateTopup(dto: InitiateTopupDto) {
     const unit = await this.unitRepo.findOneBy({ unit_no: dto.unitNo }); // validate unit exists
     if (!unit) throw new NotFoundException('Unit not found');
-    const id = `TRX-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
     const totalAmount = dto.electricityAmount + dto.waterAmount;
     if (totalAmount < 1000) {
@@ -58,6 +57,27 @@ export class PaymentsService {
       serverKey: serverKey,
       clientKey: this.configService.get<string>('MIDTRANS_CLIENT_KEY') || '',
     });
+
+    // Cancel any stale pending transactions so the unit never accumulates
+    // unresolved charges from a previous abandoned payment session.
+    const stalePending = await this.txRepo.find({
+      where: { unit_no: dto.unitNo, status: 'pending' },
+    });
+    for (const stale of stalePending) {
+      try {
+        await coreApi.transaction.cancel(stale.id);
+      } catch {
+        // Already expired or settled on Midtrans side — safe to ignore.
+      }
+      stale.status = 'failed';
+      stale.webhook_event_id = `${stale.id}-superseded`;
+      await this.txRepo.save(stale);
+      this.logger.log(
+        `Superseded stale pending transaction ${stale.id} for unit ${dto.unitNo}`,
+      );
+    }
+
+    const id = `TRX-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
     const paymentParams: any = {
       payment_type: dto.method === 'transfer' ? 'bank_transfer' : 'gopay',

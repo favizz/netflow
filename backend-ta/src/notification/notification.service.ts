@@ -138,6 +138,40 @@ export class NotificationService {
     }
   }
 
+  /**
+   * Generic HTML notifier: sends a formatted HTML email + Telegram message to a resident.
+   * Looks up the resident's telegram_chat_id from their email address.
+   */
+  async sendHtmlNotification(
+    email: string,
+    subject: string,
+    htmlEmail: string,
+    telegramHtml: string,
+  ): Promise<void> {
+    const [resident] = await Promise.allSettled([
+      this.residentsService.findByEmail(email),
+    ]);
+    const chatId =
+      resident.status === 'fulfilled'
+        ? (resident.value?.telegram_chat_id ?? null)
+        : null;
+
+    await Promise.allSettled([
+      this.sendEmailHtml(email, subject, htmlEmail),
+      chatId ? this.sendTelegram(chatId, telegramHtml) : Promise.resolve(),
+    ]);
+  }
+
+  /** @deprecated Use sendHtmlNotification */
+  async sendPaymentConfirmation(
+    email: string,
+    subject: string,
+    htmlEmail: string,
+    telegramHtml: string,
+  ): Promise<void> {
+    return this.sendHtmlNotification(email, subject, htmlEmail, telegramHtml);
+  }
+
   private async sendEmail(
     email: string,
     subject: string,
@@ -150,9 +184,28 @@ export class NotificationService {
         to: email,
         subject,
         text: message,
-        html: `<p>${message.replace(/\n/g, '<br>')}</p>`,
+        html: `<p style="font-family:sans-serif;line-height:1.6">${message.replace(/\n/g, '<br>')}</p>`,
       });
       this.logger.log(`Email successfully sent to ${email}`);
+    } catch (error) {
+      this.logger.error(`Failed to send email to ${email}:`, error);
+    }
+  }
+
+  private async sendEmailHtml(
+    email: string,
+    subject: string,
+    html: string,
+  ): Promise<void> {
+    if (!this.transporter || !email) return;
+    try {
+      await this.transporter.sendMail({
+        from: this.configService.get<string>('SMTP_FROM'),
+        to: email,
+        subject,
+        html,
+      });
+      this.logger.log(`Email (HTML) successfully sent to ${email}`);
     } catch (error) {
       this.logger.error(`Failed to send email to ${email}:`, error);
     }
