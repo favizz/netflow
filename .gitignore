@@ -6,7 +6,6 @@
 # ── Claude Code local state ─────────────────
 .claude/
 
-
 # ── Dependencies ───────────────────────────────
 node_modules/
 .pnp
