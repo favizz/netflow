@@ -2,12 +2,15 @@ import { useEffect, useState, useRef } from "react";
 import {
     AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
-import { ChevronLeft, ChevronRight, Zap, Droplets } from "lucide-react";
+import { ChevronLeft, ChevronRight, Zap, Droplets, Radio } from "lucide-react";
 import { fetchApi } from "@/lib/api";
 import { useIsDark } from "@/lib/useIsDark";
+import { MQTT_CONFIG } from "@/lib/constants";
+import mqtt from "mqtt";
 
 type Utility = 'electricity' | 'water';
-type Period = 'daily' | 'monthly' | 'yearly';
+type Period = 'daily' | 'monthly' | 'yearly' | 'live';
+type LiveMetric = 'power' | 'voltage' | 'current';
 
 const COLORS: Record<Utility, string> = {
     electricity: '#f59e0b',
@@ -19,6 +22,12 @@ const LABELS: Record<Utility, { title: string; unit: string }> = {
     water: { title: 'Water', unit: 'm³' },
 };
 
+const LIVE_METRICS: { id: LiveMetric; label: string; unit: string; color: string }[] = [
+    { id: 'power',   label: 'Power',   unit: 'W',   color: '#f59e0b' },
+    { id: 'voltage', label: 'Voltage', unit: 'V',   color: '#ef4444' },
+    { id: 'current', label: 'Current', unit: 'A',   color: '#8b5cf6' },
+];
+
 function getCurrentPeriodKey(period: Period): string {
     const now = new Date();
     if (period === 'daily') return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -26,7 +35,7 @@ function getCurrentPeriodKey(period: Period): string {
     return 'all';
 }
 
-function offsetPeriodKey(key: string, period: Period, delta: number): string {
+function offsetPeriodKey(key: string, period: 'daily' | 'monthly' | 'yearly', delta: number): string {
     if (period === 'daily') {
         const [y, m] = key.split('-').map(Number);
         const date = new Date(y, m - 1 + delta);
@@ -43,6 +52,17 @@ function periodLabel(key: string, period: Period): string {
     }
     if (period === 'monthly') return `Tahun ${key}`;
     return 'All Time';
+}
+
+function decodeTelemetry(buf: Uint8Array): { p?: number; v?: number; c?: number; wf?: number } | null {
+    if (buf.length < 21) return null;
+    const view = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    return {
+        p:  view.getUint16(4, false) / 10,
+        v:  view.getUint16(6, false) / 10,
+        c:  view.getUint16(8, false) / 1000,
+        wf: view.getUint16(10, false) / 100,
+    };
 }
 
 interface TrendData {
@@ -80,31 +100,52 @@ export function TrendChart() {
     const [hasNext, setHasNext] = useState(false);
     const todayKey = useRef(getCurrentPeriodKey('monthly'));
 
+    // First unit info
+    const [firstUnitNo, setFirstUnitNo] = useState<string | null>(null);
+    const [firstDeviceId, setFirstDeviceId] = useState<string | null>(null);
+
+    // Live mode
+    const [livePowerMetric, setLivePowerMetric] = useState<LiveMetric>('power');
+    const [liveElecData, setLiveElecData] = useState<{ time: string; power: number; voltage: number; current: number }[]>([]);
+    const [liveWaterData, setLiveWaterData] = useState<{ time: string; flow: number }[]>([]);
+    const [isConnected, setIsConnected] = useState(false);
+
+    // Fetch first unit info once on mount
     useEffect(() => {
-        const now = getCurrentPeriodKey(period);
-        todayKey.current = now;
-        setPeriodKey(now);
-    }, [period]);
+        fetchApi('/unit')
+            .then((units: { unit_no: string; device_id?: string }[]) => {
+                if (units?.length) {
+                    setFirstUnitNo(units[0].unit_no);
+                    setFirstDeviceId((units[0] as { device_id?: string }).device_id ?? null);
+                }
+            })
+            .catch(() => {});
+    }, []);
 
     useEffect(() => {
+        const now = getCurrentPeriodKey(period === 'live' ? 'monthly' : period);
+        todayKey.current = now;
+        if (period !== 'live') setPeriodKey(now);
+    }, [period]);
+
+    // Fetch historical trend data
+    useEffect(() => {
+        if (!firstUnitNo || period === 'live') {
+            if (period === 'live') setLoading(false);
+            return;
+        }
+
         let cancelled = false;
         setLoading(true);
 
-        fetchApi('/unit')
-            .then(async (units: { unit_no: string }[]) => {
+        const apiPeriod = period === 'daily' ? 'daily' : 'monthly';
+        fetchApi(`/reporting/trends/${encodeURIComponent(firstUnitNo)}?period=${apiPeriod}`)
+            .then(trends => {
                 if (cancelled) return;
-                if (!units || units.length === 0) { setData([]); setHasPrev(false); setHasNext(false); return; }
-
-                const firstUnit = units[0].unit_no;
-                const apiPeriod = period === 'daily' ? 'daily' : 'monthly';
-                const trends = await fetchApi(`/reporting/trends/${encodeURIComponent(firstUnit)}?period=${apiPeriod}`);
-                if (cancelled) return;
-
                 const raw = (trends || []) as TrendResponse[];
 
                 let mapped: TrendData[] = [];
                 if (period === 'daily') {
-                    // Show last 30 days filtered by periodKey (YYYY-MM)
                     const filtered = raw.filter(t => {
                         const d = new Date(t.bucket);
                         const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -116,7 +157,6 @@ export function TrendChart() {
                         water: Number(t.waterM3 || t.water_m3 || 0),
                     }));
                 } else if (period === 'monthly') {
-                    // Show months of the year filtered by periodKey (YYYY)
                     const filtered = raw.filter(t => String(new Date(t.bucket).getFullYear()) === periodKey);
                     mapped = filtered.map(t => ({
                         name: new Date(t.bucket).toLocaleDateString('id-ID', { month: 'short' }),
@@ -124,7 +164,6 @@ export function TrendChart() {
                         water: Number(t.waterM3 || t.water_m3 || 0),
                     }));
                 } else if (period === 'yearly') {
-                    // Aggregate monthly data into years
                     const yearMap = new Map<string, { electricity: number; water: number }>();
                     raw.forEach(t => {
                         const year = String(new Date(t.bucket).getFullYear());
@@ -149,8 +188,8 @@ export function TrendChart() {
                             : String(d.getFullYear());
                     });
                     const unique = [...new Set(allKeys)];
-                    const prevKey = offsetPeriodKey(periodKey, period === 'daily' ? 'monthly' : 'yearly', -1);
-                    const nextKey = offsetPeriodKey(periodKey, period === 'daily' ? 'monthly' : 'yearly', 1);
+                    const prevKey = offsetPeriodKey(periodKey, period === 'daily' ? 'daily' : 'monthly', -1);
+                    const nextKey = offsetPeriodKey(periodKey, period === 'daily' ? 'daily' : 'monthly', 1);
                     setHasPrev(unique.includes(prevKey));
                     setHasNext(nextKey <= todayKey.current && unique.includes(nextKey));
                 } else {
@@ -162,22 +201,87 @@ export function TrendChart() {
             .finally(() => { if (!cancelled) setLoading(false); });
 
         return () => { cancelled = true; };
-    }, [periodKey, period]);
+    }, [firstUnitNo, periodKey, period]);
 
-    const color = COLORS[utility];
-    const gradId = `grad-${utility}`;
+    // MQTT live connection
+    useEffect(() => {
+        if (period !== 'live' || !firstDeviceId || !MQTT_CONFIG.brokerUrl) return;
+
+        setIsConnected(false);
+        setLiveElecData([]);
+        setLiveWaterData([]);
+
+        const client = mqtt.connect(MQTT_CONFIG.brokerUrl, {
+            ...MQTT_CONFIG.options,
+            clientId: `ta-dashboard-overview-${Math.random().toString(16).slice(2, 8)}`,
+        });
+
+        const topic = `device/${firstDeviceId}/data`;
+
+        client.on('connect', () => {
+            setIsConnected(true);
+            client.subscribe(topic);
+        });
+
+        client.on('message', (msgTopic, message) => {
+            if (msgTopic !== topic) return;
+            const buf = new Uint8Array(message.buffer, message.byteOffset, message.byteLength);
+            const decoded = decodeTelemetry(buf);
+            if (!decoded) return;
+            const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            setLiveElecData(prev => [...prev.slice(-59), {
+                time: timeStr,
+                power: decoded.p ?? 0,
+                voltage: decoded.v ?? 0,
+                current: decoded.c ?? 0,
+            }]);
+            setLiveWaterData(prev => [...prev.slice(-59), {
+                time: timeStr,
+                flow: decoded.wf ?? 0,
+            }]);
+        });
+
+        client.on('error', () => setIsConnected(false));
+
+        return () => {
+            client.end();
+            setIsConnected(false);
+        };
+    }, [period, firstDeviceId]);
+
+    const isLive = period === 'live';
+    const activeLiveMetric = LIVE_METRICS.find(m => m.id === livePowerMetric)!;
+
+    const liveChartData = utility === 'electricity'
+        ? liveElecData.map(d => ({ time: d.time, value: d[livePowerMetric] }))
+        : liveWaterData.map(d => ({ time: d.time, value: d.flow }));
+
+    const liveUnit = utility === 'electricity' ? activeLiveMetric.unit : 'L/min';
+    const liveColor = utility === 'electricity' ? activeLiveMetric.color : COLORS.water;
+    const liveLabel = utility === 'electricity' ? activeLiveMetric.label : 'Flow Rate';
 
     const PERIOD_OPTIONS: { id: Period; label: string }[] = [
         { id: 'daily',   label: 'Daily' },
         { id: 'monthly', label: 'Monthly' },
         { id: 'yearly',  label: 'Yearly' },
+        { id: 'live',    label: 'Live' },
     ];
+
+    const color = isLive ? liveColor : COLORS[utility];
+    const gradId = `grad-${utility}-${isLive ? livePowerMetric : 'hist'}`;
 
     return (
         <div className="rounded-lg bg-white dark:bg-gray-800 p-6 shadow-sm ring-1 ring-gray-900/5 dark:ring-gray-700">
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-3">
-                    <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Consumption Trends</h3>
+                    <div className="flex items-center gap-2">
+                        {isLive && (
+                            <Radio className={`h-3.5 w-3.5 ${isConnected ? 'text-red-500 animate-pulse' : 'text-gray-400'}`} />
+                        )}
+                        <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">
+                            {isLive ? (isConnected ? 'Live Data' : 'Connecting...') : 'Consumption Trends'}
+                        </h3>
+                    </div>
                     <div className="flex rounded-md overflow-hidden border border-gray-200 dark:border-gray-600 text-xs font-medium">
                         <button
                             onClick={() => setUtility('electricity')}
@@ -209,7 +313,7 @@ export function TrendChart() {
                         ))}
                     </div>
 
-                    {period !== 'yearly' && (
+                    {(period === 'daily' || period === 'monthly') && (
                         <div className="flex items-center">
                             <button
                                 onClick={() => setPeriodKey(k => offsetPeriodKey(k, period, -1))}
@@ -233,21 +337,62 @@ export function TrendChart() {
                 </div>
             </div>
 
-            <div className="mb-1 text-xs text-gray-400 dark:text-gray-500">
-                {LABELS[utility].title} ({LABELS[utility].unit})
-            </div>
+            {/* Live sub-metric selector — electricity only */}
+            {isLive && utility === 'electricity' && (
+                <div className="flex gap-1 mb-4 p-1 bg-gray-100 dark:bg-gray-700 rounded-lg">
+                    {LIVE_METRICS.map(({ id, label }) => (
+                        <button
+                            key={id}
+                            onClick={() => setLivePowerMetric(id)}
+                            className={`flex-1 py-1.5 px-2 rounded-md text-xs font-semibold transition-colors ${
+                                livePowerMetric === id
+                                    ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
+                                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                            }`}
+                        >
+                            {label}
+                        </button>
+                    ))}
+                </div>
+            )}
 
-            {loading && (
+            {/* Historical label */}
+            {!isLive && (
+                <div className="mb-1 text-xs text-gray-400 dark:text-gray-500">
+                    {LABELS[utility].title} ({LABELS[utility].unit})
+                </div>
+            )}
+
+            {/* Live label */}
+            {isLive && (
+                <div className="mb-1 text-xs text-gray-400 dark:text-gray-500">
+                    {liveLabel} ({liveUnit})
+                </div>
+            )}
+
+            {/* Historical loading / empty */}
+            {!isLive && loading && (
                 <div className="h-72 flex items-center justify-center text-sm text-gray-400 dark:text-gray-500">
                     Loading...
                 </div>
             )}
-            {!loading && data.length === 0 && (
+            {!isLive && !loading && data.length === 0 && (
                 <div className="h-72 flex items-center justify-center text-sm text-gray-400 dark:text-gray-500">
                     No data for this period.
                 </div>
             )}
-            {!loading && data.length > 0 && (
+
+            {/* Live waiting */}
+            {isLive && liveChartData.length === 0 && (
+                <div className="h-72 flex flex-col items-center justify-center gap-2 text-sm text-gray-400 dark:text-gray-500">
+                    {isConnected
+                        ? <span>Waiting for device data...</span>
+                        : <span>Connecting to live feed...</span>}
+                </div>
+            )}
+
+            {/* Historical chart */}
+            {!isLive && !loading && data.length > 0 && (
                 <div className="w-full">
                     <div className="mb-3 flex items-baseline gap-1.5">
                         <span className="text-2xl font-bold text-gray-900 dark:text-gray-100">
@@ -282,6 +427,51 @@ export function TrendChart() {
                                 fill={`url(#${gradId})`}
                                 dot={false}
                                 activeDot={{ r: 4, fill: color }}
+                            />
+                        </AreaChart>
+                    </ResponsiveContainer>
+                </div>
+            )}
+
+            {/* Live chart */}
+            {isLive && liveChartData.length > 0 && (
+                <div className="w-full">
+                    <div className="mb-3 flex items-baseline gap-1.5">
+                        <span className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                            {liveChartData.length > 0
+                                ? liveChartData[liveChartData.length - 1].value.toFixed(utility === 'electricity' && livePowerMetric === 'current' ? 3 : 1)
+                                : '—'}
+                        </span>
+                        <span className="text-sm text-gray-500 dark:text-gray-400">{liveUnit} now</span>
+                    </div>
+                    <ResponsiveContainer width="100%" height={288}>
+                        <AreaChart data={liveChartData} margin={{ top: 5, right: 20, left: 0, bottom: 0 }}>
+                            <defs>
+                                <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor={liveColor} stopOpacity={0.25} />
+                                    <stop offset="95%" stopColor={liveColor} stopOpacity={0} />
+                                </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
+                            <XAxis dataKey="time" axisLine={false} tickLine={false} tick={{ fill: tickColor, fontSize: 11 }} dy={6} />
+                            <YAxis axisLine={false} tickLine={false} tick={{ fill: tickColor, fontSize: 11 }} width={40} />
+                            <Tooltip
+                                contentStyle={tooltipStyle}
+                                formatter={(val: number | string | readonly (number | string)[] | undefined) => [
+                                    `${Number(val ?? 0).toFixed(utility === 'electricity' && livePowerMetric === 'current' ? 3 : 1)} ${liveUnit}`,
+                                    liveLabel
+                                ] as [string, string]}
+                            />
+                            <Area
+                                type="monotone"
+                                dataKey="value"
+                                stroke={liveColor}
+                                strokeWidth={2}
+                                fillOpacity={1}
+                                fill={`url(#${gradId})`}
+                                dot={false}
+                                activeDot={false}
+                                isAnimationActive={false}
                             />
                         </AreaChart>
                     </ResponsiveContainer>

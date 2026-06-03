@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Plus, Pencil, Trash2, Building2, X, Check, Loader2 } from "lucide-react";
 import { fetchApi } from "@/lib/api";
+import { useToast } from "@/components/layout/ToastProvider";
 
 type Building = {
     id: number;
@@ -141,6 +142,7 @@ export default function BuildingsPage() {
     const [deleteTarget, setDeleteTarget] = useState<Building | null>(null);
     const [deleteError, setDeleteError] = useState<string | null>(null);
     const [deleting, setDeleting] = useState(false);
+    const toast = useToast();
 
     const load = () => {
         setLoading(true);
@@ -180,7 +182,9 @@ export default function BuildingsPage() {
             setDeleteTarget(null);
             load();
         } catch (err: unknown) {
-            setDeleteError(friendlyError(err, 'Gedung masih punya unit.'));
+            const msg = friendlyError(err, 'Cannot delete — building still has units assigned to it.');
+            setDeleteError(msg);
+            toast.error(msg);
         } finally {
             setDeleting(false);
         }

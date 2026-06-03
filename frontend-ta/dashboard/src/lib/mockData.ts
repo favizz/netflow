@@ -6,6 +6,8 @@ export interface InventoryItem {
     unit: string;
     meterSerial: string;
     balance?: number;
+    token_electricity?: number;
+    token_water?: number;
     status: string;
     power: boolean;
     water: boolean;

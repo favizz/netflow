@@ -117,7 +117,8 @@ export function AddDeviceModal({ isOpen, onClose, onSuccess }: AddDeviceModalPro
     const [selectedResident, setSelectedResident] = useState<Resident | null>(null);
     const [unitNo, setUnitNo]   = useState('');
     const [deviceId, setDeviceId] = useState('');
-    const [balance, setBalance] = useState('0');
+    const [tokenElec, setTokenElec] = useState('0');
+    const [tokenWater, setTokenWater] = useState('0');
 
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -130,7 +131,8 @@ export function AddDeviceModal({ isOpen, onClose, onSuccess }: AddDeviceModalPro
         setSelectedResident(null);
         setUnitNo('');
         setDeviceId('');
-        setBalance('0');
+        setTokenElec('0');
+        setTokenWater('0');
         setError(null);
 
         setLoadingData(true);
@@ -159,7 +161,8 @@ export function AddDeviceModal({ isOpen, onClose, onSuccess }: AddDeviceModalPro
                     building_id: selectedBuilding.id,
                     unit_no: unitNo.trim().toUpperCase(),
                     device_id: deviceId.trim().toUpperCase(),
-                    balance: parseFloat(balance) || 0,
+                    token_electricity: parseFloat(tokenElec) || 0,
+                    token_water: parseFloat(tokenWater) || 0,
                 }),
             });
             await fetchApi(`/admin/residents/${encodeURIComponent(selectedResident.email)}/units/${unit.id}`, {
@@ -173,7 +176,7 @@ export function AddDeviceModal({ isOpen, onClose, onSuccess }: AddDeviceModalPro
         } finally {
             setLoading(false);
         }
-    }, [selectedBuilding, selectedResident, unitNo, deviceId, balance, toast, onSuccess, onClose]);
+    }, [selectedBuilding, selectedResident, unitNo, deviceId, tokenElec, tokenWater, toast, onSuccess, onClose]);
 
     if (!isOpen) return null;
 
@@ -237,18 +240,31 @@ export function AddDeviceModal({ isOpen, onClose, onSuccess }: AddDeviceModalPro
                         </div>
                     </div>
 
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                            Initial Balance (Rp)
-                        </label>
-                        <input
-                            type="text"
-                            inputMode="numeric"
-                            pattern="[0-9]*"
-                            value={balance}
-                            onChange={e => setBalance(e.target.value.replace(/[^0-9]/g, ''))}
-                            className="block w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                        />
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Electricity Token (kWh)
+                            </label>
+                            <input
+                                type="text"
+                                inputMode="decimal"
+                                value={tokenElec}
+                                onChange={e => setTokenElec(e.target.value.replace(/[^0-9.]/g, ''))}
+                                className="block w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Water Token (m³)
+                            </label>
+                            <input
+                                type="text"
+                                inputMode="decimal"
+                                value={tokenWater}
+                                onChange={e => setTokenWater(e.target.value.replace(/[^0-9.]/g, ''))}
+                                className="block w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                            />
+                        </div>
                     </div>
 
                     <SearchDropdown<Resident>
