@@ -15,17 +15,16 @@ const readline = require('readline');
 const fs = require('fs');
 const path = require('path');
 
-// ── USAGE: node scripts/singleDeviceSimulator.js [UNIT_NO] [BROKER_URL]
-// Example: node scripts/singleDeviceSimulator.js A-0002 mqtt://ta252601002.srusun.id:1883
 
-// Simple .env parser to avoid extra dependencies
+// Simple .env parser — handles values that contain '=' (e.g. base64 strings)
 function loadEnv() {
-    const envPath = path.resolve(__dirname, '../../../../.env');
+    const envPath = path.resolve(__dirname, '../../../.env');
     if (fs.existsSync(envPath)) {
-        const content = fs.readFileSync(envPath, 'utf8');
-        content.split('\n').forEach(line => {
-            const [key, value] = line.split('=');
-            if (key && value) process.env[key.trim()] = value.trim();
+        fs.readFileSync(envPath, 'utf8').split('\n').forEach((line) => {
+            const [k, ...rest] = line.split('=');
+            const key = (k || '').trim();
+            if (!key || key.startsWith('#') || process.env[key] !== undefined) return;
+            process.env[key] = rest.join('=').trim().replace(/^["']|["']$/g, '');
         });
     }
 }
@@ -34,8 +33,9 @@ loadEnv();
 const rawUnit = process.argv[2] || 'A-101';
 const UNIT_NO = rawUnit;
 const DEVICE_ID = `DEV-${UNIT_NO}`;
-// Use .env broker, then command line arg, then fallback
-const BROKER_URL = process.env.MQTT_BROKER_URL || process.argv[3] || 'mqtt://ta252601002.srusun.id:1883';
+const BROKER_URL = process.env.MQTT_BROKER_URL || process.argv[3] || 'mqtt://localhost:1883';
+const USERNAME   = process.env.MQTT_USERNAME || undefined;
+const PASSWORD   = process.env.MQTT_DEVICE_SECRET || process.env.MQTT_PASSWORD || undefined;
 const INTERVAL_MS = 2000;
 
 console.log('====================================================');
@@ -81,6 +81,8 @@ const state = {
 
 const client = mqtt.connect(BROKER_URL, {
     clientId: `single-sim-${DEVICE_ID}-${Date.now().toString(36)}`,
+    username: USERNAME,
+    password: PASSWORD,
     clean: true,
     rejectUnauthorized: false,
 });

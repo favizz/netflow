@@ -59,9 +59,9 @@ function encode(t) {
   b.writeUInt16BE(Math.round((t.c  ?? 0.9) * 1000),  8);
   b.writeUInt16BE(Math.round((t.wf ?? 1)   * 100),  10);
   b.writeUInt32BE(Math.round((t.wt ?? 10)  * 1000), 12);
-  b.writeUInt32BE(Math.round((t.te ?? 50) * 1000),  16);
-  b.writeUInt32BE(Math.round((t.tw ?? 10) * 1000),  20);
-  b[24] = ((t.rs ?? 1) & 1) | (((t.vs ?? 1) & 1) << 1) | (((t.tamper ?? 0) & 1) << 2);
+  b.writeUInt32BE(Math.round((t.te ?? 50)  * 1000), 16);
+  b.writeUInt32BE(Math.round((t.tw ?? 10)  * 1000), 20);
+  b[24] = ((t.rs ?? 1) & 1) | (((t.vs ?? 1) & 1) << 1);
   return b;
 }
 
@@ -118,7 +118,7 @@ async function testSpec3() {
   const FRAMES = 10;
 
   for (let i = 0; i < FRAMES; i++) {
-    const frame = encode({ et: i * 0.1, p: 200, v: 220, c: 0.9, wf: 1, wt: i * 0.01, b: 50000 });
+    const frame = encode({ et: i * 0.1, p: 200, v: 220, c: 0.9, wf: 1, wt: i * 0.01, te: 50, tw: 10 });
     sent++;
     await new Promise((r) => client.publish(topic, frame, { qos: 1 }, (err) => { if (!err) acked++; r(); }));
     await sleep(200);
@@ -259,7 +259,7 @@ async function testSpec7() {
     const wf = 1 + Math.random() * 0.5;
     et += p  * (SAMPLE_RATE / 1000) / 3_600_000;
     wt += wf * (SAMPLE_RATE / 1000) / 60_000;
-    buffer.push(encode({ et, p, v: 220, c: p / 220, wf, wt, b: 50000 }));
+    buffer.push(encode({ et, p, v: 220, c: p / 220, wf, wt, te: 50, tw: 10 }));
   }
   console.log(`  Buffer size: ${buffer.length} frames`);
 
@@ -284,12 +284,14 @@ async function testSpec7() {
 // ── Spec 8: Anomaly detection latency ────────────────────────────────────────
 async function testSpec8() {
   console.log('\n[Spec 8] Anomaly Detection Latency < 90s');
-  console.log('  Triggers jumper and tamper anomalies, polls backend for alert records.');
+  console.log('  Triggers jailbreak and mcb_trip anomalies, polls backend for alert records.');
   if (!ADMIN_TOKEN) console.warn('  [WARN] ADMIN_TOKEN not set — polling will likely fail (403)\n');
 
   const SCENARIOS = [
-    { label: 'jumper', frame: { p: 1500, v: 220, c: 6.8, rs: 0, vs: 1, wf: 0, wt: 10, b: 50000 } },
-    { label: 'tamper', frame: { p: 200, v: 220, c: 0.9, rs: 1, vs: 1, wf: 1, wt: 10, b: 50000, tamper: 1 } },
+    // jailbreak: token=0 + relay=OFF but power still flowing → bypass detected
+    { label: 'jailbreak', frame: { et: 100, p: 150, v: 220, c: 0.68, wf: 0, wt: 10, te: 0, tw: 10, rs: 0, vs: 1 } },
+    // mcb_trip: power exceeds 1300 W MCB limit
+    { label: 'mcb_trip',  frame: { et: 100, p: 1450, v: 220, c: 6.59, wf: 1, wt: 10, te: 50, tw: 10, rs: 1, vs: 1 } },
   ];
 
   const client = await mqttConnect(`healthsim-spec8-${Date.now().toString(36)}`);
@@ -299,7 +301,7 @@ async function testSpec8() {
 
   for (const sc of SCENARIOS) {
     // Publish normal frame first
-    await new Promise((r) => client.publish(topic, encode({ et: 100, p: 200, v: 220, c: 0.9, wf: 1, wt: 10, b: 50000 }), { qos: 1 }, r));
+    await new Promise((r) => client.publish(topic, encode({ et: 100, p: 200, v: 220, c: 0.9, wf: 1, wt: 10, te: 50, tw: 10 }), { qos: 1 }, r));
     await sleep(2000);
 
     const t0 = Date.now();

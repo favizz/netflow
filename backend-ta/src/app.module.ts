@@ -78,7 +78,7 @@ import { AppController } from './app.controller';
     }),
 
     BullBoardModule.forRoot({
-      route: '/admin/queues',
+      route: '/api/admin/queues',
       adapter: ExpressAdapter,
     }),
 
