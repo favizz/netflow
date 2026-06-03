@@ -222,15 +222,20 @@ export default function App() {
       </header>
 
       {/* ── Page content ───────────────────────────────────────────────── */}
-      <main className="flex-1 overflow-y-auto overflow-x-hidden">
+      {/* overflow-hidden here; each page owns its own scroll container   */}
+      <main className="flex-1 min-h-0 overflow-hidden">
         {currentPage === "home" && (
-          <Dashboard unitId={userUnit} availableUnits={availableUnits} onSelectUnit={handleSelectUnit} />
+          <div className="h-full overflow-y-auto overflow-x-hidden">
+            <Dashboard unitId={userUnit} availableUnits={availableUnits} onSelectUnit={handleSelectUnit} />
+          </div>
         )}
         {currentPage === "purchase" && (
           <TokenPurchase unitId={userUnit} onBack={() => setCurrentPage("home")} />
         )}
         {currentPage === "notifications" && (
-          <NotificationsPage anomalies={anomalies} lastReadAt={notifLastRead} />
+          <div className="h-full overflow-y-auto overflow-x-hidden">
+            <NotificationsPage anomalies={anomalies} lastReadAt={notifLastRead} />
+          </div>
         )}
       </main>
 

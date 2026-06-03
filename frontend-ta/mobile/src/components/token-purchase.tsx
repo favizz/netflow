@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { CheckCircle, Zap, Droplets, QrCode, Building2, ArrowLeft, Info, Clock, Wallet } from "lucide-react"
 import { toast } from "sonner"
 import { Card } from "@/components/ui/card"
@@ -129,24 +129,30 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
     return false
   }, [completePayment])
 
+  // Keep restart in a ref so the interval callback always sees the latest version
+  const restartRef = useRef(restart)
+  useEffect(() => { restartRef.current = restart }, [restart])
+
   useEffect(() => {
     if (step !== "instruction") return
     const limit = selectedOption?.method === "qris" ? 15 * 60 : 24 * 60 * 60
     setTimeLeft(limit)
-    const id = setInterval(() => setTimeLeft((t) => {
-      if (t <= 1) return 0
-      return t - 1
-    }), 1000)
+    const id = setInterval(() => {
+      setTimeLeft(t => {
+        if (t <= 1) {
+          // Handle expiry inside the interval — avoids the race condition where
+          // a separate useEffect sees timeLeft=0 before the timer ever started.
+          setTimeout(() => {
+            toast.error("Waktu pembayaran habis. Silakan buat transaksi baru.")
+            restartRef.current()
+          }, 0)
+          return 0
+        }
+        return t - 1
+      })
+    }, 1000)
     return () => clearInterval(id)
   }, [step, selectedOption?.method])
-
-  // Timer expiry → failed
-  useEffect(() => {
-    if (step !== "instruction" || timeLeft > 0) return
-    toast.error("Waktu pembayaran habis. Silakan buat transaksi baru.")
-    restart()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [timeLeft, step])
 
   // Auto-copy VA number when instruction page opens
   useEffect(() => {
@@ -300,21 +306,23 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
 
   if (step === "success") {
     return (
-      <SuccessScreen
-        transactionId={transactionId}
-        elecAmount={elecAmount}
-        waterAmount={waterAmount}
-        method={selectedOption}
-        onBuyAgain={restart}
-        onBack={onBack}
-      />
+      <div className="h-full overflow-y-auto">
+        <SuccessScreen
+          transactionId={transactionId}
+          elecAmount={elecAmount}
+          waterAmount={waterAmount}
+          method={selectedOption}
+          onBuyAgain={restart}
+          onBack={onBack}
+        />
+      </div>
     )
   }
 
   return (
-    <div className="bg-background pb-36">
-      {/* Header */}
-      <div className="flex items-center gap-2 px-3 py-3 sticky top-0 bg-background/95 backdrop-blur-sm z-10 border-b border-border">
+    <div className="flex flex-col h-full bg-background">
+      {/* Header — flex-none so it never scrolls */}
+      <div className="flex-none flex items-center gap-2 px-3 py-3 bg-background border-b border-border">
         {step !== "amount" && (
           <button
             onClick={() => setStep(step === "method" ? "amount" : "method")}
@@ -332,7 +340,8 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
         </div>
       </div>
 
-      <div className="px-5 pt-4 space-y-5">
+      {/* Scrollable content — flex-1 owns all remaining height */}
+      <div className="flex-1 min-h-0 overflow-y-auto px-5 pt-4 pb-4 space-y-5">
 
         {/* ── STEP 1: Amount ─────────────────────────────────────────────── */}
         {step === "amount" && (
@@ -629,7 +638,7 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
         )}
       </div>
 
-      {/* Payment check loading overlay */}
+      {/* Payment check loading overlay (fixed to viewport — loading overlays are fine) */}
       {step === "instruction" && loading && (
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm gap-3">
           <div className="h-10 w-10 rounded-full border-4 border-primary border-t-transparent animate-spin" />
@@ -637,8 +646,8 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
         </div>
       )}
 
-      {/* Bottom CTA */}
-      <div className="fixed bottom-16 left-0 right-0 bg-background/95 backdrop-blur-sm border-t border-border">
+      {/* Bottom CTA — flex-none, always visible, no position:fixed needed */}
+      <div className="flex-none border-t border-border bg-background">
         {step === "instruction" && (
           <p className="text-xs text-center text-muted-foreground px-4 pt-3 pb-0">
             Status diperbarui otomatis. Tekan konfirmasi setelah selesai bayar.

@@ -11,6 +11,9 @@ export class AuthRefreshToken {
   @Column({ type: 'varchar' })
   user_sub!: string; // resident email
 
+  @Column({ type: 'enum', enum: ['mobile', 'admin'], default: 'mobile' })
+  source!: 'mobile' | 'admin';
+
   @Column({ type: 'datetime' })
   expires_at!: Date;
 
