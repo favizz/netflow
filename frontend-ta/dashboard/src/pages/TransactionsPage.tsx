@@ -142,27 +142,30 @@ export default function TransactionsPage() {
 
             <div className="rounded-lg bg-white dark:bg-gray-900 shadow-sm ring-1 ring-gray-900/5 dark:ring-gray-700 overflow-hidden">
                 {/* Filter header - same pattern as InventoryTable */}
-                <div className="border-b border-gray-200 dark:border-gray-700 px-6 py-4">
-                    <div className="flex flex-col space-y-4 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
+                <div className="border-b border-gray-200 dark:border-gray-700 px-4 sm:px-6 py-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">Payment History</h2>
-                        <div className="flex space-x-3">
-                            <div className="relative">
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:flex-wrap">
+                            <div className="relative w-full sm:w-56">
                                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400 dark:text-gray-500" />
                                 <input
                                     type="text"
                                     value={search}
                                     onChange={e => { setSearch(e.target.value); resetPage(); }}
                                     placeholder="Search ID or unit..."
-                                    className="h-9 w-56 rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 pl-9 pr-4 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary placeholder:text-gray-400 dark:placeholder:text-gray-500"
+                                    className="h-9 w-full rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 pl-9 pr-4 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary placeholder:text-gray-400 dark:placeholder:text-gray-500"
                                 />
                             </div>
-                            <FilterDropdown label="Status" options={STATUS_OPTIONS} value={statusFilter} onChange={v => { setStatusFilter(v); resetPage(); }} />
-                            <FilterDropdown label="Method" options={METHOD_OPTIONS} value={methodFilter} onChange={v => { setMethodFilter(v); resetPage(); }} displayMap={METHOD_LABEL} />
+                            <div className="flex flex-wrap gap-2">
+                                <FilterDropdown label="Status" options={STATUS_OPTIONS} value={statusFilter} onChange={v => { setStatusFilter(v); resetPage(); }} />
+                                <FilterDropdown label="Method" options={METHOD_OPTIONS} value={methodFilter} onChange={v => { setMethodFilter(v); resetPage(); }} displayMap={METHOD_LABEL} />
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <table className="w-full text-left text-sm text-gray-500 dark:text-gray-400">
+                <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm text-gray-500 dark:text-gray-400 min-w-[640px]">
                     <thead className="bg-gray-50 dark:bg-gray-800 text-xs uppercase text-gray-700 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
                         <tr>
                             <th className="px-6 py-3 font-medium">Transaction ID</th>
@@ -211,27 +214,28 @@ export default function TransactionsPage() {
                         ))}
                     </tbody>
                 </table>
+                </div>
 
                 {/* Pagination */}
-                <div className="flex items-center justify-between border-t border-gray-200 dark:border-gray-700 px-6 py-4">
-                    <div className="text-sm text-gray-500 dark:text-gray-400">
-                        {filtered.length === 0 ? "No results" : `Showing ${start}–${end} of ${filtered.length}`}
-                    </div>
-                    <div className="flex items-center space-x-2">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-t border-gray-200 dark:border-gray-700 px-4 sm:px-6 py-3">
+                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                        {filtered.length === 0 ? "No results" : `${start}–${end} of ${filtered.length}`}
+                    </span>
+                    <div className="flex items-center gap-2">
                         <button
                             onClick={() => setPage(p => Math.max(1, p - 1))}
                             disabled={page === 1}
-                            className="flex items-center rounded-md border border-gray-200 dark:border-gray-600 px-3 py-1 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed"
+                            className="flex items-center rounded-md border border-gray-200 dark:border-gray-600 px-2.5 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed"
                         >
-                            <ChevronLeft className="h-4 w-4 mr-1" /> Prev
+                            <ChevronLeft className="h-3.5 w-3.5 mr-0.5" /> Prev
                         </button>
-                        <span className="text-sm text-gray-500 dark:text-gray-400">{page} / {totalPages}</span>
+                        <span className="text-xs text-gray-500 dark:text-gray-400">{page} / {totalPages}</span>
                         <button
                             onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                             disabled={page === totalPages}
-                            className="flex items-center rounded-md border border-gray-200 dark:border-gray-600 px-3 py-1 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed"
+                            className="flex items-center rounded-md border border-gray-200 dark:border-gray-600 px-2.5 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed"
                         >
-                            Next <ChevronRight className="h-4 w-4 ml-1" />
+                            Next <ChevronRight className="h-3.5 w-3.5 ml-0.5" />
                         </button>
                     </div>
                 </div>

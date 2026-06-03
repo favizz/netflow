@@ -215,7 +215,7 @@ export default function BuildingsPage() {
                         <p className="text-sm">No buildings yet. Add one to get started.</p>
                     </div>
                 ) : (
-                    <table className="w-full text-left text-sm text-gray-500 dark:text-gray-400">
+                    <div className="overflow-x-auto"><table className="w-full text-left text-sm text-gray-500 dark:text-gray-400 min-w-[560px]">
                         <thead className="bg-gray-50 dark:bg-gray-800 text-xs uppercase text-gray-700 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
                             <tr>
                                 <th className="px-6 py-3 font-medium">Code</th>
@@ -255,7 +255,7 @@ export default function BuildingsPage() {
                                 </tr>
                             ))}
                         </tbody>
-                    </table>
+                    </table></div>
                 )}
             </div>
 

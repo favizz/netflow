@@ -101,9 +101,9 @@ function offsetKey(key: string, period: TimePeriod, delta: number): string {
 function periodKeyLabel(key: string, period: TimePeriod): string {
     if (period === "daily") {
         const [y, m] = key.split('-').map(Number);
-        return new Date(y, m - 1).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+        return new Date(y, m - 1).toLocaleDateString('id-ID', { month: 'short', year: 'numeric' });
     }
-    if (period === "monthly") return `Tahun ${key}`;
+    if (period === "monthly") return key;
     return '';
 }
 
@@ -747,7 +747,7 @@ export default function UnitDetailPage() {
 
                 <div className="lg:col-span-2 space-y-6">
                     {/* Period selector */}
-                    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm px-4 py-3">
+                    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm px-4 py-3 space-y-2">
                         <div className="flex items-center justify-between gap-3">
                             <div className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
                                 {isLive && (
@@ -755,31 +755,29 @@ export default function UnitDetailPage() {
                                 )}
                                 {isLive ? (isConnected ? "Live" : "Connecting...") : "Rentang Waktu"}
                             </div>
-                            <div className="flex items-center gap-2">
-                                {(period === "daily" || period === "monthly") && (
-                                    <div className="flex items-center">
-                                        <button
-                                            onClick={() => setPeriodKey(k => offsetKey(k, period, -1))}
-                                            disabled={!hasPrev}
-                                            className="rounded p-1 text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                                        >
-                                            <ChevronLeft className="h-4 w-4" />
-                                        </button>
-                                        <span className="text-xs font-medium text-gray-700 dark:text-gray-300 min-w-[120px] text-center">
-                                            {periodKeyLabel(periodKey, period)}
-                                        </span>
-                                        <button
-                                            onClick={() => setPeriodKey(k => offsetKey(k, period, 1))}
-                                            disabled={!hasNext}
-                                            className="rounded p-1 text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                                        >
-                                            <ChevronRight className="h-4 w-4" />
-                                        </button>
-                                    </div>
-                                )}
-                                <PeriodDropdown value={period} onChange={setPeriod} />
-                            </div>
+                            <PeriodDropdown value={period} onChange={setPeriod} />
                         </div>
+                        {(period === "daily" || period === "monthly") && (
+                            <div className="flex items-center justify-center gap-0.5">
+                                <button
+                                    onClick={() => setPeriodKey(k => offsetKey(k, period, -1))}
+                                    disabled={!hasPrev}
+                                    className="rounded p-0.5 text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                >
+                                    <ChevronLeft className="h-4 w-4" />
+                                </button>
+                                <span className="text-xs font-medium text-gray-700 dark:text-gray-300 min-w-[80px] text-center">
+                                    {periodKeyLabel(periodKey, period)}
+                                </span>
+                                <button
+                                    onClick={() => setPeriodKey(k => offsetKey(k, period, 1))}
+                                    disabled={!hasNext}
+                                    className="rounded p-0.5 text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                >
+                                    <ChevronRight className="h-4 w-4" />
+                                </button>
+                            </div>
+                        )}
                     </div>
 
                     {/* Power Chart */}
@@ -841,6 +839,7 @@ export default function UnitDetailPage() {
                                         <YAxis axisLine={false} tickLine={false} tick={{ fill: tickColor, fontSize: 11 }} width={36} />
                                         <RechartsTooltip
                                             contentStyle={tooltipStyle}
+                                            cursor={{ stroke: activeLiveMetric.color, strokeWidth: 1, strokeDasharray: '3 3' }}
                                             formatter={(val: unknown) => [`${Number(val ?? 0).toFixed(isLive && livePowerMetric === "current" ? 3 : 2)} ${isLive ? activeLiveMetric.unit : "kWh"}`, isLive ? activeLiveMetric.label : "Consumption"] as [string, string]}
                                         />
                                         <Area type="monotone" dataKey="value" stroke={activeLiveMetric.color} strokeWidth={2} fillOpacity={1} fill="url(#colorPower)" dot={false} activeDot={isLive ? false : { r: 4 }} isAnimationActive={!isLive} />
@@ -879,7 +878,7 @@ export default function UnitDetailPage() {
                                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
                                         <XAxis dataKey="time" axisLine={false} tickLine={false} tick={{ fill: tickColor, fontSize: 11 }} />
                                         <YAxis axisLine={false} tickLine={false} tick={{ fill: tickColor, fontSize: 11 }} width={36} />
-                                        <RechartsTooltip contentStyle={tooltipStyle} />
+                                        <RechartsTooltip contentStyle={tooltipStyle} cursor={{ stroke: '#06b6d4', strokeWidth: 1, strokeDasharray: '3 3' }} />
                                         <Line type="monotone" dataKey="value" stroke="#06b6d4" strokeWidth={2} dot={false} activeDot={isLive ? false : { r: 4 }} isAnimationActive={!isLive} />
                                     </LineChart>
                                 </ResponsiveContainer>

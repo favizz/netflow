@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { CheckCircle, Zap, Droplets, QrCode, Building2, Copy, Check, ArrowLeft, Info, Clock, Wallet } from "lucide-react"
+import { CheckCircle, Zap, Droplets, QrCode, Building2, ArrowLeft, Info, Clock, Wallet } from "lucide-react"
 import { toast } from "sonner"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -133,9 +133,27 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
     if (step !== "instruction") return
     const limit = selectedOption?.method === "qris" ? 15 * 60 : 24 * 60 * 60
     setTimeLeft(limit)
-    const id = setInterval(() => setTimeLeft((t) => Math.max(0, t - 1)), 1000)
+    const id = setInterval(() => setTimeLeft((t) => {
+      if (t <= 1) return 0
+      return t - 1
+    }), 1000)
     return () => clearInterval(id)
   }, [step, selectedOption?.method])
+
+  // Timer expiry → failed
+  useEffect(() => {
+    if (step !== "instruction" || timeLeft > 0) return
+    toast.error("Waktu pembayaran habis. Silakan buat transaksi baru.")
+    restart()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timeLeft, step])
+
+  // Auto-copy VA number when instruction page opens
+  useEffect(() => {
+    if (step !== "instruction" || selectedOption?.method !== "transfer" || !initResult?.vaNumber) return
+    void navigator.clipboard.writeText(initResult.vaNumber).catch(() => {})
+    toast.success("Nomor VA disalin otomatis")
+  }, [step, initResult?.vaNumber, selectedOption?.method])
 
   useEffect(() => {
     let active = true
@@ -515,19 +533,15 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
 
                 <div className="p-5 space-y-4">
                   <div className="bg-muted/40 rounded-xl p-4">
-                    <p className="text-xs text-muted-foreground mb-2">Nomor Virtual Account</p>
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-lg font-mono font-bold text-foreground tracking-widest leading-none">{vaNumber}</p>
-                      <button
-                        onClick={() => copyVA(vaNumber)}
-                        className={`p-2 rounded-lg transition-all flex-shrink-0 ${
-                          copied ? "bg-green-500/10 text-green-600" : "bg-primary/10 text-primary hover:bg-primary/20 active:scale-95"
-                        }`}
-                        aria-label={copied ? "Tersalin" : "Salin nomor VA"}
-                      >
-                        {copied ? <Check size={16} /> : <Copy size={16} />}
-                      </button>
-                    </div>
+                    <p className="text-xs text-muted-foreground mb-2">Nomor Virtual Account <span className="text-primary">(ketuk untuk salin)</span></p>
+                    <button
+                      onClick={() => copyVA(vaNumber)}
+                      className="w-full text-left active:opacity-70 transition-opacity"
+                    >
+                      <p className={`text-lg font-mono font-bold tracking-widest leading-none ${copied ? "text-green-600" : "text-foreground"}`}>
+                        {copied ? "✓ Tersalin!" : vaNumber}
+                      </p>
+                    </button>
                   </div>
 
                   <div className="flex items-center justify-between px-1">
@@ -611,9 +625,6 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
               </Card>
             )}
 
-            <p className="text-xs text-center text-muted-foreground px-4">
-              Status akan diperbarui otomatis. Anda juga bisa menekan konfirmasi setelah pembayaran selesai.
-            </p>
           </>
         )}
       </div>
@@ -627,22 +638,29 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
       )}
 
       {/* Bottom CTA */}
-      <div className="fixed bottom-16 left-0 right-0 p-4 bg-background/95 backdrop-blur-sm border-t border-border space-y-2">
-        {step === "amount" && (
-          <Button onClick={goToMethod} disabled={totalAmount < MIN_AMOUNT} className={cta.primary}>
-            Pilih Metode Pembayaran
-          </Button>
-        )}
-        {step === "method" && (
-          <Button onClick={() => void goToInstruction()} disabled={!selectedOption || loading} className={cta.primary}>
-            {loading ? "Memproses..." : "Lanjutkan"}
-          </Button>
-        )}
+      <div className="fixed bottom-16 left-0 right-0 bg-background/95 backdrop-blur-sm border-t border-border">
         {step === "instruction" && (
-          <Button onClick={() => void confirmPayment()} disabled={loading} className={cta.primary}>
-            {loading ? "Mengkonfirmasi..." : "Saya Sudah Bayar"}
-          </Button>
+          <p className="text-xs text-center text-muted-foreground px-4 pt-3 pb-0">
+            Status diperbarui otomatis. Tekan konfirmasi setelah selesai bayar.
+          </p>
         )}
+        <div className="p-4 space-y-2">
+          {step === "amount" && (
+            <Button onClick={goToMethod} disabled={totalAmount < MIN_AMOUNT} className={cta.primary}>
+              Pilih Metode Pembayaran
+            </Button>
+          )}
+          {step === "method" && (
+            <Button onClick={() => void goToInstruction()} disabled={!selectedOption || loading} className={cta.primary}>
+              {loading ? "Memproses..." : "Lanjutkan"}
+            </Button>
+          )}
+          {step === "instruction" && (
+            <Button onClick={() => void confirmPayment()} disabled={loading} className={cta.primary}>
+              {loading ? "Mengkonfirmasi..." : "Saya Sudah Bayar"}
+            </Button>
+          )}
+        </div>
       </div>
     </div>
   )

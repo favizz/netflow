@@ -161,18 +161,19 @@ export function InventoryTable({ data, initialFilter = "", buildings = [], onAdd
                     <div className="flex items-center gap-2">
                         <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{data.length} devices</span>
                     </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                        <div className="relative flex-1 sm:flex-none">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+                        <div className="relative w-full sm:w-52">
                             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400 dark:text-gray-500" />
                             <input
                                 type="text"
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
                                 placeholder="Search unit, tenant, serial..."
-                                className="h-9 w-full sm:w-52 rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 pl-9 pr-4 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary placeholder:text-gray-400 dark:placeholder:text-gray-500"
+                                className="h-9 w-full rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 pl-9 pr-4 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary placeholder:text-gray-400 dark:placeholder:text-gray-500"
                             />
                         </div>
-                                        {buildings.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-2">
+                        {buildings.length > 0 && (
                             <SelectDropdown
                                 label="Building"
                                 items={[
@@ -199,6 +200,7 @@ export function InventoryTable({ data, initialFilter = "", buildings = [], onAdd
                                 <span>Add Unit</span>
                             </button>
                         )}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -292,25 +294,25 @@ export function InventoryTable({ data, initialFilter = "", buildings = [], onAdd
                 </table>
             </div>
 
-            <div className="flex items-center justify-between border-t border-gray-200 dark:border-gray-700 px-6 py-4">
-                <div className="text-sm text-gray-500 dark:text-gray-400">
-                    {filteredData.length === 0 ? "No results" : `Showing ${start}–${end} of ${filteredData.length}`}
-                </div>
-                <div className="flex items-center space-x-2">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-gray-200 dark:border-gray-700 px-3 sm:px-6 py-3">
+                <span className="text-xs text-gray-500 dark:text-gray-400">
+                    {filteredData.length === 0 ? "No results" : `${start}–${end} of ${filteredData.length}`}
+                </span>
+                <div className="flex items-center gap-2">
                     <button
                         onClick={() => setPage(p => Math.max(1, p - 1))}
                         disabled={page === 1}
-                        className="flex items-center rounded-md border border-gray-200 dark:border-gray-600 px-3 py-1 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed"
+                        className="flex items-center rounded-md border border-gray-200 dark:border-gray-600 px-2.5 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed"
                     >
-                        <ChevronLeft className="h-4 w-4 mr-1" /> Prev
+                        <ChevronLeft className="h-3.5 w-3.5 mr-0.5" /> Prev
                     </button>
-                    <span className="text-sm text-gray-500 dark:text-gray-400">{page} / {totalPages}</span>
+                    <span className="text-xs text-gray-500 dark:text-gray-400">{page} / {totalPages}</span>
                     <button
                         onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                         disabled={page === totalPages}
-                        className="flex items-center rounded-md border border-gray-200 dark:border-gray-600 px-3 py-1 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed"
+                        className="flex items-center rounded-md border border-gray-200 dark:border-gray-600 px-2.5 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed"
                     >
-                        Next <ChevronRight className="h-4 w-4 ml-1" />
+                        Next <ChevronRight className="h-3.5 w-3.5 ml-0.5" />
                     </button>
                 </div>
             </div>

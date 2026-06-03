@@ -48,9 +48,9 @@ function offsetPeriodKey(key: string, period: 'daily' | 'monthly' | 'yearly', de
 function periodLabel(key: string, period: Period): string {
     if (period === 'daily') {
         const [y, m] = key.split('-').map(Number);
-        return new Date(y, m - 1).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+        return new Date(y, m - 1).toLocaleDateString('id-ID', { month: 'short', year: 'numeric' });
     }
-    if (period === 'monthly') return `Tahun ${key}`;
+    if (period === 'monthly') return key;
     return 'All Time';
 }
 
@@ -300,13 +300,13 @@ export function TrendChart() {
                     </div>
                 </div>
 
-                <div className="flex items-center gap-1">
+                <div className="flex flex-col gap-2">
                     <div className="flex rounded-md overflow-hidden border border-gray-200 dark:border-gray-600 text-xs font-medium">
                         {PERIOD_OPTIONS.map(({ id, label }) => (
                             <button
                                 key={id}
                                 onClick={() => setPeriod(id)}
-                                className={`px-2.5 py-1.5 transition-colors border-l first:border-l-0 border-gray-200 dark:border-gray-600 ${period === id ? 'bg-primary text-white' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
+                                className={`flex-1 px-2.5 py-1.5 transition-colors border-l first:border-l-0 border-gray-200 dark:border-gray-600 ${period === id ? 'bg-primary text-white' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
                             >
                                 {label}
                             </button>
@@ -314,21 +314,21 @@ export function TrendChart() {
                     </div>
 
                     {(period === 'daily' || period === 'monthly') && (
-                        <div className="flex items-center">
+                        <div className="flex items-center justify-center gap-0.5">
                             <button
                                 onClick={() => setPeriodKey(k => offsetPeriodKey(k, period, -1))}
                                 disabled={!hasPrev}
-                                className="rounded p-1 text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                className="rounded p-0.5 text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                             >
                                 <ChevronLeft className="h-4 w-4" />
                             </button>
-                            <span className="text-xs font-medium text-gray-700 dark:text-gray-300 min-w-[100px] text-center">
+                            <span className="text-xs font-medium text-gray-700 dark:text-gray-300 min-w-[80px] text-center">
                                 {periodLabel(periodKey, period)}
                             </span>
                             <button
                                 onClick={() => setPeriodKey(k => offsetPeriodKey(k, period, 1))}
                                 disabled={!hasNext}
-                                className="rounded p-1 text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                className="rounded p-0.5 text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                             >
                                 <ChevronRight className="h-4 w-4" />
                             </button>
@@ -413,6 +413,7 @@ export function TrendChart() {
                             <YAxis axisLine={false} tickLine={false} tick={{ fill: tickColor, fontSize: 11 }} width={40} />
                             <Tooltip
                                 contentStyle={tooltipStyle}
+                                cursor={{ stroke: COLORS[utility], strokeWidth: 1, strokeDasharray: '3 3' }}
                                 formatter={(val: number | string | readonly (number | string)[] | undefined) => [
                                     `${Number(val ?? 0).toFixed(2)} ${LABELS[utility].unit}`,
                                     LABELS[utility].title

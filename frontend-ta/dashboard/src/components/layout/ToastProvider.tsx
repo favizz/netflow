@@ -38,23 +38,28 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     return (
         <ToastContext.Provider value={{ success, error }}>
             {children}
-            <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2">
+            <div className="fixed bottom-4 left-4 right-4 sm:left-auto sm:right-4 z-50 flex flex-col gap-2 sm:max-w-sm">
                 {toasts.map(toast => (
                     <div
                         key={toast.id}
                         className={cn(
-                            "flex items-center gap-3 min-w-[300px] rounded-lg p-4 shadow-lg border animate-in slide-in-from-bottom-5 fade-in duration-300",
-                            toast.type === 'success' ? "bg-white dark:bg-gray-800 border-green-200 dark:border-green-900/50" : "bg-white dark:bg-gray-800 border-red-200 dark:border-red-900/50"
+                            "relative flex items-start gap-3 w-full rounded-xl p-4 pr-8 shadow-lg border animate-in slide-in-from-bottom-4 fade-in duration-300",
+                            toast.type === 'success'
+                                ? "bg-white dark:bg-gray-800 border-green-200 dark:border-green-900/50"
+                                : "bg-white dark:bg-gray-800 border-red-200 dark:border-red-900/50"
                         )}
                     >
                         {toast.type === 'success' ? (
-                            <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-500 shrink-0" />
+                            <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-500 shrink-0 mt-0.5" />
                         ) : (
-                            <XCircle className="h-5 w-5 text-red-600 dark:text-red-500 shrink-0" />
+                            <XCircle className="h-4 w-4 text-red-600 dark:text-red-500 shrink-0 mt-0.5" />
                         )}
-                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100 flex-1">{toast.message}</p>
-                        <button onClick={() => removeToast(toast.id)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 shrink-0">
-                            <X className="h-4 w-4" />
+                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100 flex-1 leading-snug">{toast.message}</p>
+                        <button
+                            onClick={() => removeToast(toast.id)}
+                            className="absolute top-2 right-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                        >
+                            <X className="h-3.5 w-3.5" />
                         </button>
                     </div>
                 ))}

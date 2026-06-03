@@ -1,7 +1,9 @@
 import { useState } from "react"
+import { useTheme } from "next-themes"
 import { GoogleLogin } from "@react-oauth/google"
 import { Card } from "@/components/ui/card"
 import logoWhite from "@/assets/netflow-logo-white.png"
+import logoBlack from "@/assets/netflow-logo-black.png"
 
 interface LoginFormProps {
   onGoogleLogin: (credential: string) => Promise<void>
@@ -10,6 +12,7 @@ interface LoginFormProps {
 export default function LoginForm({ onGoogleLogin }: LoginFormProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
+  const { resolvedTheme } = useTheme()
 
   const handleSuccess = async (response: { credential?: string }) => {
     if (!response.credential) return
@@ -33,7 +36,7 @@ export default function LoginForm({ onGoogleLogin }: LoginFormProps) {
           <div className="text-center space-y-3">
             <div className="flex justify-center mb-6">
               <img
-                src={logoWhite}
+                src={resolvedTheme === 'dark' ? logoWhite : logoBlack}
                 alt="NETFLOW"
                 className="h-20 w-20 object-contain"
               />
