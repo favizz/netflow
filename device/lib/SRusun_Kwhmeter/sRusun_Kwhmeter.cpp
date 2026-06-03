@@ -1,12 +1,22 @@
 #include <Arduino.h>
+#include <SD.h>
+#include <WiFi.h>
+#include <LiquidCrystal_I2C.h>
+#include <time.h>
+#include <sys/time.h>
+#include <ArduinoJson.h>
+#include <HTTPClient.h>
 #include <PZEM004Tv30.h>
+#include <stdint.h>
+#include "driver/pcnt.h"
+
 
 #include "sRusun_Kwhmeter.h"
 
 const int rxPin = 16;
 const int txPin = 17;
 
-float CAL_FACTOR_POWER = 1.05f;  // matches backend DEFAULTS.CAL_FACTOR_POWER
+float CAL_FACTOR_POWER = 1.0;
 float voltage = 0.0;
 float current = 0.0;
 float power = 0.0;

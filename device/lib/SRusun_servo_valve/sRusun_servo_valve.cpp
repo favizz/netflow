@@ -15,6 +15,7 @@
 
 //Servo (Only channel 0 used)
 const int servoPin = 26;
+const int ledcChannel = 0;  // PWM channel
 String inputString = ""; // String to hold incoming data
 
 // Servo control variables
@@ -28,18 +29,17 @@ bool water_valve_state = true; // Valve state
 
 void initServoValve()
 {
-  // ESP32 Arduino core v3+ API: ledcAttach(pin, freq, resolution)
-  ledcAttach(servoPin, 50, 16);
+  ledcSetup(ledcChannel, 50, 16);
+  ledcAttachPin(servoPin, ledcChannel);
 }
 
-void writeServo(int angle)
-{
-  int minDuty = 1638;  // 0.5 ms at 50 Hz, 16-bit resolution
-  int maxDuty = 8192;  // 2.5 ms at 50 Hz, 16-bit resolution
+void writeServo(int angle) 
+{ 
+  int minDuty = 1638;  // 0.5 ms pulse
+  int maxDuty = 8192;  // 2.5 ms pulse
   angle = constrain(angle, 0, 180);
   int duty = map(angle, 0, 180, minDuty, maxDuty);
-  // ESP32 Arduino core v3+ API: ledcWrite(pin, duty)
-  ledcWrite(servoPin, duty);
+  ledcWrite(ledcChannel, duty);
 }
 
 void ServoValveOpen()
