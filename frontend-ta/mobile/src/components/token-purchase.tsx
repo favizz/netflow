@@ -129,9 +129,8 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
     return false
   }, [completePayment])
 
-  // Keep restart in a ref so the interval callback always sees the latest version
-  const restartRef = useRef(restart)
-  useEffect(() => { restartRef.current = restart }, [restart])
+  // Initialized with a no-op; updated to the real restart once it's declared below.
+  const restartRef = useRef<() => void>(() => {})
 
   useEffect(() => {
     if (step !== "instruction") return
@@ -294,6 +293,7 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
     setInitResult(null)
     setTransactionId("")
   }
+  restartRef.current = restart
 
   const formatCountdown = (s: number) => {
     const h   = Math.floor(s / 3600)
