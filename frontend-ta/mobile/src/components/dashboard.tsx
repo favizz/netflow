@@ -129,8 +129,8 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
         if (!active) return
         setKwh(d.summary.tokenElectricity)
         setWater(d.summary.tokenWater)
-        setRelayOn(d.summary.relayStatus)
-        setValveOpen(d.summary.valveStatus)
+        setRelayOn(!!d.summary.relayStatus)
+        setValveOpen(!!d.summary.valveStatus)
         setIsDeviceOnline(d.summary.connectivity?.online ?? false)
       } catch { /* errors surface in notification bell */ }
       finally { if (active) setLoading(false) }
@@ -378,12 +378,14 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
     try {
       if (confirmTarget === "relay") {
         const res = await api.setRelay(unitId, confirmNextVal)
-        setRelayOn(res.relayStatus)
-        toast.success(res.relayStatus ? "Aliran listrik dinyalakan" : "Aliran listrik dimatikan")
+        const on = !!res.relayStatus
+        setRelayOn(on)
+        toast.success(on ? "Aliran listrik dinyalakan" : "Aliran listrik dimatikan")
       } else {
         const res = await api.setValve(unitId, confirmNextVal)
-        setValveOpen(res.valveStatus)
-        toast.success(res.valveStatus ? "Aliran air dibuka" : "Aliran air ditutup")
+        const open = !!res.valveStatus
+        setValveOpen(open)
+        toast.success(open ? "Aliran air dibuka" : "Aliran air ditutup")
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Gagal mengubah status perangkat")

@@ -193,7 +193,7 @@ export default function App() {
   }
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden bg-background">
+    <div className="flex flex-col h-[100dvh] overflow-hidden bg-background">
 
       {/* ── Header ─────────────────────────────────────────────────────── */}
       <header className="flex-none z-30 bg-card border-b border-border flex items-center justify-between px-4 h-14 gap-3">
@@ -404,8 +404,7 @@ function NotificationsPage({ anomalies, lastReadAt }: { anomalies: AnomalyItem[]
                   </span>
                   <span className="text-[10px] text-muted-foreground/60 shrink-0">{formatTimeAgo(a.detectedAt)}</span>
                 </div>
-                {/* Line 2: message (single line) */}
-                <p className="text-xs text-foreground truncate mt-1 leading-snug">{a.message}</p>
+                <p className="text-xs text-foreground mt-1 leading-snug">{a.message}</p>
               </div>
             )
           })}

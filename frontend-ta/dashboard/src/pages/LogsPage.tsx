@@ -265,7 +265,7 @@ export default function LogsPage() {
                                     </td>
                                     <td className="px-4 py-3">
                                         <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${RESULT_STYLE[log.result] ?? RESULT_STYLE.info}`}>
-                                            {log.result}
+                                            {log.result === 'info' ? 'recorded' : log.result}
                                         </span>
                                     </td>
                                 </tr>

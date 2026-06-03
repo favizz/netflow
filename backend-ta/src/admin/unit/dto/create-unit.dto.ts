@@ -1,4 +1,11 @@
-import { IsNotEmpty, IsOptional, IsString, IsInt, Min } from 'class-validator';
+import {
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsString,
+  IsInt,
+  Min,
+} from 'class-validator';
 
 export class CreateUnitDto {
   @IsString()
@@ -10,8 +17,14 @@ export class CreateUnitDto {
   device_id!: string;
 
   @IsOptional()
+  @IsNumber()
   @Min(0)
-  balance?: number;
+  token_electricity?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  token_water?: number;
 
   @IsOptional()
   @IsInt()

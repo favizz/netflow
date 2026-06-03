@@ -21,6 +21,13 @@ interface TelegramUpdate {
   };
 }
 
+function esc(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
 @Controller('telegram')
 export class TelegramController {
   private readonly logger = new Logger(TelegramController.name);
@@ -57,8 +64,8 @@ export class TelegramController {
       this.pending.set(chatId, true);
       await this.reply(
         chatId,
-        `👋 Hi ${firstName}! I'm the NetFlow notification bot.\n\n` +
-          `Please reply with your *registered email address* to link this Telegram account and start receiving alerts.`,
+        `&#128075; Halo, <b>${esc(firstName)}</b>! Saya adalah bot notifikasi NetFlow.\n\n` +
+          `Balas pesan ini dengan <b>alamat email terdaftar</b> Anda untuk menghubungkan akun Telegram ini dan mulai menerima notifikasi.`,
       );
       return;
     }
@@ -72,12 +79,12 @@ export class TelegramController {
         await this.residentsService.setTelegramChatId(resident.email, null);
         await this.reply(
           chatId,
-          '✅ Your Telegram account has been unlinked from NetFlow.',
+          '&#9989; Akun Telegram Anda telah berhasil dilepas dari NetFlow.',
         );
       } else {
         await this.reply(
           chatId,
-          'No NetFlow account is linked to this Telegram.',
+          'Tidak ada akun NetFlow yang tertaut dengan Telegram ini.',
         );
       }
       return;
@@ -90,7 +97,7 @@ export class TelegramController {
       if (!email.includes('@')) {
         await this.reply(
           chatId,
-          "❌ That doesn't look like a valid email. Please try again.",
+          '&#10060; Format email tidak valid. Silakan coba lagi.',
         );
         return;
       }
@@ -99,7 +106,7 @@ export class TelegramController {
       if (!resident) {
         await this.reply(
           chatId,
-          `❌ No account found for *${email}*.\n\nMake sure it matches the email registered by your building admin.`,
+          `&#10060; Akun dengan email <b>${esc(email)}</b> tidak ditemukan.\n\nPastikan email yang Anda masukkan sesuai dengan yang didaftarkan oleh pengelola gedung.`,
         );
         return;
       }
@@ -110,8 +117,8 @@ export class TelegramController {
 
       await this.reply(
         chatId,
-        `✅ *Linked!* Your account (${email}) will now receive NetFlow alerts here.\n\n` +
-          `Send /unlink at any time to disconnect.`,
+        `&#9989; <b>Berhasil tertaut!</b> Akun Anda (<b>${esc(email)}</b>) akan menerima notifikasi NetFlow di sini.\n\n` +
+          `Kirim /unlink kapan saja untuk memutus koneksi.`,
       );
       return;
     }
@@ -119,11 +126,11 @@ export class TelegramController {
     // Unknown message — prompt the user
     await this.reply(
       chatId,
-      `Send /start to link your NetFlow account, or /unlink to disconnect.`,
+      `Kirim /start untuk menghubungkan akun NetFlow Anda, atau /unlink untuk memutus koneksi.`,
     );
   }
 
-  private async reply(chatId: number, text: string): Promise<void> {
-    await this.notificationService.sendTelegram(String(chatId), text);
+  private async reply(chatId: number, html: string): Promise<void> {
+    await this.notificationService.sendTelegram(String(chatId), html);
   }
 }

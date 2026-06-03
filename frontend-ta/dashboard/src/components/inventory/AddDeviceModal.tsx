@@ -172,7 +172,16 @@ export function AddDeviceModal({ isOpen, onClose, onSuccess }: AddDeviceModalPro
             onSuccess();
             onClose();
         } catch (err) {
-            setError(err instanceof Error ? err.message.replace(/^API error \(\d+\): /, '') : 'Failed to add unit');
+            const raw = err instanceof Error ? err.message.replace(/^API error \(\d+\): /, '') : '';
+            try {
+                const parsed = JSON.parse(raw) as { message?: string | string[] };
+                const msg = Array.isArray(parsed.message)
+                    ? parsed.message[0]
+                    : (parsed.message ?? raw);
+                setError(msg || 'Failed to add unit');
+            } catch {
+                setError(raw || 'Failed to add unit');
+            }
         } finally {
             setLoading(false);
         }
