@@ -34,14 +34,16 @@ const rawUnit = process.argv[2] || 'A-101';
 const UNIT_NO = rawUnit;
 const DEVICE_ID = `DEV-${UNIT_NO}`;
 const BROKER_URL = process.env.MQTT_BROKER_URL || process.argv[3] || 'mqtt://localhost:1883';
-const USERNAME   = process.env.MQTT_USERNAME || undefined;
-const PASSWORD   = process.env.MQTT_DEVICE_SECRET || process.env.MQTT_PASSWORD || undefined;
+// Devices authenticate with device_id as username and MQTT_DEVICE_SECRET as password
+const USERNAME   = DEVICE_ID;
+const PASSWORD   = process.env.MQTT_DEVICE_SECRET || undefined;
 const INTERVAL_MS = 2000;
 
 console.log('====================================================');
 console.log(`🔌 Single Device Simulator`);
 console.log(`   Unit: ${UNIT_NO} | Device: ${DEVICE_ID}`);
 console.log(`   Broker: ${BROKER_URL}`);
+console.log(`   Auth: username=${USERNAME} password=${PASSWORD ? '***set***' : 'NOT SET'}`);
 console.log(`   Interval: ${INTERVAL_MS / 1000}s`);
 console.log('====================================================\n');
 
