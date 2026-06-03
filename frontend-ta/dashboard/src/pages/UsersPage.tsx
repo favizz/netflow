@@ -316,8 +316,8 @@ export default function UsersPage() {
                             <Users className="h-5 w-5 text-gray-400 dark:text-gray-500" />
                             <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{residents.length} users total</span>
                         </div>
-                        <div className="flex items-center gap-3">
-                            <div className="relative">
+                        <div className="flex flex-wrap items-center gap-2">
+                            <div className="relative flex-1 sm:flex-none">
                                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" />
                                 <input
                                     type="text"
@@ -378,6 +378,16 @@ export default function UsersPage() {
                                                 <div className="min-w-0">
                                                     <div className="font-medium text-gray-900 dark:text-gray-100 truncate">{res.name || '-'}</div>
                                                     <div className="text-xs text-gray-400 dark:text-gray-500 truncate max-w-[120px] sm:max-w-none">{res.email}</div>
+                                                    <div className="flex flex-wrap gap-1 mt-1 sm:hidden">
+                                                        {assigned.length === 0
+                                                            ? <span className="text-xs text-gray-400 dark:text-gray-500">No units</span>
+                                                            : assigned.map(u => (
+                                                                <span key={u.id} className="inline-flex items-center rounded-full bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 px-1.5 py-0.5 text-xs text-blue-700 dark:text-blue-400">
+                                                                    {u.unit_no}
+                                                                </span>
+                                                            ))
+                                                        }
+                                                    </div>
                                                 </div>
                                             </div>
                                         </td>
