@@ -6,12 +6,11 @@ import { fetchApi } from "@/lib/api";
 const PAGE_SIZE = 15;
 
 const ACTION_CATEGORY: Record<string, string> = {
-    CREATE: 'User Management',
-    DELETE: 'User Management',
     UPDATE_ACCESS: 'User Management',
     ASSIGN_UNIT: 'Unit Management',
     UNASSIGN_UNIT: 'Unit Management',
     UPDATE_SETTINGS: 'Calibration',
+    PUSH_CONFIG: 'Calibration',
     CONFIG_ACK: 'Calibration',
     CREATE_TARIFF: 'Tariff',
     UPDATE_TARIFF: 'Tariff',
@@ -23,6 +22,8 @@ const ACTION_CATEGORY: Record<string, string> = {
     OTA_ACK: 'Firmware',
     SEND_COMMAND: 'Device',
     COMMAND_ACK: 'Device',
+    CREATE: 'User Management',
+    DELETE: 'User Management',
 };
 
 function deriveCategory(action: string): string {
@@ -33,6 +34,8 @@ function deriveCategory(action: string): string {
 }
 
 const CATEGORIES = ['All', 'User Management', 'Unit Management', 'Calibration', 'Tariff', 'Transactions', 'Anomaly', 'Firmware', 'Device', 'System Error', 'Other'];
+
+type Building = { id: number; name: string };
 const RESULTS = ['All', 'success', 'failure', 'info'];
 
 const RESULT_STYLE: Record<string, string> = {
@@ -166,17 +169,22 @@ export default function LogsPage() {
     const [filterResult, setFilterResult] = useState('All');
     const [page, setPage] = useState(0);
     const [unitNames, setUnitNames] = useState<Map<string, string>>(new Map());
+    const [buildingNames, setBuildingNames] = useState<Map<string, string>>(new Map());
 
     useEffect(() => {
         setLoading(true);
         Promise.all([
             fetchApi('/admin/audit-logs').catch(() => []),
             fetchApi('/unit').catch(() => []),
-        ]).then(([auditData, units]) => {
+            fetchApi('/admin/buildings').catch(() => []),
+        ]).then(([auditData, units, buildings]) => {
             setLogs(Array.isArray(auditData) ? auditData.map(mapAuditLog) : []);
-            const map = new Map<string, string>();
-            (units as Array<{ id: number; unit_no: string }>).forEach(u => map.set(String(u.id), u.unit_no));
-            setUnitNames(map);
+            const unitMap = new Map<string, string>();
+            (units as Array<{ id: number; unit_no: string }>).forEach(u => unitMap.set(String(u.id), u.unit_no));
+            setUnitNames(unitMap);
+            const buildingMap = new Map<string, string>();
+            (buildings as Building[]).forEach(b => buildingMap.set(String(b.id), b.name));
+            setBuildingNames(buildingMap);
         }).catch(() => setLogs([]))
           .finally(() => setLoading(false));
     }, []);
@@ -252,7 +260,11 @@ export default function LogsPage() {
                                     <td className="px-4 py-3 text-xs text-gray-900 dark:text-gray-300">
                                         {log.target_type
                                             ? `${log.target_type}${log.target
-                                                ? ` – ${log.target_type === 'unit' ? (unitNames.get(log.target) || log.target) : log.target}`
+                                                ? ` – ${
+                                                    log.target_type === 'unit' ? (unitNames.get(log.target) || log.target) :
+                                                    log.target_type === 'building' ? (buildingNames.get(log.target) || log.target) :
+                                                    log.target
+                                                }`
                                                 : ''}`
                                             : '—'}
                                     </td>

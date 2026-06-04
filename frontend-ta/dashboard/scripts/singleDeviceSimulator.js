@@ -135,6 +135,9 @@ client.on('connect', () => {
     console.log(`✅ Connected as ${DEVICE_ID}\n`);
 
     client.subscribe(`device/${DEVICE_ID}/command`);
+    client.subscribe(`device/${DEVICE_ID}/config`);
+    client.subscribe(`device/${DEVICE_ID}/ota`);
+    client.subscribe(`device/${DEVICE_ID}/topup`);
 
     setInterval(() => {
         const payload = generatePayload();
@@ -164,12 +167,13 @@ client.on('connect', () => {
 });
 
 client.on('message', (topic, message) => {
+    // ── Relay / valve command (1 byte binary) ─────────────────────────────
     if (topic === `device/${DEVICE_ID}/command` && message.length === 1) {
-        const type = (message[0] >> 4) & 0x0F;
-        const val  = message[0] & 0x0F;
+        const type   = (message[0] >> 4) & 0x0F;
+        const val    = message[0] & 0x0F;
         const typeStr = type === 1 ? 'relay' : type === 2 ? 'valve' : 'unknown';
 
-        if (type === 1) state.relayOn  = val === 1;
+        if (type === 1) state.relayOn   = val === 1;
         if (type === 2) state.valveOpen = val === 1;
 
         console.log(`\n⚡ COMMAND: ${typeStr} → ${val ? 'ON' : 'OFF'}`);
@@ -177,6 +181,59 @@ client.on('message', (topic, message) => {
             `device/${DEVICE_ID}/command_ack`,
             JSON.stringify({ status: 'ok', type: typeStr, value: val }),
         );
+        return;
+    }
+
+    // ── Calibration config (4 bytes binary) ───────────────────────────────
+    // bytes [0:1] uint16 BE = CAL_FACTOR_FLOWRATE × 100
+    // byte  [2]   uint8    = CAL_FACTOR_POWER    × 100
+    // byte  [3]   uint8    = SENSOR_SAMPLING_TIME
+    if (topic === `device/${DEVICE_ID}/config` && message.length === 4) {
+        const cf = message.readUInt16BE(0) / 100;
+        const cp = message[2] / 100;
+        const st = message[3];
+        console.log(`\n🔧 CONFIG: flowrate=${cf} power=${cp} sampling=${st}s`);
+        client.publish(
+            `device/${DEVICE_ID}/config_ack`,
+            JSON.stringify({ status: 'ok', cf, cp, st }),
+        );
+        return;
+    }
+
+    // ── OTA firmware update (4+ bytes binary) ─────────────────────────────
+    // byte[0] major, byte[1] minor, byte[2] patch, byte[3] flags, byte[4..] URL
+    if (topic === `device/${DEVICE_ID}/ota` && message.length >= 4) {
+        const major = message[0], minor = message[1], patch = message[2];
+        const version = `${major}.${minor}.${patch}`;
+        const url = message.slice(4).toString('utf8');
+        console.log(`\n📦 OTA: v${version}  url=${url}`);
+        // Simulate a 2s flash delay then ack success
+        setTimeout(() => {
+            client.publish(
+                `device/${DEVICE_ID}/ota_ack`,
+                JSON.stringify({ status: 'ok', version }),
+            );
+            console.log(`\n✅ OTA flash complete v${version}`);
+        }, 2000);
+        return;
+    }
+
+    // ── Token top-up (12 bytes binary) ────────────────────────────────────
+    // bytes [0:3] uint32 BE = electricity amount (Rp)
+    // bytes [4:7] uint32 BE = water amount (Rp)
+    // bytes [8:11] uint32 BE = timestamp (unix seconds)
+    if (topic === `device/${DEVICE_ID}/topup` && message.length === 12) {
+        const elecRp  = message.readUInt32BE(0);
+        const waterRp = message.readUInt32BE(4);
+        console.log(`\n💰 TOPUP: electricity=Rp${elecRp} water=Rp${waterRp}`);
+        // Re-enable relay/valve if they were cut off due to empty token
+        if (elecRp > 0) state.relayOn   = true;
+        if (waterRp > 0) state.valveOpen = true;
+        client.publish(
+            `device/${DEVICE_ID}/topup_ack`,
+            JSON.stringify({ status: 'ok', amount: elecRp + waterRp }),
+        );
+        return;
     }
 });
 

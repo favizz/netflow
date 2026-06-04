@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { SlidersHorizontal, Save, CheckCircle, AlertCircle, Zap, Droplets, Loader2, Clock, Pencil, Check, X, Terminal, Radio, UploadCloud, ExternalLink } from "lucide-react";
 import { fetchApi } from "@/lib/api";
 import mqtt from "mqtt";
@@ -183,8 +183,17 @@ function InputField({ label, value, min, max, step, unit, serverValue, onChange,
     );
 }
 
-type LogEntry = { ts: string; level: 'info' | 'ok' | 'err'; text: string };
+type LogEntry = {
+    id: string;
+    ts: string;
+    level: 'info' | 'ok' | 'err' | 'pending';
+    text: string;
+    deviceId?: string;
+    ackType?: string;
+};
 
+let _logSeq = 0;
+function makeId() { return `${Date.now().toString(36)}-${(++_logSeq).toString(36)}`; }
 function ts() { return new Date().toLocaleTimeString('id-ID', { hour12: false }); }
 
 export default function ControlCenterPage() {
@@ -211,6 +220,8 @@ export default function ControlCenterPage() {
     const [cmdPending, setCmdPending] = useState<string | null>(null);
     const [log, setLog] = useState<LogEntry[]>([]);
     const [broadcastConfirm, setBroadcastConfirm] = useState<{ type: 'relay' | 'valve'; value: 0 | 1 } | null>(null);
+    // key: `${ackType}:${deviceId}` → log entry id — used to update pending entries in place
+    const pendingAcksRef = useRef<Map<string, string>>(new Map());
 
     // ── OTA state ─────────────────────────────────────────────────────────────
     const [otaBinaryLink, setOtaBinaryLink] = useState('');
@@ -261,23 +272,33 @@ export default function ControlCenterPage() {
 
             if (type === 'ota_ack') {
                 text = ack.status === 'ok'
-                    ? `✓ OTA ACK [${deviceId}] flash ok - v${ack.version ?? '?'}`
+                    ? `✓ OTA [${deviceId}] flash ok — v${ack.version ?? '?'}`
                     : ack.status === 'noop'
-                    ? `· OTA ACK [${deviceId}] already up-to-date`
-                    : `✗ OTA ACK [${deviceId}] flash failed - error ${ack.error ?? '?'}`;
+                    ? `· OTA [${deviceId}] already up-to-date`
+                    : `✗ OTA [${deviceId}] failed — error ${ack.error ?? '?'}`;
             } else if (type === 'config_ack') {
                 text = ack.status === 'ok'
-                    ? `✓ CONFIG ACK [${deviceId}] calibration applied`
-                    : `✗ CONFIG ACK [${deviceId}] calibration failed - ${ack.error ?? '?'}`;
+                    ? `✓ CONFIG [${deviceId}] calibration applied`
+                    : `✗ CONFIG [${deviceId}] failed — ${ack.error ?? '?'}`;
             } else if (type === 'command_ack') {
                 text = ack.status === 'ok'
-                    ? `✓ COMMAND ACK [${deviceId}] ${ack.type ?? 'actuation'} success`
-                    : `✗ COMMAND ACK [${deviceId}] ${ack.type ?? 'actuation'} failed`;
+                    ? `✓ CMD [${deviceId}] ${ack.type ?? 'actuation'} ok`
+                    : `✗ CMD [${deviceId}] ${ack.type ?? 'actuation'} failed`;
             } else {
-                text = `? Unknown ACK [${deviceId}/${type}]: ${JSON.stringify(ack)}`;
+                text = `? ACK [${deviceId}/${type}]: ${JSON.stringify(ack)}`;
             }
 
-            setLog(prev => [...prev.slice(-49), { ts: ts(), level, text }]);
+            // Update the pending entry for this device if one exists, else append
+            const pendingKey = `${type}:${deviceId}`;
+            const pendingId = pendingAcksRef.current.get(pendingKey);
+            if (pendingId) {
+                pendingAcksRef.current.delete(pendingKey);
+                setLog(prev => prev.map(e =>
+                    e.id === pendingId ? { ...e, level, text, ts: ts() } : e
+                ));
+            } else {
+                setLog(prev => [...prev.slice(-49), { id: makeId(), ts: ts(), level, text }]);
+            }
         });
         return () => {
             active = false;
@@ -291,7 +312,40 @@ export default function ControlCenterPage() {
     );
 
     const addLog = useCallback((level: LogEntry['level'], text: string) =>
-        setLog(prev => [...prev.slice(-49), { ts: ts(), level, text }]), []);
+        setLog(prev => [...prev.slice(-49), { id: makeId(), ts: ts(), level, text }]), []);
+
+    // Creates one pending entry per device and registers them in pendingAcksRef.
+    // Returns a cleanup function that marks still-pending entries as failed after timeoutMs.
+    const addPendingBatch = useCallback((
+        devices: string[],
+        ackType: string,
+        labelFn: (deviceId: string) => string,
+        timeoutMs = 10_000,
+    ) => {
+        const entries: LogEntry[] = devices.map(deviceId => ({
+            id: makeId(),
+            ts: ts(),
+            level: 'pending' as const,
+            text: `⏳ ${labelFn(deviceId)}`,
+            deviceId,
+            ackType,
+        }));
+        entries.forEach(e => pendingAcksRef.current.set(`${ackType}:${e.deviceId}`, e.id));
+        setLog(prev => [...prev.slice(-(50 - entries.length)), ...entries]);
+
+        const entryIds = entries.map(e => e.id);
+        setTimeout(() => {
+            setLog(prev => prev.map(e =>
+                entryIds.includes(e.id) && e.level === 'pending'
+                    ? { ...e, level: 'err', text: e.text.replace('⏳', '✗') + ' — timeout' }
+                    : e
+            ));
+            entries.forEach(e => {
+                if (pendingAcksRef.current.get(`${ackType}:${e.deviceId}`) === e.id)
+                    pendingAcksRef.current.delete(`${ackType}:${e.deviceId}`);
+            });
+        }, timeoutMs);
+    }, []);
 
     const loadTariffs = useCallback(() => {
         fetchApi('/admin/tariff')
@@ -354,14 +408,20 @@ export default function ControlCenterPage() {
 
     const sendCommandAll = async (type: 'relay' | 'valve', value: 0 | 1) => {
         const key = `${type}-${value}`;
+        const label = `${type === 'relay' ? 'Relay' : 'Valve'} ${value ? 'ON/OPEN' : 'OFF/CLOSE'}`;
         setCmdPending(key);
-        addLog('info', `→ BROADCAST  ${type} → ${value ? 'ON/OPEN' : 'OFF/CLOSE'}  (all devices)`);
+        addLog('info', `→ BROADCAST ${label} → all devices`);
         try {
             const res = await fetchApi('/admin/command', {
                 method: 'POST',
                 body: JSON.stringify({ type, value }),
             }) as { pushed?: string[] };
-            addLog('ok', `✓ COMMAND sent to ${Array.isArray(res?.pushed) ? res.pushed.length : '?'} device(s)`);
+            const pushed = Array.isArray(res?.pushed) ? res.pushed : [];
+            if (pushed.length > 0) {
+                addPendingBatch(pushed, 'command_ack', d => `${label} → ${d}`);
+            } else {
+                addLog('info', '· No devices with assigned hardware IDs');
+            }
         } catch (err: unknown) {
             addLog('err', `✗ BROADCAST failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
         } finally {
@@ -371,10 +431,15 @@ export default function ControlCenterPage() {
 
     const pushConfigAll = async () => {
         setCmdPending('config');
-        addLog('info', '→ CONFIG  push to ALL devices');
+        addLog('info', '→ CONFIG push to all devices');
         try {
             const res = await fetchApi('/admin/push-config', { method: 'POST' }) as { pushed?: string[] };
-            addLog('ok', `✓ CONFIG pushed to ${Array.isArray(res?.pushed) ? res.pushed.length : '?'} device(s)`);
+            const pushed = Array.isArray(res?.pushed) ? res.pushed : [];
+            if (pushed.length > 0) {
+                addPendingBatch(pushed, 'config_ack', d => `CONFIG calibration → ${d}`);
+            } else {
+                addLog('info', '· No devices with assigned hardware IDs');
+            }
         } catch (err: unknown) {
             addLog('err', `✗ CONFIG push failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
         } finally {
@@ -385,13 +450,18 @@ export default function ControlCenterPage() {
     const pushOta = async () => {
         if (!otaBinaryLink || !otaVersion) return;
         setOtaPending(true);
-        addLog('info', `→ OTA  v${otaVersion}  → all devices`);
+        addLog('info', `→ OTA v${otaVersion} → all devices`);
         try {
             const res = await fetchApi('/admin/ota', {
                 method: 'POST',
                 body: JSON.stringify({ version: otaVersion, binaryLink: otaBinaryLink, updateNow: true }),
             }) as { pushed?: string[] };
-            addLog('info', `→ OTA sent to ${Array.isArray(res?.pushed) ? res.pushed.length : '?'} device(s) - awaiting ACK...`);
+            const pushed = Array.isArray(res?.pushed) ? res.pushed : [];
+            if (pushed.length > 0) {
+                addPendingBatch(pushed, 'ota_ack', d => `OTA v${otaVersion} → ${d}`, 120_000);
+            } else {
+                addLog('info', '· No devices with assigned hardware IDs');
+            }
             localStorage.setItem('ota_last_link', otaBinaryLink);
             localStorage.setItem('ota_last_version', otaVersion);
             setLastOtaLink(otaBinaryLink);
@@ -683,8 +753,13 @@ export default function ControlCenterPage() {
                     {log.length === 0 ? (
                         <p className="text-gray-600">No commands sent yet.</p>
                     ) : (
-                        log.map((entry, i) => (
-                            <div key={i} className={entry.level === 'ok' ? 'text-green-400' : entry.level === 'err' ? 'text-red-400' : 'text-gray-300'}>
+                        log.map((entry) => (
+                            <div key={entry.id} className={
+                                entry.level === 'ok' ? 'text-green-400' :
+                                entry.level === 'err' ? 'text-red-400' :
+                                entry.level === 'pending' ? 'text-yellow-400 animate-pulse' :
+                                'text-gray-300'
+                            }>
                                 <span className="text-gray-600 mr-2">[{entry.ts}]</span>{entry.text}
                             </div>
                         ))

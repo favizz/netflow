@@ -172,10 +172,13 @@ export class AdminService implements OnModuleInit {
   async pushConfigToAll(): Promise<{ pushed: string[] }> {
     const units = await this.unitService.findAll();
     const withDevice = units.filter((u) => u.device_id);
-    this.logger.log(
-      `Queuing config broadcast for [${withDevice.length}] units (job)`,
-    );
-    await this.broadcastQueue.add('config', {});
+    try {
+      await this.broadcastQueue.add('config', {});
+      this.logger.log(`Queuing config broadcast for [${withDevice.length}] units (job)`);
+    } catch {
+      this.logger.warn('BullMQ unavailable — sending config directly to all devices');
+      withDevice.forEach((u) => this.pushConfigToDevice(u.device_id!));
+    }
     return { pushed: withDevice.map((u) => u.device_id as string) };
   }
 
@@ -210,10 +213,13 @@ export class AdminService implements OnModuleInit {
   ): Promise<{ pushed: string[] }> {
     const units = await this.unitService.findAll();
     const withDevice = units.filter((u) => u.device_id);
-    this.logger.log(
-      `Queuing command broadcast [${type}=${value}] for [${withDevice.length}] units (job)`,
-    );
-    await this.broadcastQueue.add('command', { commandType: type, value });
+    try {
+      await this.broadcastQueue.add('command', { commandType: type, value });
+      this.logger.log(`Queuing command broadcast [${type}=${value}] for [${withDevice.length}] units (job)`);
+    } catch {
+      this.logger.warn('BullMQ unavailable — sending command directly to all devices');
+      withDevice.forEach((u) => this.sendCommand(u.device_id!, type, value));
+    }
     return { pushed: withDevice.map((u) => u.device_id as string) };
   }
 
@@ -224,10 +230,13 @@ export class AdminService implements OnModuleInit {
   ): Promise<{ pushed: string[] }> {
     const units = await this.unitService.findAll();
     const withDevice = units.filter((u) => u.device_id);
-    this.logger.log(
-      `Queuing OTA broadcast v${version} for [${withDevice.length}] units (job)`,
-    );
-    await this.broadcastQueue.add('ota', { version, binaryLink, updateNow });
+    try {
+      await this.broadcastQueue.add('ota', { version, binaryLink, updateNow });
+      this.logger.log(`Queuing OTA broadcast v${version} for [${withDevice.length}] units (job)`);
+    } catch {
+      this.logger.warn('BullMQ unavailable — sending OTA directly to all devices');
+      withDevice.forEach((u) => this.pushOtaToDevice(u.device_id!, version, binaryLink, updateNow));
+    }
     return { pushed: withDevice.map((u) => u.device_id as string) };
   }
 
