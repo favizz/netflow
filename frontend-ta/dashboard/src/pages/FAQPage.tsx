@@ -121,12 +121,42 @@ const FAQ_DATA: FAQSection[] = [
                 answer: "Every admin action (unit creation, relay toggle, tariff change, payment, anomaly detection) is recorded in the audit log with the actor email, action type, target entity, details, and success/failure result.",
             },
             {
-                question: "What is the Queue Monitor?",
-                answer: "The Queue Monitor is embedded at the bottom of the Logs page as a collapsible section. Click 'Queue Monitor (Bull Board)' to expand it — the iframe loads on demand. It shows the BullMQ job queues: telemetry processing, payment expiry, pending/completed/failed jobs, and retry counts.",
-            },
-            {
                 question: "Can I filter logs?",
                 answer: "Yes. Logs can be filtered by category (User Management, Unit Management, Calibration, Tariff, Transactions, Anomaly, System Error) and by result (success, failure, info). You can also free-text search across actor, action, target, and details fields.",
+            },
+        ],
+    },
+    {
+        title: "BullMQ Queue Monitor",
+        items: [
+            {
+                question: "What is the Queue Monitor?",
+                answer: "The Queue Monitor (powered by Bull Board) is an embedded dashboard located at the bottom of the Logs page. It provides a visual interface to manage all asynchronous background jobs in the system. The system runs three main queues: 'telemetry' (processing incoming device data), 'payment-expiry' (canceling unpaid Midtrans transactions), and 'broadcast' (sending bulk Telegram messages).",
+            },
+            {
+                question: "What actions (CRUD) can I perform on jobs?",
+                answer: "As an admin, you have full control over the lifecycle of background jobs. You can:\n\n1. Read/View: Inspect the exact payload (data) of any pending, active, completed, or failed job.\n2. Retry (Update): Manually trigger a retry for any job that has failed (e.g., if a Telegram broadcast failed due to a network blip).\n3. Delete: Permanently remove specific jobs from the queue history.\n4. Clean/Purge: Bulk delete all completed or all failed jobs to free up Redis memory.",
+            },
+            {
+                question: "How do I pause or resume queue processing?",
+                answer: "At the top right of each queue's panel in the Queue Monitor, there is a 'Pause' button. Clicking this will halt the processing of all new jobs in that specific queue. The jobs will safely stack up in Redis. You can click 'Resume' to process the backlog. This is highly useful during database maintenance.",
+            },
+        ],
+    },
+    {
+        title: "EMQX Dashboard",
+        items: [
+            {
+                question: "What is the EMQX Dashboard?",
+                answer: "The EMQX Dashboard is a separate, standalone control panel for the MQTT broker (usually accessible at port 18083). It allows admins to monitor real-time device connections, manage topics, and configure broker settings independent of the main NetFlow backend.",
+            },
+            {
+                question: "What client management (CRUD) actions can I perform?",
+                answer: "In the EMQX Dashboard under 'Connections' or 'Clients', you can:\n\n1. Read/View: See a list of all currently connected ESP32 devices and mobile web clients, including their IP addresses, connection times, and active subscriptions.\n2. Kick/Delete: Forcefully disconnect (kick) a misbehaving or rogue client from the broker. The device will attempt to reconnect based on its firmware logic.\n3. Trace (Update/Debug): Start a real-time message trace on a specific Client ID to see exactly what binary payloads they are sending and receiving for debugging purposes.",
+            },
+            {
+                question: "Can I manually publish or subscribe to topics?",
+                answer: "Yes. Under the 'WebSocket Client' or 'Tools' section of the EMQX Dashboard, admins can connect a temporary debug client. From there, you can manually Publish (Create) test payloads to any topic (e.g., simulating a top-up) or Subscribe (Read) to topics to watch raw traffic flow in real-time.",
             },
         ],
     },

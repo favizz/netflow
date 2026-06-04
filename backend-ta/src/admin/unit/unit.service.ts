@@ -1,5 +1,6 @@
 import {
   Injectable,
+  Logger,
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
@@ -17,6 +18,8 @@ const LOW_TOKEN_THRESHOLD_KWH = ANOMALY_DETECTION_CONFIG.lowElectricityTokenKwh;
 
 @Injectable()
 export class UnitService {
+  private readonly logger = new Logger(UnitService.name);
+
   /** Adjusted dynamically by AdminService whenever SENSOR_SAMPLING_TIME changes. */
   private onlineThresholdMs = 5 * 60 * 1000;
 
@@ -53,7 +56,23 @@ export class UnitService {
       last_water_reading: 0,
     });
 
-    return this.unitRepo.save(entity);
+    const saved = await this.unitRepo.save(entity);
+
+    // When a device_id is set at creation time, log it as an EMQX registration event.
+    // EMQX uses HTTP auth (POST /auth/mqtt) that queries this table, so saving the
+    // device_id here is all that's needed — EMQX will accept the device on its next
+    // connect attempt with no further API call required.
+    if (saved.device_id) {
+      this.logger.log(
+        `[EMQX] Device ${saved.device_id} registered for unit ${saved.unit_no} — MQTT auth will accept on next connect`,
+      );
+      void this.auditLogService.log(
+        'admin', 'DEVICE_ASSIGNED', 'unit', saved.unit_no,
+        { device_id: saved.device_id, emqx: 'registered via HTTP auth (units table)' },
+      );
+    }
+
+    return saved;
   }
 
   findAll(buildingId?: number) {
@@ -100,9 +119,33 @@ export class UnitService {
   }
 
   async update(id: number, updateUnitDto: UpdateUnitDto) {
-    const unit = await this.findOne(id);
+    const unit          = await this.findOne(id);
+    const prevDeviceId  = unit.device_id;
     Object.assign(unit, updateUnitDto);
-    return this.unitRepo.save(unit);
+    const saved = await this.unitRepo.save(unit);
+
+    // When device_id is assigned or changed, record it as an EMQX registration event.
+    // EMQX HTTP auth queries this table on every connect — saving device_id here
+    // immediately allows the device to authenticate. No EMQX Management API call needed.
+    if (
+      updateUnitDto.device_id !== undefined &&
+      updateUnitDto.device_id !== prevDeviceId
+    ) {
+      this.logger.log(
+        `[EMQX] Device ${updateUnitDto.device_id ?? 'unassigned'} registered for unit ${saved.unit_no}` +
+        (prevDeviceId ? ` (replaced ${prevDeviceId})` : ''),
+      );
+      void this.auditLogService.log(
+        'admin', 'DEVICE_ASSIGNED', 'unit', saved.unit_no,
+        {
+          device_id:          updateUnitDto.device_id ?? null,
+          previous_device_id: prevDeviceId ?? null,
+          emqx:               'registered via HTTP auth (units table)',
+        },
+      );
+    }
+
+    return saved;
   }
 
   async remove(id: number) {

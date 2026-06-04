@@ -52,7 +52,7 @@ String deviceId   = "DEV-A-101";
 // =============================================================================
 bool initSD()
 {
-  sdOk = SD.begin(SD_CS_PIN);
+  sdOk = SD.begin(SD_CS_PIN, SPI, 4000000U);
   if (!sdOk) { Serial.println("[SD] Init failed — offline log disabled"); return false; }
   if (!SD.exists("/backup")) SD.mkdir("/backup");
   Serial.println("[SD] Ready");
