@@ -3,10 +3,6 @@
 # Covers: backend-ta/, frontend-ta/dashboard/, frontend-ta/mobile/
 # =============================================
 
-# ── Claude Code local state ─────────────────
-.claude/
-
-
 # ── Dependencies ───────────────────────────────
 node_modules/
 .pnp
