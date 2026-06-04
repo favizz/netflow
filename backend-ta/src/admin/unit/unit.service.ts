@@ -85,6 +85,10 @@ export class UnitService {
     return this.unitRepo.find({ order: { unit_no: 'ASC' } });
   }
 
+  findByDeviceId(deviceId: string) {
+    return this.unitRepo.findOne({ where: { device_id: deviceId } });
+  }
+
   async countByBuilding(buildingId: number): Promise<number> {
     return this.unitRepo.count({ where: { building_id: buildingId } });
   }

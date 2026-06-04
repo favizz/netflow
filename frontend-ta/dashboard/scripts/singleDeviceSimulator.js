@@ -7,8 +7,8 @@
  *
  * Specs covered: 5 (relay actuation), 6 (valve actuation), 8 (anomaly triggers)
  *
- * Usage: node singleDeviceSimulator.js [UNIT_NO] [BROKER_URL]
- * Example: node singleDeviceSimulator.js A-0001 mqtt://localhost:1883
+ * Usage: node singleDeviceSimulator.js [UNIT_NO_OR_DEVICE_ID] [BROKER_URL]
+ * Example: MQTT_PASSWORD='TA!2025Ok' node singleDeviceSimulator.js DEV-A-101 mqtts://ta252601002.srusun.id:8883
  */
 const mqtt = require('mqtt');
 const readline = require('readline');
@@ -30,20 +30,22 @@ function loadEnv() {
 }
 loadEnv();
 
-const rawUnit = process.argv[2] || 'A-101';
-const UNIT_NO = rawUnit;
-const DEVICE_ID = `DEV-${UNIT_NO}`;
-const BROKER_URL = process.env.MQTT_BROKER_URL || process.argv[3] || 'mqtt://localhost:1883';
-// Devices authenticate with device_id as username and MQTT_DEVICE_SECRET as password
-const USERNAME   = DEVICE_ID;
-const PASSWORD   = process.env.MQTT_DEVICE_SECRET || undefined;
+const rawDeviceArg = process.argv[2] || 'A-101';
+const DEVICE_ID = rawDeviceArg.startsWith('DEV-') ? rawDeviceArg : `DEV-${rawDeviceArg}`;
+const UNIT_NO = DEVICE_ID.replace(/^DEV-/, '');
+// Use .env broker, then command line arg, then fallback
+const BROKER_URL = process.env.MQTT_BROKER_URL || process.argv[3] || 'mqtt://ta252601002.srusun.id:1883';
+const MQTT_USERNAME = process.env.MQTT_USERNAME || DEVICE_ID;
+const MQTT_PASSWORD = process.env.MQTT_PASSWORD || process.env.MQTT_DEVICE_SECRET || undefined;
+const MQTT_TLS_VERIFY = process.env.MQTT_TLS_VERIFY === 'true';
 const INTERVAL_MS = 2000;
 
 console.log('====================================================');
 console.log(`🔌 Single Device Simulator`);
 console.log(`   Unit: ${UNIT_NO} | Device: ${DEVICE_ID}`);
 console.log(`   Broker: ${BROKER_URL}`);
-console.log(`   Auth: username=${USERNAME} password=${PASSWORD ? '***set***' : 'NOT SET'}`);
+console.log(`   MQTT username: ${MQTT_USERNAME}`);
+console.log(`   TLS verify: ${MQTT_TLS_VERIFY ? 'on' : 'off'}`);
 console.log(`   Interval: ${INTERVAL_MS / 1000}s`);
 console.log('====================================================\n');
 
@@ -85,10 +87,12 @@ const STATUS_TOPIC = `device/${DEVICE_ID}/status`;
 
 const client = mqtt.connect(BROKER_URL, {
     clientId: `single-sim-${DEVICE_ID}-${Date.now().toString(36)}`,
-    username: USERNAME,
-    password: PASSWORD,
+    username: MQTT_USERNAME,
+    password: MQTT_PASSWORD,
     clean: true,
-    rejectUnauthorized: false,
+    // Keep this false for debugging while EMQX still serves a self-signed cert.
+    // Set MQTT_TLS_VERIFY=true after EMQX serves a valid ta252601002.srusun.id cert.
+    rejectUnauthorized: MQTT_TLS_VERIFY,
     will: {
         topic:   STATUS_TOPIC,
         payload: 'offline',
