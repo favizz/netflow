@@ -13,6 +13,7 @@ type UnitResponse = {
     id: number;
     building_id: number;
     token_electricity: string | number;
+    token_water: string | number;
     resident_email: string | null;
     unit_no: string;
     device_id: string;
