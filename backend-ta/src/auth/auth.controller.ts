@@ -112,9 +112,8 @@ export class AuthController {
     );
     if (deviceSecret && password === deviceSecret) {
       try {
-        const units = await this.unitService.findAll();
-        const known = units.some((u) => u.device_id === username);
-        if (known) return { result: 'allow' };
+        const unit = await this.unitService.findByDeviceId(username);
+        if (unit) return { result: 'allow' };
       } catch {
         // DB unavailable - deny to be safe
       }
