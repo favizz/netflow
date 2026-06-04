@@ -236,6 +236,7 @@ export class AdminController {
       'DELETE',
       'resident',
       email,
+      { email },
     );
     return { deleted: true };
   }
@@ -315,7 +316,7 @@ export class AdminController {
       'PUSH_CONFIG_ALL',
       'device',
       'all-devices',
-      {},
+      this.adminService.getSettings() as unknown as Record<string, unknown>,
     );
     return result;
   }
