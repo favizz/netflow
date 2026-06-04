@@ -29,7 +29,7 @@ static const long  GMT_OFFSET  = 7 * 3600;   // WIB UTC+7
 static const char* MQTT_SECRET = "f7fde3a818e7a5a29fcc0d995330b025ae358a0f9381b401";
 
 // Let's Encrypt ISRG Root X1 — verify against your broker's cert chain.
-static const char* MQTT_CA_CERT = R"(
+static const char* MQTT_CA_CERT = R"PEM(
 -----BEGIN CERTIFICATE-----
 MIIFazCCA1OgAwIBAgIRAIIQz7DSQONZRGPgu2OCiwAwDQYJKoZIhvcNAQELBQAw
 TzELMAkGA1UEBhMCVVMxKTAnBgNVBAoTIEludGVybmV0IFNlY3VyaXR5IFJlc2Vh
@@ -61,7 +61,7 @@ oyi3B43njTOQ5yOf+1CceWxG1bQVs5ZufpsMljq4Ui0/1lvh+wjChP4kqKOJ2qxq
 mRGunUHBcnWEvgJBQl9nJEiU0Zsnvgc/ubhPgXRR4Xq37Z0j4r7g1SgEEzwxA57d
 emyPxgcYxn/eR44/KJ4EBs+lVDR3veyJm+kXQ99b21/+jh5Xos1AnX5iItreGCc=
 -----END CERTIFICATE-----
-)";
+)PEM";
 
 // =============================================================================
 // MODULE-LEVEL DEFINITIONS
@@ -103,12 +103,35 @@ void connectToWiFi()
 
 void initMQTT()
 {
-  espClient.setCACert(MQTT_CA_CERT); // verify broker TLS cert against ISRG Root X1
+#if MQTT_TLS_INSECURE
+  // Mirrors the Node simulator's rejectUnauthorized:false during hardware bring-up.
+  // TLS is still used, but the certificate chain is not verified by the ESP32.
+  espClient.setInsecure();
+#else
+  espClient.setCACert(MQTT_CA_CERT);
+#endif
   mqttClient.setServer(mqttServer.c_str(), mqttPort);
   mqttClient.setCallback(mqttCallback);
-  mqttClient.setBufferSize(1024); // headroom for OTA + telemetry
+  mqttClient.setBufferSize(1024);
   mqttClient.setKeepAlive(30);
   mqttClient.setSocketTimeout(10);
+
+  // Diagnostic — printed once at boot so the serial log captures the full context.
+  Serial.printf("[MQTT] Server   : %s:%d\n", mqttServer.c_str(), mqttPort);
+  Serial.printf("[MQTT] ClientID : %s\n",    deviceId.c_str());
+#if MQTT_TLS_INSECURE
+  Serial.println("[MQTT] TLS auth : insecure (certificate verification disabled)");
+#else
+  Serial.println("[MQTT] TLS auth : CA certificate verification enabled");
+#endif
+  // Print enough of the cert header to confirm PEM was loaded without a leading garbage byte.
+  // A correct load starts exactly with "-----BEGIN CERTIFICATE-----".
+  const char* certStart = MQTT_CA_CERT;
+  while (*certStart == '\n' || *certStart == '\r' || *certStart == ' ') certStart++;
+  Serial.printf("[MQTT] CA cert  : %.29s...\n", certStart);
+  Serial.printf("[MQTT] TLS mode : %s\n", (mqttPort == 8883 || mqttPort == 8084)
+      ? "TLS (port looks correct)"
+      : "WARNING — port is not 8883/8084, TLS may fail on a plain-MQTT broker");
 }
 
 // =============================================================================
@@ -376,13 +399,46 @@ bool ensureMQTT()
   if (WiFi.status() != WL_CONNECTED) return false;
   if (mqttClient.connected()) return true;
 
-  Serial.print("[MQTT] Connecting...");
+  Serial.printf("[MQTT] Connecting... RSSI=%d dBm\n", WiFi.RSSI());
   String base        = "device/" + deviceId;
   String statusTopic = base + "/status";
   // LWT: broker publishes "offline" (retained, QoS 1) if connection drops unexpectedly
   if (!mqttClient.connect(deviceId.c_str(), deviceId.c_str(), MQTT_SECRET,
                           statusTopic.c_str(), 1, true, "offline")) {
-    Serial.printf(" failed (state=%d)\n", mqttClient.state());
+    int state = mqttClient.state();
+
+    // Human-readable state descriptions (PubSubClient state codes)
+    const char* desc =
+      state == -4 ? "MQTT_CONNECTION_TIMEOUT — broker unreachable or too slow" :
+      state == -3 ? "MQTT_CONNECTION_LOST — connection dropped mid-handshake" :
+      state == -2 ? "MQTT_CONNECT_FAILED — TCP/TLS layer error before MQTT packet" :
+      state == -1 ? "MQTT_DISCONNECTED" :
+      state ==  1 ? "MQTT_CONNECT_BAD_PROTOCOL" :
+      state ==  2 ? "MQTT_CONNECT_BAD_CLIENT_ID" :
+      state ==  3 ? "MQTT_CONNECT_SERVER_UNAVAILABLE" :
+      state ==  4 ? "MQTT_CONNECT_BAD_CREDENTIALS — wrong username or password" :
+      state ==  5 ? "MQTT_CONNECT_UNAUTHORIZED — ACL denied this client" :
+                    "UNKNOWN";
+
+    Serial.printf("[MQTT] failed  state=%d  %s\n", state, desc);
+
+    if (state == -2) {
+      // -2 means the SSL/TCP layer rejected the connection before any MQTT byte
+      // was exchanged. Common causes:
+      //   1. Port mismatch  — plain MQTT port (1883) used with TLS espClient
+      //   2. Wrong CA cert  — broker cert signed by a different CA than MQTT_CA_CERT
+      //   3. Cert parse fail — PEM string missing leading newline (see device/device_new diff)
+      //   4. Clock skew     — cert validity window check fails if NTP not yet synced
+      Serial.printf("[MQTT]   -> server  : %s:%d\n", mqttServer.c_str(), mqttPort);
+      Serial.printf("[MQTT]   -> NTP sync: %s\n", isNtpSynced ? "yes" : "NO (clock may be wrong — cert validity check will fail)");
+      Serial.printf("[MQTT]   -> WiFi IP : %s\n", WiFi.localIP().toString().c_str());
+      // Print cert header — must start exactly with "-----BEGIN CERTIFICATE-----"
+      const char* p = MQTT_CA_CERT;
+      while (*p == '\n' || *p == '\r' || *p == ' ') p++;
+      Serial.printf("[MQTT]   -> CA cert : %.29s...\n", p);
+      Serial.printf("[MQTT]   -> expected: -----BEGIN CERTIFICATE-----\n");
+    }
+
     return false;
   }
   Serial.println(" OK");
