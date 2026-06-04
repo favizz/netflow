@@ -10,6 +10,11 @@ export class NotificationService {
   private readonly telegramSendQueues = new Map<string, Promise<void>>();
   private readonly lastTelegramSendAt = new Map<string, number>();
 
+  // TEMPORARILY DISABLED — set to true to re-enable all outgoing notifications
+  // (email to residents/admins + Telegram). Disabled during fleet simulation to
+  // avoid flooding inboxes with 2,500 simulated-device anomaly/offline alerts.
+  private readonly notificationsEnabled = false;
+
   constructor(
     private readonly configService: ConfigService,
     private readonly residentsService: ResidentsService,
@@ -35,6 +40,7 @@ export class NotificationService {
   }
 
   async sendTelegram(chatId: string, html: string): Promise<void> {
+    if (!this.notificationsEnabled) return; // re-enable: set notificationsEnabled = true
     const token = this.configService.get<string>('TELEGRAM_BOT_TOKEN');
     if (!token || !chatId) return;
     const previousSend =
@@ -139,6 +145,7 @@ export class NotificationService {
     subject: string,
     message: string,
   ): Promise<void> {
+    if (!this.notificationsEnabled) return; // re-enable: set notificationsEnabled = true
     if (!this.transporter || !email) return;
     try {
       await this.transporter.sendMail({
@@ -159,6 +166,7 @@ export class NotificationService {
     subject: string,
     html: string,
   ): Promise<void> {
+    if (!this.notificationsEnabled) return; // re-enable: set notificationsEnabled = true
     if (!this.transporter || !email) return;
     try {
       await this.transporter.sendMail({
