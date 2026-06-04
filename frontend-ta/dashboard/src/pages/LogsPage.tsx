@@ -1,8 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import { Search, ChevronDown, ChevronUp, Copy, Check } from "lucide-react";
+import { Search, ChevronDown, Copy, Check } from "lucide-react";
 import { fetchApi } from "@/lib/api";
-import { API_BASE_URL } from "@/lib/constants";
 
 const PAGE_SIZE = 15;
 
@@ -166,7 +165,6 @@ export default function LogsPage() {
     const [filterCategory, setFilterCategory] = useState('All');
     const [filterResult, setFilterResult] = useState('All');
     const [page, setPage] = useState(0);
-    const [bullBoardOpen, setBullBoardOpen] = useState(false);
     const [unitNames, setUnitNames] = useState<Map<string, string>>(new Map());
 
     useEffect(() => {
@@ -291,31 +289,6 @@ export default function LogsPage() {
                 </div>
             </div>
 
-            {/* Collapsible Bull Board */}
-            <div className="rounded-lg bg-white dark:bg-gray-900 shadow-sm ring-1 ring-gray-900/5 dark:ring-gray-700 overflow-hidden">
-                <button
-                    onClick={() => setBullBoardOpen(o => !o)}
-                    className="w-full flex items-center justify-between px-6 py-4 text-left hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
-                >
-                    <div>
-                        <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">Queue Monitor (Bull Board)</span>
-                        <span className="ml-2 text-xs text-gray-400 dark:text-gray-500">BullMQ job queues</span>
-                    </div>
-                    {bullBoardOpen
-                        ? <ChevronUp className="h-4 w-4 text-gray-400 dark:text-gray-500" />
-                        : <ChevronDown className="h-4 w-4 text-gray-400 dark:text-gray-500" />
-                    }
-                </button>
-                {bullBoardOpen && (
-                    <div className="border-t border-gray-200 dark:border-gray-700">
-                        <iframe
-                            src={`${API_BASE_URL}/admin/queues`}
-                            title="Bull Board Queue Monitor"
-                            className="w-full h-[600px] border-0"
-                        />
-                    </div>
-                )}
-            </div>
         </div>
     );
 }

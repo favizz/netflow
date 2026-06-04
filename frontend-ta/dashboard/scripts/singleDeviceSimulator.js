@@ -72,8 +72,8 @@ function encodeTelemetry(t) {
 }
 
 const state = {
-    energyTotal: 120.50, // kWh — non-zero start so first frames don't encode as zero and trigger sensor_malfunction
-    waterTotal: 45.230,  // m³
+    energyTotal: 5952.00, // kWh — start near seeded baseline so delta is visible immediately
+    waterTotal: 368.50,   // m³
     elecTokenKwh: 68.966,
     waterTokenM3: 20.000,
     relayOn: true,
@@ -90,9 +90,12 @@ const client = mqtt.connect(BROKER_URL, {
 });
 
 const generatePayload = () => {
-    let power = Math.random() * 100 + 50;    // 50–150 W
-    let voltage = Math.random() * 5 + 220;   // 220–225 V
-    let flowRate = Math.random() * 1.5 + 0.5; // 0.5–2 L/min
+    // Higher ranges so energy/water totals visibly increment each frame at 2s intervals.
+    // At 1000 W × 2 s → 0.00056 kWh delta; encoding precision is 0.01 kWh, so ~18 frames
+    // before the column changes. Raising to ~2500 W peak gives a change roughly every 7 frames.
+    let power = Math.random() * 2000 + 500;  // 500–2500 W (realistic apartment peak)
+    let voltage = Math.random() * 5 + 218;   // 218–223 V
+    let flowRate = Math.random() * 4 + 2;    // 2–6 L/min (shower / washing machine range)
 
     if (state.anomaly) {
         switch (state.anomaly) {
