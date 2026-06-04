@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { SlidersHorizontal, Save, CheckCircle, AlertCircle, Zap, Droplets, Loader2, Clock, Pencil, Check, X, Terminal, Radio, UploadCloud } from "lucide-react";
+import { SlidersHorizontal, Save, CheckCircle, AlertCircle, Zap, Droplets, Loader2, Clock, Pencil, Check, X, Terminal, Radio, UploadCloud, ExternalLink } from "lucide-react";
 import { fetchApi } from "@/lib/api";
 import mqtt from "mqtt";
-import { MQTT_CONFIG } from "@/lib/constants";
+import { MQTT_CONFIG, API_BASE_URL } from "@/lib/constants";
 
 interface CalibrationConfig {
     CAL_FACTOR_FLOWRATE: number;
@@ -618,6 +618,52 @@ export default function ControlCenterPage() {
                     {otaPending ? 'Pushing...' : 'Push OTA to All Devices'}
                 </button>
             </div>
+
+            {/* System Tools */}
+            {(() => {
+                const origin = new URL(API_BASE_URL).origin;
+                const tools = [
+                    {
+                        label: 'Queue Monitor',
+                        description: 'BullMQ job queues — telemetry, payment expiry, broadcast',
+                        href: `${API_BASE_URL}/admin/queues`,
+                        icon: <Terminal className="h-5 w-5 text-primary" />,
+                    },
+                    {
+                        label: 'EMQX Dashboard',
+                        description: 'MQTT broker — connections, authentication, topics',
+                        href: `${origin}/emqx/`,
+                        icon: <Radio className="h-5 w-5 text-primary" />,
+                    },
+                ];
+                return (
+                    <div className="rounded-lg bg-white dark:bg-gray-800 p-6 shadow-sm ring-1 ring-gray-900/5 dark:ring-gray-700">
+                        <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-4">System Tools</h2>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                            {tools.map(tool => (
+                                <a
+                                    key={tool.href}
+                                    href={tool.href}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-start gap-3 rounded-lg border border-gray-200 dark:border-gray-600 p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors group"
+                                >
+                                    <div className="mt-0.5 rounded-lg bg-primary/10 dark:bg-primary/20 p-2 shrink-0">
+                                        {tool.icon}
+                                    </div>
+                                    <div className="min-w-0">
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{tool.label}</span>
+                                            <ExternalLink className="h-3.5 w-3.5 text-gray-400 group-hover:text-primary transition-colors" />
+                                        </div>
+                                        <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{tool.description}</p>
+                                    </div>
+                                </a>
+                            ))}
+                        </div>
+                    </div>
+                );
+            })()}
 
             {/* MQTT Command Log */}
             <div className="rounded-lg bg-white dark:bg-gray-800 shadow-sm ring-1 ring-gray-900/5 dark:ring-gray-700 overflow-hidden">
