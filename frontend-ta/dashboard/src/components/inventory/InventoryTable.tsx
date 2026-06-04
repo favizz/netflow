@@ -135,8 +135,11 @@ export function InventoryTable({ data, initialFilter = "", buildings = [], onAdd
     const [selectedBuilding, setSelectedBuilding] = useState("all");
     const [page, setPage] = useState(1);
 
-    const filteredData = useMemo(() => {
+    useEffect(() => {
         setPage(1);
+    }, [data, searchQuery, statusFilter, selectedBuilding]);
+
+    const filteredData = useMemo(() => {
         return data.filter((item) => {
             const matchesSearch =
                 item.tenant.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -146,7 +149,6 @@ export function InventoryTable({ data, initialFilter = "", buildings = [], onAdd
             const matchesBuilding = selectedBuilding === "all" || item.buildingId === Number(selectedBuilding);
             return matchesSearch && matchesFilter && matchesBuilding;
         });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [data, searchQuery, statusFilter, selectedBuilding]);
 
     const totalPages = Math.max(1, Math.ceil(filteredData.length / PAGE_SIZE));

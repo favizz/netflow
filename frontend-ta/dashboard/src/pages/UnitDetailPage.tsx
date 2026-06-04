@@ -80,6 +80,15 @@ const MQTT_CONFIG = {
 };
 
 type RawTrendRow = { bucket: string; kwh?: unknown; waterM3?: unknown; water_m3?: unknown };
+type AnomalyRow = {
+    anomalyType?: string;
+    type?: string;
+    severity?: string;
+    message?: string;
+    detectedAt?: string;
+    timestamp?: string;
+    [key: string]: unknown;
+};
 
 function getDefaultPeriodKey(period: TimePeriod): string {
     const now = new Date();
@@ -182,7 +191,7 @@ export default function UnitDetailPage() {
     type UnitInfoState = { unit: string; tenant: string; meterSerial: string; status: string; lastUpdate: string; relay_status?: number; valve_status?: number; token_electricity?: number; token_water?: number; };
     const [unitInfo, setUnitInfo] = useState<UnitInfoState | null>(null);
     const [loadingInfo, setLoadingInfo] = useState(true);
-    const [anomalies, setAnomalies] = useState<any[]>([]);
+    const [anomalies, setAnomalies] = useState<AnomalyRow[]>([]);
 
     const [powerState, setPowerState] = useState(false);
     const [waterState, setWaterState] = useState(false);
@@ -210,8 +219,6 @@ export default function UnitDetailPage() {
 
     const [energyStats, setEnergyStats] = useState({ total_kwh: 0, active_power_w: 0, voltage_v: 0, current_a: 0 });
     const [waterStats, setWaterStats] = useState({ total_m3: 0, flow_rate_lpm: 0 });
-    const [electricityTariff, setElectricityTariff] = useState(1444.7);
-    const [waterTariff, setWaterTariff] = useState(5000);
 
     useEffect(() => {
         if (!id) return;
@@ -249,15 +256,6 @@ export default function UnitDetailPage() {
             .catch(() => {})
             .finally(() => setLoadingInfo(false));
 
-        fetchApi('/admin/tariff')
-            .then((tariffs: Array<{ utility_type: string; price_per_unit: number; effective_date: string }>) => {
-                const today = new Date().toISOString().split('T')[0];
-                const elec = tariffs.find(t => t.utility_type === 'electricity' && t.effective_date <= today);
-                const water = tariffs.find(t => t.utility_type === 'water' && t.effective_date <= today);
-                if (elec) setElectricityTariff(Number(elec.price_per_unit));
-                if (water) setWaterTariff(Number(water.price_per_unit));
-            })
-            .catch(() => {});
     }, [id]);
 
     // Reset periodKey when period changes
@@ -385,12 +383,12 @@ export default function UnitDetailPage() {
                     setUnitInfo((prev: UnitInfoState | null) => prev?.status !== "Online" ? { ...prev!, status: "Online" } : prev);
                     // Device is provably online — clear stale offline anomaly immediately
                     setAnomalies(prev => prev.filter(a => (a.anomalyType ?? a.type) !== 'device_offline'));
-                    setEnergyStats({
-                        total_kwh: parsed.et ?? energyStats.total_kwh,
+                    setEnergyStats(prev => ({
+                        total_kwh: parsed.et ?? prev.total_kwh,
                         active_power_w: parsed.p ?? 0,
                         voltage_v: parsed.v ?? 0,
                         current_a: parsed.c ?? 0,
-                    });
+                    }));
                     if (parsed.rs !== undefined) setPowerState(parsed.rs === 1);
 
                     if (parsed.p !== undefined || parsed.v !== undefined || parsed.c !== undefined) {
@@ -406,7 +404,7 @@ export default function UnitDetailPage() {
                         setRealTimeWater(prev => [...prev.slice(-59), { time: timeStr, value: parsed!.wf ?? 0, timestamp: now.toISOString() }]);
                     }
 
-                    setWaterStats({ total_m3: parsed.wt ?? waterStats.total_m3, flow_rate_lpm: parsed.wf ?? 0 });
+                    setWaterStats(prev => ({ total_m3: parsed.wt ?? prev.total_m3, flow_rate_lpm: parsed.wf ?? 0 }));
                     if (parsed.vs !== undefined) setWaterState(parsed.vs === 1);
 
                     const rawLabel = 'Binary 21B';
@@ -438,7 +436,7 @@ export default function UnitDetailPage() {
             setIsConnected(false);
             setMqttClient(null);
         };
-    }, [unitInfo?.meterSerial, period]);
+    }, [unitInfo?.meterSerial, period, toast]);
 
     const handleConfirm = async () => {
         if (!confirmAction) return;
@@ -612,7 +610,7 @@ export default function UnitDetailPage() {
                                     {anomaly.message}
                                 </p>
                                 <span className="text-xs text-red-500/80 dark:text-red-400/70 mt-1 block font-medium">
-                                    Terdeteksi: {new Date(anomaly.timestamp || anomaly.detectedAt).toLocaleString('id-ID')}
+                                    Terdeteksi: {new Date(anomaly.timestamp || anomaly.detectedAt || Date.now()).toLocaleString('id-ID')}
                                 </span>
                             </div>
                         </div>

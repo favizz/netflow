@@ -8,6 +8,19 @@ import { fetchApi } from "@/lib/api";
 import mqtt from "mqtt";
 import { MQTT_CONFIG } from "@/lib/constants";
 
+type BuildingResponse = { id: number; code: string; name: string };
+type UnitResponse = {
+    id: number;
+    building_id: number;
+    token_electricity: string | number;
+    resident_email: string | null;
+    unit_no: string;
+    device_id: string;
+    relay_status: number;
+    valve_status: number;
+};
+type ConnectivityResponse = { units: { online: boolean; deviceId: string }[] };
+
 export default function DevicesPage() {
     const [searchParams] = useSearchParams();
     const initialFilter = searchParams.get("unit") ?? "";
@@ -16,22 +29,22 @@ export default function DevicesPage() {
     const [isAddOpen, setIsAddOpen] = useState(false);
     const [editTarget, setEditTarget] = useState<InventoryItem | null>(null);
     const [isLoading, setIsLoading] = useState(true);
-    const [buildings, setBuildings] = useState<{id: number, code: string, name: string}[]>([]);
+    const [buildings, setBuildings] = useState<BuildingResponse[]>([]);
 
     const loadData = useCallback(() => {
         setIsLoading(true);
         Promise.all([
-            fetchApi('/admin/buildings').catch(() => []),
-            fetchApi('/unit'),
-            fetchApi('/unit/connectivity').catch(() => ({ units: [] }))
+            fetchApi('/admin/buildings').then((value) => value as BuildingResponse[]).catch(() => []),
+            fetchApi('/unit').then((value) => value as UnitResponse[]),
+            fetchApi('/unit/connectivity').then((value) => value as ConnectivityResponse).catch(() => ({ units: [] }))
         ])
             .then(([bldgs, units, conn]) => {
                 setBuildings(bldgs || []);
-                const bldgMap = new Map((bldgs || []).map((b: any) => [b.id, b.name]));
+                const bldgMap = new Map((bldgs || []).map((b) => [b.id, b.name]));
                 const onlineIds = new Set(
-                    ((conn.units || []) as { online: boolean; deviceId: string }[]).filter(u => u.online).map(u => u.deviceId)
+                    (conn.units || []).filter(u => u.online).map(u => u.deviceId)
                 );
-                const mapped: InventoryItem[] = units.map((u: { id: number; building_id: number; token_electricity: string | number; token_water: string | number; resident_email: string | null; unit_no: string; device_id: string; relay_status: number; valve_status: number }) => ({
+                const mapped: InventoryItem[] = units.map((u) => ({
                     id: String(u.id),
                     buildingId: u.building_id,
                     buildingName: bldgMap.get(u.building_id) || "Unknown Building",
