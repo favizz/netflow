@@ -28,9 +28,22 @@
 'use strict';
 
 const path = require('path');
-require('dotenv').config({ path: path.resolve(__dirname, '../../../.env') });
+const fs   = require('fs');
 const mqtt  = require('mqtt');
 const mysql = require('mysql2/promise');
+
+// Mirrors singleDeviceSimulator.js — handles values containing '=' (e.g. base64 secrets)
+function loadEnv() {
+  const envPath = path.resolve(__dirname, '../../../.env');
+  if (!fs.existsSync(envPath)) return;
+  fs.readFileSync(envPath, 'utf8').split('\n').forEach(line => {
+    const [k, ...rest] = line.split('=');
+    const key = (k || '').trim();
+    if (!key || key.startsWith('#') || process.env[key] !== undefined) return;
+    process.env[key] = rest.join('=').trim().replace(/^["']|["']$/g, '');
+  });
+}
+loadEnv();
 
 // ── Fleet layout ───────────────────────────────────────────────────────────────
 const BUILDINGS       = ['A', 'B', 'C', 'D', 'E'];
@@ -40,7 +53,7 @@ const TOTAL           = BUILDINGS.length * FLOORS * UNITS_PER_FLOOR; // 2,500
 
 // ── Shared env ────────────────────────────────────────────────────────────────
 const BROKER_URL    = process.env.MQTT_BROKER_URL    || 'mqtt://localhost:1883';
-const DEVICE_SECRET = process.env.MQTT_DEVICE_SECRET || '';
+const DEVICE_SECRET = process.env.MQTT_DEVICE_SECRET || undefined;
 const MQTT_USER     = process.env.MQTT_USERNAME      || 'netflow-backend';
 const MQTT_PASS     = process.env.MQTT_PASSWORD      || '';
 const DEVICE_AUTH_MODE = String(process.env.FLEET_DEVICE_AUTH_MODE || 'device').toLowerCase();
