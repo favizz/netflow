@@ -9,7 +9,7 @@
  *
  * Usage:
  *   node scripts/fleet.js seed   [--dry-run] [--reset-existing]
- *   node scripts/fleet.js sim    [--count N] [--no-db-hydrate]
+ *   node scripts/fleet.js sim    [--count N] [--interval-ms MS] [--no-db-hydrate]
  *   node scripts/fleet.js verify [--test 1,3,5]
  *
  * Environment (from .env three levels up):
@@ -43,8 +43,10 @@ const BROKER_URL    = process.env.MQTT_BROKER_URL    || 'mqtt://localhost:1883';
 const DEVICE_SECRET = process.env.MQTT_DEVICE_SECRET || '';
 const MQTT_USER     = process.env.MQTT_USERNAME      || 'netflow-backend';
 const MQTT_PASS     = process.env.MQTT_PASSWORD      || '';
+const DEVICE_AUTH_MODE = String(process.env.FLEET_DEVICE_AUTH_MODE || 'device').toLowerCase();
 const MQTT_REJECT_UNAUTHORIZED =
   String(process.env.MQTT_REJECT_UNAUTHORIZED || 'false').toLowerCase() === 'true';
+const LOG_MQTT_ERRORS = String(process.env.FLEET_LOG_MQTT_ERRORS || 'true').toLowerCase() !== 'false';
 
 // ── Shared utilities ───────────────────────────────────────────────────────────
 const sleep    = ms => new Promise(r => setTimeout(r, ms));
@@ -230,8 +232,9 @@ const REPLENISH_S    = 3600;
 const RP_PER_KWH     = 1450;
 const RP_PER_M3      = 5000;
 const DEFAULT_ST     = 5;
+const TELEMETRY_QOS   = 1;
 
-function makeDevice(bldg, floor, room) {
+function makeDevice(bldg, floor, room, samplingTimeSeconds = DEFAULT_ST) {
   const id = devId(bldg, floor, room);
   return {
     id,
@@ -245,7 +248,7 @@ function makeDevice(bldg, floor, room) {
     tw: 20 + Math.random() * 20,
     rs: 1, vs: 1,
     adminLatch: false,
-    cf: 4.55, cp: 1.05, st: DEFAULT_ST,
+    cf: 4.55, cp: 1.05, st: samplingTimeSeconds,
     version: '1.0.0',
     client: null, connected: false, otaBusy: false,
     offlineBuffer: [],
@@ -261,10 +264,15 @@ function connectDevice(dev) {
     dev.client = null;
   }
 
+  const useGlobalAuth = DEVICE_AUTH_MODE === 'global';
+  const username = useGlobalAuth ? MQTT_USER : dev.id;
+  const password = useGlobalAuth ? MQTT_PASS : DEVICE_SECRET;
+  let loggedConnectIssue = false;
+
   const client = mqtt.connect(BROKER_URL, {
     clientId:        `fleet-${dev.id}-${Date.now().toString(36)}`,
-    username:        dev.id,
-    password:        DEVICE_SECRET,
+    username,
+    password,
     clean:           true,
     reconnectPeriod: 8000,
     connectTimeout:  15000,
@@ -282,13 +290,20 @@ function connectDevice(dev) {
     ], { qos: 1 });
     if (dev.offlineBuffer.length > 0) {
       const drained = dev.offlineBuffer.splice(0);
-      for (const { topic, frame } of drained) client.publish(topic, frame, { qos: 0 });
+      for (const { frame } of drained) publishTelemetry(dev, frame);
     }
   });
 
   client.on('offline', () => { dev.connected = false; });
   client.on('close',   () => { dev.connected = false; });
-  client.on('error',   () => {});
+  client.on('error',   err => {
+    if (!LOG_MQTT_ERRORS || loggedConnectIssue) return;
+    loggedConnectIssue = true;
+    console.warn(
+      `[MQTT ERROR ${dev.id}] ${err.message} ` +
+      `(auth=${DEVICE_AUTH_MODE}, username=${username || '<empty>'})`,
+    );
+  });
   client.on('message', (topic, payload) => onMessage(dev, topic, payload));
   dev.client = client;
 }
@@ -359,10 +374,13 @@ async function runOta(dev, major, minor, patch, url) {
   await sleep(2000 + Math.random() * 3000);
 
   const newVersion = `${major}.${minor}.${patch}`;
+  const useGlobalAuth = DEVICE_AUTH_MODE === 'global';
+  const username = useGlobalAuth ? MQTT_USER : dev.id;
+  const password = useGlobalAuth ? MQTT_PASS : DEVICE_SECRET;
   const ackClient  = mqtt.connect(BROKER_URL, {
     clientId: `ota-${dev.id}-${Date.now().toString(36)}`,
-    username:  dev.id,
-    password:  DEVICE_SECRET,
+    username,
+    password,
     clean:     true,
     rejectUnauthorized: MQTT_REJECT_UNAUTHORIZED,
     will: { topic: dev.statusTopic, payload: 'offline', qos: 1, retain: true },
@@ -385,6 +403,27 @@ async function runOta(dev, major, minor, patch, url) {
 }
 
 let running = true;
+
+function bufferTelemetry(dev, frame) {
+  dev.offlineBuffer.push({ topic: dev.dataTopic, frame });
+  if (dev.offlineBuffer.length > 100) dev.offlineBuffer.shift();
+  dev.bufferedTotal++;
+}
+
+function publishTelemetry(dev, frame) {
+  if (!dev.connected || !dev.client?.connected) {
+    bufferTelemetry(dev, frame);
+    return;
+  }
+
+  dev.client.publish(dev.dataTopic, frame, { qos: TELEMETRY_QOS }, err => {
+    if (err) {
+      bufferTelemetry(dev, frame);
+      return;
+    }
+    dev.sentTotal++;
+  });
+}
 
 function tick(dev) {
   if (dev.otaBusy) return;
@@ -424,14 +463,7 @@ function tick(dev) {
     rs: effectiveRelay, vs: effectiveValve,
   });
 
-  if (dev.connected && dev.client?.connected) {
-    dev.client.publish(dev.dataTopic, frame, { qos: 0 });
-    dev.sentTotal++;
-  } else {
-    dev.offlineBuffer.push({ topic: dev.dataTopic, frame });
-    if (dev.offlineBuffer.length > 100) dev.offlineBuffer.shift();
-    dev.bufferedTotal++;
-  }
+  publishTelemetry(dev, frame);
 }
 
 function scheduleTick(dev) {
@@ -481,13 +513,21 @@ async function hydrateFromDatabase(allDevices) {
 async function cmdSim(argv) {
   const countArg    = argv.indexOf('--count');
   const MAX_DEVICES = countArg >= 0 ? parseInt(argv[countArg + 1]) || TOTAL : TOTAL;
+  const intervalArg = argv.indexOf('--interval-ms');
+  const intervalMs = intervalArg >= 0
+    ? Math.max(1000, parseInt(argv[intervalArg + 1]) || DEFAULT_ST * 1000)
+    : DEFAULT_ST * 1000;
+  const samplingTimeSeconds = intervalMs / 1000;
   const HYDRATE     = !argv.includes('--no-db-hydrate');
 
   console.log('══════════════════════════════════════════════════════');
   console.log(' NetFlow Fleet Simulator');
   console.log(`  Broker  : ${BROKER_URL}`);
   console.log(`  Fleet   : ${MAX_DEVICES} devices`);
+  console.log(`  Interval: ${intervalMs} ms`);
+  console.log(`  QoS     : ${TELEMETRY_QOS}`);
   console.log(`  Hydrate : ${HYDRATE ? 'yes (from DB)' : 'no (random baseline)'}`);
+  console.log(`  Auth    : ${DEVICE_AUTH_MODE === 'global' ? `global username ${MQTT_USER || '<empty>'}` : 'device_id + MQTT_DEVICE_SECRET'}`);
   console.log('  Note    : requires "ulimit -n 65536" for full fleet');
   console.log('══════════════════════════════════════════════════════\n');
 
@@ -539,7 +579,7 @@ async function cmdSim(argv) {
       for (let f = 1; f <= FLOORS; f++)
         for (let r = 1; r <= UNITS_PER_FLOOR; r++) {
           if (count >= MAX_DEVICES) return;
-          yield makeDevice(b, f, r);
+          yield makeDevice(b, f, r, samplingTimeSeconds);
           count++;
         }
   }
@@ -801,7 +841,7 @@ const [,, sub, ...rest] = process.argv;
 const USAGE = `
 Usage:
   node scripts/fleet.js seed   [--dry-run] [--reset-existing]
-  node scripts/fleet.js sim    [--count N] [--no-db-hydrate]
+  node scripts/fleet.js sim    [--count N] [--interval-ms MS] [--no-db-hydrate]
   node scripts/fleet.js verify [--test 1,3,5]
 `.trim();
 

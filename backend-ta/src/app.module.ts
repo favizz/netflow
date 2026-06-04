@@ -49,7 +49,7 @@ import { AppController } from './app.controller';
         synchronize: false,
         // Connection pool tuned for 10 k+ concurrent units
         extra: {
-          connectionLimit: cfg.get<number>('DB_POOL_SIZE', 20),
+          connectionLimit: cfg.get<number>('DB_POOL_SIZE', 60),
           idleTimeout: cfg.get<number>('DB_POOL_IDLE_TIMEOUT', 30_000),
           enableKeepAlive: true,
           keepAliveInitialDelay: 10_000,

@@ -17,7 +17,7 @@ export const TELEMETRY_QUEUE = 'telemetry';
  * Concurrency is controlled by TELEMETRY_QUEUE_CONCURRENCY in .env.
  */
 @Processor(TELEMETRY_QUEUE, {
-  concurrency: Number(process.env.TELEMETRY_QUEUE_CONCURRENCY || 10),
+  concurrency: Number(process.env.TELEMETRY_QUEUE_CONCURRENCY || 50),
 })
 export class TelemetryProcessor
   extends WorkerHost

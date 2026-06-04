@@ -53,17 +53,22 @@ let service: DeviceService;
 let mockMqttClient: { emit: jest.Mock };
 let mockAnomalyService: { checkOnTelemetry: jest.Mock };
 let mockDataSource: { createQueryRunner: jest.Mock };
+let mockMeterRepo: { create: jest.Mock; insert: jest.Mock };
 
 async function buildModule(unit: Unit): Promise<{ qr: any }> {
   const { queryRunner, savedUnit } = makeQueryRunner(unit);
   mockDataSource = { createQueryRunner: jest.fn().mockReturnValue(queryRunner) };
   mockMqttClient = { emit: jest.fn() };
   mockAnomalyService = { checkOnTelemetry: jest.fn().mockResolvedValue(undefined) };
+  mockMeterRepo = {
+    create: jest.fn().mockImplementation((data) => ({ ...data })),
+    insert: jest.fn().mockResolvedValue(undefined),
+  };
 
   const module: TestingModule = await Test.createTestingModule({
     providers: [
       DeviceService,
-      { provide: getRepositoryToken(MeterReading), useValue: {} },
+      { provide: getRepositoryToken(MeterReading), useValue: mockMeterRepo },
       { provide: DataSource, useValue: mockDataSource },
       { provide: 'MQTT_CLIENT', useValue: mockMqttClient },
       { provide: AnomalyService, useValue: mockAnomalyService },
