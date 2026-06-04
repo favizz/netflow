@@ -221,7 +221,7 @@ export default function ControlCenterPage() {
     const [log, setLog] = useState<LogEntry[]>([]);
     const [broadcastConfirm, setBroadcastConfirm] = useState<{ type: 'relay' | 'valve'; value: 0 | 1 } | null>(null);
     // Batch tracking: summaryId, counts, device→batchId mapping
-    type BatchTracker = { summaryId: string; label: string; total: number; received: number; success: number };
+    type BatchTracker = { summaryId: string; label: string; total: number; received: number; success: number; failure: number };
     const batchTrackersRef = useRef<Map<string, BatchTracker>>(new Map()); // batchId → tracker
     const deviceBatchRef   = useRef<Map<string, string>>(new Map());       // `${ackType}:${deviceId}` → batchId
 
@@ -247,6 +247,7 @@ export default function ControlCenterPage() {
             client.subscribe('device/+/ota_ack');
             client.subscribe('device/+/config_ack');
             client.subscribe('device/+/command_ack');
+            client.subscribe('device/+/status');
         });
 
         client.on('error', (err) => {
@@ -259,6 +260,50 @@ export default function ControlCenterPage() {
             const deviceId = parts[1] ?? 'unknown';
             const type = parts[2] ?? 'unknown';
 
+            // ── LWT / device status ───────────────────────────────────────────
+            if (type === 'status') {
+                let online = true;
+                try {
+                    const s = payload.toString().trim();
+                    if (s === 'offline' || s === '0') {
+                        online = false;
+                    } else {
+                        const parsed = JSON.parse(s) as { online?: boolean | number };
+                        online = parsed.online !== false && parsed.online !== 0;
+                    }
+                } catch { online = false; }
+
+                if (!online) {
+                    // Mark any pending ACK for this device as immediately failed
+                    const ackTypes = ['command_ack', 'config_ack', 'ota_ack'];
+                    ackTypes.forEach(ackType => {
+                        const batchKey = `${ackType}:${deviceId}`;
+                        const batchId = deviceBatchRef.current.get(batchKey);
+                        if (!batchId) return;
+                        deviceBatchRef.current.delete(batchKey);
+                        const tracker = batchTrackersRef.current.get(batchId);
+                        if (!tracker) return;
+                        tracker.received++;
+                        tracker.failure++;
+                        setLog(prev => [...prev.slice(-49), {
+                            id: makeId(), ts: ts(), level: 'err',
+                            text: `✗ [${deviceId}] went offline — command not confirmed`,
+                        }]);
+                        if (tracker.received >= tracker.total) {
+                            const allOk = tracker.failure === 0;
+                            setLog(prev => prev.map(e => e.id === tracker.summaryId
+                                ? { ...e, level: allOk ? 'ok' : 'err', ts: ts(),
+                                    text: allOk
+                                        ? `✓ ${tracker.label} — SUCCESS (${tracker.total}/${tracker.total})`
+                                        : `✗ ${tracker.label} — FAILED (${tracker.success}/${tracker.total} ok, ${tracker.failure} failed)` }
+                                : e));
+                            batchTrackersRef.current.delete(batchId);
+                        }
+                    });
+                }
+                return;
+            }
+
             interface MqttAck {
                 status?: 'ok' | 'noop' | 'error' | 'failed' | 'unknown';
                 version?: string;
@@ -269,6 +314,7 @@ export default function ControlCenterPage() {
             let ack: MqttAck = {};
             try { ack = JSON.parse(payload.toString()); } catch { ack = { status: 'unknown' }; }
 
+            // 'noop' = device already in requested state — counts as acceptable, not failure
             const level: LogEntry['level'] = ack.status === 'ok' ? 'ok' : ack.status === 'noop' ? 'info' : 'err';
             let text = '';
 
@@ -285,6 +331,8 @@ export default function ControlCenterPage() {
             } else if (type === 'command_ack') {
                 text = ack.status === 'ok'
                     ? `✓ CMD [${deviceId}] ${ack.type ?? 'actuation'} ok`
+                    : ack.status === 'noop'
+                    ? `· CMD [${deviceId}] ${ack.type ?? 'actuation'} already in requested state`
                     : `✗ CMD [${deviceId}] ${ack.type ?? 'actuation'} failed`;
             } else {
                 text = `? ACK [${deviceId}/${type}]: ${JSON.stringify(ack)}`;
@@ -295,20 +343,20 @@ export default function ControlCenterPage() {
             const batchId  = deviceBatchRef.current.get(batchKey);
             if (batchId) {
                 deviceBatchRef.current.delete(batchKey);
-                // Individual success/failure entry
                 setLog(prev => [...prev.slice(-49), { id: makeId(), ts: ts(), level, text }]);
-                // Update tracker and potentially resolve summary
                 const tracker = batchTrackersRef.current.get(batchId);
                 if (tracker) {
                     tracker.received++;
-                    if (level === 'ok') tracker.success++;
+                    // 'ok' and 'noop' are both acceptable outcomes; only 'err' counts as failure
+                    if (level === 'ok' || level === 'info') tracker.success++;
+                    if (level === 'err') tracker.failure++;
                     if (tracker.received >= tracker.total) {
-                        const allOk = tracker.success === tracker.total;
+                        const allOk = tracker.failure === 0;
                         setLog(prev => prev.map(e => e.id === tracker.summaryId
                             ? { ...e, level: allOk ? 'ok' : 'err', ts: ts(),
                                 text: allOk
                                     ? `✓ ${tracker.label} — SUCCESS (${tracker.total}/${tracker.total})`
-                                    : `✗ ${tracker.label} — FAILED (${tracker.success}/${tracker.total} ok)` }
+                                    : `✗ ${tracker.label} — FAILED (${tracker.success}/${tracker.total} ok, ${tracker.failure} failed)` }
                             : e));
                         batchTrackersRef.current.delete(batchId);
                     }
@@ -356,23 +404,27 @@ export default function ControlCenterPage() {
         }]);
 
         // Register tracker + device→batch mappings
-        batchTrackersRef.current.set(batchId, { summaryId, label: summaryLabel, total: devices.length, received: 0, success: 0 });
+        batchTrackersRef.current.set(batchId, { summaryId, label: summaryLabel, total: devices.length, received: 0, success: 0, failure: 0 });
         devices.forEach(d => deviceBatchRef.current.set(`${ackType}:${d}`, batchId));
 
-        // Timeout: log any unreplied devices, resolve summary as FAILED
+        // Timeout: log any unreplied devices, resolve summary
         setTimeout(() => {
             const tracker = batchTrackersRef.current.get(batchId);
             if (!tracker) return;
             const remaining = devices.filter(d => deviceBatchRef.current.get(`${ackType}:${d}`) === batchId);
             remaining.forEach(d => {
                 deviceBatchRef.current.delete(`${ackType}:${d}`);
+                tracker.received++;
+                tracker.failure++;
                 setLog(prev => [...prev.slice(-49), { id: makeId(), ts: ts(), level: 'err', text: `✗ ${deviceLabelFn(d)} — no response (timeout)` }]);
             });
-            if (remaining.length > 0) {
-                setLog(prev => prev.map(e => e.id === summaryId
-                    ? { ...e, level: 'err', ts: ts(), text: `✗ ${summaryLabel} — FAILED (${tracker.success}/${tracker.total} ok, ${remaining.length} timeout)` }
-                    : e));
-            }
+            const allOk = tracker.failure === 0;
+            setLog(prev => prev.map(e => e.id === summaryId
+                ? { ...e, level: allOk ? 'ok' : 'err', ts: ts(),
+                    text: allOk
+                        ? `✓ ${summaryLabel} — SUCCESS (${tracker.total}/${tracker.total})`
+                        : `✗ ${summaryLabel} — FAILED (${tracker.success}/${tracker.total} ok, ${tracker.failure} failed)` }
+                : e));
             batchTrackersRef.current.delete(batchId);
         }, timeoutMs);
     }, []);
@@ -484,7 +536,7 @@ export default function ControlCenterPage() {
             }) as { pushed?: string[] };
             const pushed = Array.isArray(res?.pushed) ? res.pushed : [];
             if (pushed.length > 0) {
-                addPendingBatch(pushed, 'ota_ack', `OTA PUSH v${otaVersion}`, d => `OTA v${otaVersion} → ${d}`, 120_000);
+                addPendingBatch(pushed, 'ota_ack', `OTA PUSH v${otaVersion}`, d => `OTA v${otaVersion} → ${d}`, 180_000);
             }
             localStorage.setItem('ota_last_link', otaBinaryLink);
             localStorage.setItem('ota_last_version', otaVersion);

@@ -81,12 +81,20 @@ const state = {
     anomaly: null,
 };
 
+const STATUS_TOPIC = `device/${DEVICE_ID}/status`;
+
 const client = mqtt.connect(BROKER_URL, {
     clientId: `single-sim-${DEVICE_ID}-${Date.now().toString(36)}`,
     username: USERNAME,
     password: PASSWORD,
     clean: true,
     rejectUnauthorized: false,
+    will: {
+        topic:   STATUS_TOPIC,
+        payload: 'offline',
+        qos:     1,
+        retain:  true,
+    },
 });
 
 const generatePayload = () => {
@@ -133,6 +141,8 @@ const generatePayload = () => {
 
 client.on('connect', () => {
     console.log(`✅ Connected as ${DEVICE_ID}\n`);
+
+    client.publish(STATUS_TOPIC, JSON.stringify({ online: true }), { retain: true, qos: 1 });
 
     client.subscribe(`device/${DEVICE_ID}/command`);
     client.subscribe(`device/${DEVICE_ID}/config`);
@@ -238,3 +248,11 @@ client.on('message', (topic, message) => {
 });
 
 client.on('error', (err) => console.error('MQTT Error:', err.message));
+
+process.on('SIGINT', () => {
+    console.log('\n[Shutdown] Publishing offline status...');
+    client.publish(STATUS_TOPIC, 'offline', { retain: true, qos: 1 }, () => {
+        client.end();
+        process.exit(0);
+    });
+});
