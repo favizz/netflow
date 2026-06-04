@@ -262,6 +262,7 @@ function connectBatch(start) {
   for (let index = start; index < end; index++) {
     const did = deviceId(index);
     const state = { et: Math.random() * 500, wt: Math.random() * 100 };
+    const statusTopic = `device/${did}/status`;
     const client = mqtt.connect(BROKER_URL, {
       clientId: `load-${did}-${Date.now().toString(36)}`,
       username: USERNAME,
@@ -270,6 +271,12 @@ function connectBatch(start) {
       reconnectPeriod: 5000,
       connectTimeout: 10_000,
       rejectUnauthorized: false,
+      will: {
+        topic:   statusTopic,
+        payload: 'offline',
+        qos:     1,
+        retain:  true,
+      },
     });
 
     const entry = {
@@ -282,6 +289,7 @@ function connectBatch(start) {
     client.on('connect', () => {
       const wasOffline = !entry.isOnline;
       entry.isOnline = true;
+      client.publish(statusTopic, JSON.stringify({ online: true }), { retain: true, qos: 0 });
       if (wasOffline) {
         const connected = getConnectedCount();
         if (connected % 200 === 0 || connected === TOTAL_UNITS) {

@@ -94,13 +94,27 @@ async function apiFetch(path, opts = {}) {
   });
 }
 
-function mqttConnect(clientId) {
+function mqttConnect(clientId, deviceId = null) {
   return new Promise((resolve, reject) => {
-    const c = mqtt.connect(BROKER_URL, {
+    const opts = {
       clientId, username: USERNAME, password: PASSWORD, clean: true, connectTimeout: 10_000,
+    };
+    if (deviceId) {
+      opts.will = {
+        topic:   `device/${deviceId}/status`,
+        payload: 'offline',
+        qos:     1,
+        retain:  true,
+      };
+    }
+    const c = mqtt.connect(BROKER_URL, opts);
+    c.on('connect', () => {
+      if (deviceId) {
+        c.publish(`device/${deviceId}/status`, JSON.stringify({ online: true }), { retain: true, qos: 1 });
+      }
+      resolve(c);
     });
-    c.on('connect', () => resolve(c));
-    c.on('error',   (e) => reject(e));
+    c.on('error', (e) => reject(e));
   });
 }
 
@@ -184,7 +198,7 @@ async function testActuation(type, specLabel) {
     : `/unit/${TEST_UNIT}/relay`;
 
   const results = [];
-  const client = await mqttConnect(`healthsim-act-${Date.now().toString(36)}`);
+  const client = await mqttConnect(`healthsim-act-${Date.now().toString(36)}`, TEST_DEVICE);
 
   // Subscribe to ACK topic so we know when device receives command
   const ackTopic = `device/${TEST_DEVICE}/command_ack`;
@@ -265,7 +279,7 @@ async function testSpec7() {
 
   // Connect and flush
   console.log(`  Reconnecting and flushing...`);
-  const client = await mqttConnect(`healthsim-spec7-${Date.now().toString(36)}`);
+  const client = await mqttConnect(`healthsim-spec7-${Date.now().toString(36)}`, TEST_DEVICE);
 
   for (const frame of buffer) {
     await new Promise((r) => client.publish(topic, frame, { qos: 1 }, (err) => {
@@ -294,7 +308,7 @@ async function testSpec8() {
     { label: 'mcb_trip',  frame: { et: 100, p: 1450, v: 220, c: 6.59, wf: 1, wt: 10, te: 50, tw: 10, rs: 1, vs: 1 } },
   ];
 
-  const client = await mqttConnect(`healthsim-spec8-${Date.now().toString(36)}`);
+  const client = await mqttConnect(`healthsim-spec8-${Date.now().toString(36)}`, TEST_DEVICE);
   const topic  = `device/${TEST_DEVICE}/data`;
   const LIMIT  = 90_000;
   const results = [];

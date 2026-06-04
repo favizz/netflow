@@ -1,12 +1,24 @@
 const mqtt = require('mqtt');
 require('dotenv').config({ path: '../.env' });
 
-const brokerUrl = process.env.MQTT_BROKER_URL || 'mqtt://broker.emqx.io:1883';
-const deviceId = process.argv[2] || 'DEV-A-101';
-const intervalMs = 5000;
+const brokerUrl      = process.env.MQTT_BROKER_URL      || 'mqtt://broker.emqx.io:1883';
+const mqttSecret     = process.env.MQTT_DEVICE_SECRET   || '';
+const deviceId       = process.argv[2] || 'DEV-A-101';
+const intervalMs     = 5000;
+const statusTopic    = `device/${deviceId}/status`;
 
 console.log(`Connecting to MQTT Broker at ${brokerUrl}...`);
-const client = mqtt.connect(brokerUrl);
+const client = mqtt.connect(brokerUrl, {
+    clientId: `sim-${deviceId}`,
+    username: deviceId,
+    password: mqttSecret,
+    will: {
+        topic:   statusTopic,
+        payload: 'offline',
+        qos:     1,
+        retain:  true,
+    },
+});
 
 let energyTotal = 1250;
 let waterTotal = 180;
@@ -25,6 +37,9 @@ let st = 5;
 client.on('connect', () => {
     console.log(`[Success] Connected to EMQX. Simulating telemetry for ${deviceId}`);
     console.log(`(Press Ctrl+C to stop the simulation)`);
+
+    // Announce online presence (retained so dashboard sees it)
+    client.publish(statusTopic, JSON.stringify({ online: true }), { retain: true, qos: 1 });
 
     // Subscribe to all control channels
     const topics = [
@@ -135,6 +150,14 @@ client.on('message', (topic, message) => {
 
 client.on('error', (err) => {
     console.error('MQTT Connection Error:', err.message);
+});
+
+process.on('SIGINT', () => {
+    console.log('\n[Shutdown] Publishing offline status...');
+    client.publish(statusTopic, 'offline', { retain: true, qos: 1 }, () => {
+        client.end();
+        process.exit(0);
+    });
 });
 
 function encodeTelemetry(t) {

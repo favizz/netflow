@@ -307,9 +307,12 @@ void otaTask(void* arg)
   }
 
   // Reconnect MQTT just long enough to deliver the ACK.
-  char ackTopic[64];
-  snprintf(ackTopic, sizeof(ackTopic), "device/%s/ota_ack", deviceId.c_str());
-  if (mqttClient.connect(deviceId.c_str(), deviceId.c_str(), MQTT_SECRET)) {
+  char ackTopic[64], statusTopic[64];
+  snprintf(ackTopic,    sizeof(ackTopic),    "device/%s/ota_ack", deviceId.c_str());
+  snprintf(statusTopic, sizeof(statusTopic), "device/%s/status",  deviceId.c_str());
+  if (mqttClient.connect(deviceId.c_str(), deviceId.c_str(), MQTT_SECRET,
+                         statusTopic, 1, true, "offline")) {
+    mqttClient.publish(statusTopic, "{\"online\":true}", true);
     mqttClient.publish(ackTopic, ackMsg);
     mqttClient.loop();
     delay(500);
@@ -374,12 +377,17 @@ bool ensureMQTT()
   if (mqttClient.connected()) return true;
 
   Serial.print("[MQTT] Connecting...");
-  if (!mqttClient.connect(deviceId.c_str(), deviceId.c_str(), MQTT_SECRET)) {
+  String base        = "device/" + deviceId;
+  String statusTopic = base + "/status";
+  // LWT: broker publishes "offline" (retained, QoS 1) if connection drops unexpectedly
+  if (!mqttClient.connect(deviceId.c_str(), deviceId.c_str(), MQTT_SECRET,
+                          statusTopic.c_str(), 1, true, "offline")) {
     Serial.printf(" failed (state=%d)\n", mqttClient.state());
     return false;
   }
   Serial.println(" OK");
-  String base = "device/" + deviceId;
+  // Announce presence (retained so dashboard sees it on subscribe)
+  mqttClient.publish(statusTopic.c_str(), "{\"online\":true}", true);
   mqttClient.subscribe((base + "/command").c_str(), 1);
   mqttClient.subscribe((base + "/topup").c_str(),   1);
   mqttClient.subscribe((base + "/config").c_str(),  1);
