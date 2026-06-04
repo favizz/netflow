@@ -453,16 +453,17 @@ export default function UnitDetailPage() {
             if (confirmAction.type === 'power') {
                 const newState = confirmAction.next;
                 setPowerState(newState);
-                if (id) {
-                    await fetchApi(`/unit/${id}/relay`, { method: 'PATCH', body: JSON.stringify({ relayStatus: newState }) });
-                }
-                if (unitInfo?.meterSerial && mqttClient && isConnected) {
-                    const cmdTopic = `device/${unitInfo.meterSerial}/command`;
-                    const payload = encodeCommand('relay', newState ? 1 : 0);
-                    mqttClient.publish(cmdTopic, payload as unknown as string);
+                // Update DB state
+                if (id) await fetchApi(`/unit/${id}/relay`, { method: 'PATCH', body: JSON.stringify({ relayStatus: newState }) });
+                // Send MQTT command via backend (retained publish, works regardless of browser MQTT state)
+                if (unitInfo?.meterSerial) {
+                    await fetchApi(`/admin/command/${unitInfo.meterSerial}`, {
+                        method: 'POST',
+                        body: JSON.stringify({ type: 'relay', value: newState ? 1 : 0 }),
+                    });
                     setLiveLogs(prev => [{
                         timestamp: new Date().toISOString(), value: newState ? 1 : 0, unit: 'CMD',
-                        rawPayload: `OUTGOING [Binary] ${cmdTopic}: relay=${newState ? 1 : 0} (0x${payload[0].toString(16).toUpperCase()}) 1B`,
+                        rawPayload: `OUTGOING [Backend] device/${unitInfo.meterSerial}/command: relay=${newState ? 1 : 0}`,
                     }, ...prev.slice(0, 49)]);
                 }
                 toast.success(`Power supply ${newState ? 'enabled' : 'disabled'}.`);
@@ -470,16 +471,17 @@ export default function UnitDetailPage() {
             if (confirmAction.type === 'water') {
                 const newState = confirmAction.next;
                 setWaterState(newState);
-                if (id) {
-                    await fetchApi(`/unit/${id}/valve`, { method: 'PATCH', body: JSON.stringify({ valveStatus: newState }) });
-                }
-                if (unitInfo?.meterSerial && mqttClient && isConnected) {
-                    const cmdTopic = `device/${unitInfo.meterSerial}/command`;
-                    const payload = encodeCommand('valve', newState ? 1 : 0);
-                    mqttClient.publish(cmdTopic, payload as unknown as string);
+                // Update DB state
+                if (id) await fetchApi(`/unit/${id}/valve`, { method: 'PATCH', body: JSON.stringify({ valveStatus: newState }) });
+                // Send MQTT command via backend (retained publish, works regardless of browser MQTT state)
+                if (unitInfo?.meterSerial) {
+                    await fetchApi(`/admin/command/${unitInfo.meterSerial}`, {
+                        method: 'POST',
+                        body: JSON.stringify({ type: 'valve', value: newState ? 1 : 0 }),
+                    });
                     setLiveLogs(prev => [{
                         timestamp: new Date().toISOString(), value: newState ? 1 : 0, unit: 'CMD',
-                        rawPayload: `OUTGOING [Binary] ${cmdTopic}: valve=${newState ? 1 : 0} (0x${payload[0].toString(16).toUpperCase()}) 1B`,
+                        rawPayload: `OUTGOING [Backend] device/${unitInfo.meterSerial}/command: valve=${newState ? 1 : 0}`,
                     }, ...prev.slice(0, 49)]);
                 }
                 toast.success(`Water valve ${newState ? 'opened' : 'closed'}.`);

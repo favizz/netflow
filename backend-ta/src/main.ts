@@ -2,6 +2,7 @@ import './tracing';
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { MicroserviceOptions, Transport } from '@nestjs/microservices';
+import { getQueueToken } from '@nestjs/bullmq';
 import { AppModule } from './app.module';
 import compression from 'compression';
 import helmet from 'helmet';
@@ -74,6 +75,34 @@ async function bootstrap() {
     /* eslint-enable @typescript-eslint/no-require-imports, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
   } catch {
     /* @nestjs/swagger not installed - API docs disabled */
+  }
+
+  // ── BullBoard queue monitor ──────────────────────────────────────────────────
+  // Mounted directly (not via NestJS BullBoardModule) so Redis unavailability
+  // cannot prevent the route from registering — the whole block is try-catched.
+  try {
+    /* eslint-disable @typescript-eslint/no-require-imports, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
+    const { createBullBoard } = require('@bull-board/api');
+    const { BullMQAdapter }   = require('@bull-board/api/bullMQAdapter');
+    const { ExpressAdapter }  = require('@bull-board/express');
+
+    const serverAdapter = new ExpressAdapter();
+    serverAdapter.setBasePath('/api/admin/queues');
+
+    createBullBoard({
+      queues: [
+        new BullMQAdapter(app.get(getQueueToken('telemetry'))),
+        new BullMQAdapter(app.get(getQueueToken('payment-expiry'))),
+        new BullMQAdapter(app.get(getQueueToken('broadcast'))),
+      ],
+      serverAdapter,
+    });
+
+    app.use('/api/admin/queues', serverAdapter.getRouter());
+    console.log('BullBoard mounted at /api/admin/queues');
+    /* eslint-enable @typescript-eslint/no-require-imports, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
+  } catch (err) {
+    console.warn(`BullBoard unavailable (Redis may be down): ${(err as Error).message}`);
   }
 
   // ── MQTT microservice ────────────────────────────────────────────────────────

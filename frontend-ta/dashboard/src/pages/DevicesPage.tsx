@@ -75,9 +75,11 @@ export default function DevicesPage() {
             let valveOn: boolean | null = null;
 
             const uint8 = new Uint8Array(message.buffer, message.byteOffset, message.byteLength);
-            if (uint8.length >= 21) {
-                relayOn = (uint8[20] & 1) === 1;
-                valveOn = ((uint8[20] >> 1) & 1) === 1;
+            // 21-byte frame: flags at byte 20; 25-byte frame: flags at byte 24
+            const flagsOffset = uint8.length >= 25 ? 24 : 20;
+            if (uint8.length === 21 || uint8.length === 25) {
+                relayOn = (uint8[flagsOffset] & 1) === 1;
+                valveOn = ((uint8[flagsOffset] >> 1) & 1) === 1;
             }
 
             setData(prev => {

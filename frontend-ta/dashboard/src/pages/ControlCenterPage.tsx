@@ -220,8 +220,10 @@ export default function ControlCenterPage() {
     const [cmdPending, setCmdPending] = useState<string | null>(null);
     const [log, setLog] = useState<LogEntry[]>([]);
     const [broadcastConfirm, setBroadcastConfirm] = useState<{ type: 'relay' | 'valve'; value: 0 | 1 } | null>(null);
-    // key: `${ackType}:${deviceId}` → log entry id — used to update pending entries in place
-    const pendingAcksRef = useRef<Map<string, string>>(new Map());
+    // Batch tracking: summaryId, counts, device→batchId mapping
+    type BatchTracker = { summaryId: string; label: string; total: number; received: number; success: number };
+    const batchTrackersRef = useRef<Map<string, BatchTracker>>(new Map()); // batchId → tracker
+    const deviceBatchRef   = useRef<Map<string, string>>(new Map());       // `${ackType}:${deviceId}` → batchId
 
     // ── OTA state ─────────────────────────────────────────────────────────────
     const [otaBinaryLink, setOtaBinaryLink] = useState('');
@@ -288,15 +290,31 @@ export default function ControlCenterPage() {
                 text = `? ACK [${deviceId}/${type}]: ${JSON.stringify(ack)}`;
             }
 
-            // Update the pending entry for this device if one exists, else append
-            const pendingKey = `${type}:${deviceId}`;
-            const pendingId = pendingAcksRef.current.get(pendingKey);
-            if (pendingId) {
-                pendingAcksRef.current.delete(pendingKey);
-                setLog(prev => prev.map(e =>
-                    e.id === pendingId ? { ...e, level, text, ts: ts() } : e
-                ));
+            // Write individual device ACK entry, then update batch summary
+            const batchKey = `${type}:${deviceId}`;
+            const batchId  = deviceBatchRef.current.get(batchKey);
+            if (batchId) {
+                deviceBatchRef.current.delete(batchKey);
+                // Individual success/failure entry
+                setLog(prev => [...prev.slice(-49), { id: makeId(), ts: ts(), level, text }]);
+                // Update tracker and potentially resolve summary
+                const tracker = batchTrackersRef.current.get(batchId);
+                if (tracker) {
+                    tracker.received++;
+                    if (level === 'ok') tracker.success++;
+                    if (tracker.received >= tracker.total) {
+                        const allOk = tracker.success === tracker.total;
+                        setLog(prev => prev.map(e => e.id === tracker.summaryId
+                            ? { ...e, level: allOk ? 'ok' : 'err', ts: ts(),
+                                text: allOk
+                                    ? `✓ ${tracker.label} — SUCCESS (${tracker.total}/${tracker.total})`
+                                    : `✗ ${tracker.label} — FAILED (${tracker.success}/${tracker.total} ok)` }
+                            : e));
+                        batchTrackersRef.current.delete(batchId);
+                    }
+                }
             } else {
+                // ACK not from a tracked broadcast — just append
                 setLog(prev => [...prev.slice(-49), { id: makeId(), ts: ts(), level, text }]);
             }
         });
@@ -314,36 +332,48 @@ export default function ControlCenterPage() {
     const addLog = useCallback((level: LogEntry['level'], text: string) =>
         setLog(prev => [...prev.slice(-49), { id: makeId(), ts: ts(), level, text }]), []);
 
-    // Creates one pending entry per device and registers them in pendingAcksRef.
-    // Returns a cleanup function that marks still-pending entries as failed after timeoutMs.
+    // Creates ONE summary pending entry for the whole broadcast, then logs each
+    // individual device ACK as it arrives. Summary resolves to SUCCESS only when
+    // ALL devices reply with ok; any failure or timeout → FAILED.
     const addPendingBatch = useCallback((
         devices: string[],
         ackType: string,
-        labelFn: (deviceId: string) => string,
+        summaryLabel: string,
+        deviceLabelFn: (deviceId: string) => string,
         timeoutMs = 10_000,
     ) => {
-        const entries: LogEntry[] = devices.map(deviceId => ({
-            id: makeId(),
-            ts: ts(),
-            level: 'pending' as const,
-            text: `⏳ ${labelFn(deviceId)}`,
-            deviceId,
-            ackType,
-        }));
-        entries.forEach(e => pendingAcksRef.current.set(`${ackType}:${e.deviceId}`, e.id));
-        setLog(prev => [...prev.slice(-(50 - entries.length)), ...entries]);
+        if (devices.length === 0) {
+            setLog(prev => [...prev.slice(-49), { id: makeId(), ts: ts(), level: 'info', text: '· No devices with assigned hardware IDs' }]);
+            return;
+        }
+        const batchId  = makeId();
+        const summaryId = makeId();
 
-        const entryIds = entries.map(e => e.id);
+        // One summary entry starts as pending
+        setLog(prev => [...prev.slice(-49), {
+            id: summaryId, ts: ts(), level: 'pending',
+            text: `⏳ ${summaryLabel} — ${devices.length} device(s) [waiting for ACK...]`,
+        }]);
+
+        // Register tracker + device→batch mappings
+        batchTrackersRef.current.set(batchId, { summaryId, label: summaryLabel, total: devices.length, received: 0, success: 0 });
+        devices.forEach(d => deviceBatchRef.current.set(`${ackType}:${d}`, batchId));
+
+        // Timeout: log any unreplied devices, resolve summary as FAILED
         setTimeout(() => {
-            setLog(prev => prev.map(e =>
-                entryIds.includes(e.id) && e.level === 'pending'
-                    ? { ...e, level: 'err', text: e.text.replace('⏳', '✗') + ' — timeout' }
-                    : e
-            ));
-            entries.forEach(e => {
-                if (pendingAcksRef.current.get(`${ackType}:${e.deviceId}`) === e.id)
-                    pendingAcksRef.current.delete(`${ackType}:${e.deviceId}`);
+            const tracker = batchTrackersRef.current.get(batchId);
+            if (!tracker) return;
+            const remaining = devices.filter(d => deviceBatchRef.current.get(`${ackType}:${d}`) === batchId);
+            remaining.forEach(d => {
+                deviceBatchRef.current.delete(`${ackType}:${d}`);
+                setLog(prev => [...prev.slice(-49), { id: makeId(), ts: ts(), level: 'err', text: `✗ ${deviceLabelFn(d)} — no response (timeout)` }]);
             });
+            if (remaining.length > 0) {
+                setLog(prev => prev.map(e => e.id === summaryId
+                    ? { ...e, level: 'err', ts: ts(), text: `✗ ${summaryLabel} — FAILED (${tracker.success}/${tracker.total} ok, ${remaining.length} timeout)` }
+                    : e));
+            }
+            batchTrackersRef.current.delete(batchId);
         }, timeoutMs);
     }, []);
 
@@ -418,9 +448,7 @@ export default function ControlCenterPage() {
             }) as { pushed?: string[] };
             const pushed = Array.isArray(res?.pushed) ? res.pushed : [];
             if (pushed.length > 0) {
-                addPendingBatch(pushed, 'command_ack', d => `${label} → ${d}`);
-            } else {
-                addLog('info', '· No devices with assigned hardware IDs');
+                addPendingBatch(pushed, 'command_ack', `BROADCAST ${label}`, d => `${label} → ${d}`);
             }
         } catch (err: unknown) {
             addLog('err', `✗ BROADCAST failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
@@ -436,9 +464,7 @@ export default function ControlCenterPage() {
             const res = await fetchApi('/admin/push-config', { method: 'POST' }) as { pushed?: string[] };
             const pushed = Array.isArray(res?.pushed) ? res.pushed : [];
             if (pushed.length > 0) {
-                addPendingBatch(pushed, 'config_ack', d => `CONFIG calibration → ${d}`);
-            } else {
-                addLog('info', '· No devices with assigned hardware IDs');
+                addPendingBatch(pushed, 'config_ack', 'PUSH CONFIG calibration', d => `CONFIG → ${d}`);
             }
         } catch (err: unknown) {
             addLog('err', `✗ CONFIG push failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
@@ -458,9 +484,7 @@ export default function ControlCenterPage() {
             }) as { pushed?: string[] };
             const pushed = Array.isArray(res?.pushed) ? res.pushed : [];
             if (pushed.length > 0) {
-                addPendingBatch(pushed, 'ota_ack', d => `OTA v${otaVersion} → ${d}`, 120_000);
-            } else {
-                addLog('info', '· No devices with assigned hardware IDs');
+                addPendingBatch(pushed, 'ota_ack', `OTA PUSH v${otaVersion}`, d => `OTA v${otaVersion} → ${d}`, 120_000);
             }
             localStorage.setItem('ota_last_link', otaBinaryLink);
             localStorage.setItem('ota_last_version', otaVersion);

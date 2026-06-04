@@ -5,9 +5,6 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { BullModule } from '@nestjs/bullmq';
 import { ThrottlerModule } from '@nestjs/throttler';
 
-import { BullBoardModule } from '@bull-board/nestjs';
-import { ExpressAdapter } from '@bull-board/express';
-import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
 import { ScheduleModule } from '@nestjs/schedule';
 
 import { AdminModule } from './admin/admin.module';
@@ -76,26 +73,6 @@ import { AppController } from './app.controller';
       }),
       inject: [ConfigService],
     }),
-
-    BullBoardModule.forRoot({
-      route: '/api/admin/queues',
-      adapter: ExpressAdapter,
-    }),
-
-    BullBoardModule.forFeature(
-      {
-        name: 'telemetry',
-        adapter: BullMQAdapter,
-      },
-      {
-        name: 'payment-expiry',
-        adapter: BullMQAdapter,
-      },
-      {
-        name: 'broadcast',
-        adapter: BullMQAdapter,
-      },
-    ),
 
     // ── Rate limiting (per-IP) ────────────────────────────────────────────────
     ThrottlerModule.forRootAsync({
