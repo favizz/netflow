@@ -307,9 +307,17 @@ export class AdminController {
   }
 
   @Post('push-config')
-  pushConfigAll() {
+  async pushConfigAll(@Request() req: AdminRequest) {
     this.logger.log(`Request to push config to all devices`);
-    return this.adminService.pushConfigToAll();
+    const result = await this.adminService.pushConfigToAll();
+    void this.auditLogService.log(
+      this.adminEmail(req),
+      'PUSH_CONFIG_ALL',
+      'device',
+      'all-devices',
+      {},
+    );
+    return result;
   }
 
   // ── Direct device command (relay / valve) ────────────────────────────────
@@ -347,7 +355,7 @@ export class AdminController {
       this.adminEmail(req),
       'SEND_COMMAND_ALL',
       'device',
-      null,
+      'all-devices',
       body as Record<string, unknown>,
     );
     return result;
@@ -397,7 +405,7 @@ export class AdminController {
       this.adminEmail(req),
       'OTA_PUSH_ALL',
       'device',
-      null,
+      'all-devices',
       body as Record<string, unknown>,
     );
     return result;
@@ -418,9 +426,9 @@ export class AdminController {
     const result = await this.tariffService.create(dto);
     void this.auditLogService.log(
       this.adminEmail(req),
-      'CREATE',
+      'CREATE_TARIFF',
       'tariff',
-      result.id,
+      dto.utility_type,
       dto as unknown as Record<string, unknown>,
     );
     return result;
