@@ -1,7 +1,6 @@
 # =============================================
 # TA-Flowmeter - Root .gitignore
 # Covers: backend-ta/, frontend-ta/dashboard/, frontend-ta/mobile/
-# =============================================
 
 # ── Dependencies ───────────────────────────────
 node_modules/
