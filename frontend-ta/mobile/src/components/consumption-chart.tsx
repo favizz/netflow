@@ -83,8 +83,7 @@ export default function ConsumptionChart({
 
   return (
     <div className="space-y-2 min-h-[220px]">
-      {/* Always-visible current value chip */}
-      {displayValue != null && (
+      {!isLive && displayValue != null && (
         <div className="flex items-baseline gap-1.5">
           <span
             className="text-2xl font-bold tabular-nums"
