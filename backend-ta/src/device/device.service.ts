@@ -10,6 +10,7 @@ import { AnomalyService } from '../anomaly/anomaly.service';
 @Injectable()
 export class DeviceService {
   private readonly logger = new Logger(DeviceService.name);
+
   constructor(
     @InjectRepository(MeterReading)
     private readonly meterRepo: Repository<MeterReading>,
@@ -41,6 +42,17 @@ export class DeviceService {
     const current = this.toNumber(data.c);
     const power = this.toNumber(data.p);
     const waterFlow = this.toNumber(data.wf);
+
+    await this.persistRawReading({
+      deviceId,
+      voltage,
+      current,
+      power,
+      waterFlow,
+      incomingEnergyTotal,
+      incomingWaterTotal,
+    });
+
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -55,7 +67,7 @@ export class DeviceService {
 
       if (!unit) {
         this.logger.warn(
-          `No unit found for device_id="${deviceId}" — telemetry dropped. ` +
+          `No unit found for device_id="${deviceId}" - telemetry accounting skipped. ` +
             `Check that units.device_id matches the MQTT topic prefix.`,
         );
       }
@@ -81,7 +93,6 @@ export class DeviceService {
           unit.last_water_reading = incomingWaterTotal;
         }
 
-        // Direct token deduction
         if (deltaEnergy > 0) {
           unit.token_electricity = Math.max(
             0,
@@ -95,7 +106,6 @@ export class DeviceService {
           unit.last_water_reading = incomingWaterTotal;
         }
 
-        // Independent safety cutoffs
         if (Number(unit.token_electricity) <= 0 && unit.relay_status) {
           unit.relay_status = false;
           this.mqttClient.emit(
@@ -103,6 +113,7 @@ export class DeviceService {
             encodeCommand('relay', 0),
           );
         }
+
         if (Number(unit.token_water) <= 0 && unit.valve_status) {
           unit.valve_status = false;
           this.mqttClient.emit(
@@ -113,30 +124,6 @@ export class DeviceService {
 
         await queryRunner.manager.save(unit);
         savedUnit = unit;
-
-        const row = queryRunner.manager.create(MeterReading, {
-          time: new Date(),
-          device_id: deviceId,
-          voltage,
-          current,
-          power,
-          water_flow: waterFlow,
-          // Use explicit null-check so 0 is stored as 0, not NULL
-          energy_total: Number.isFinite(incomingEnergyTotal)
-            ? incomingEnergyTotal
-            : null,
-          water_total: Number.isFinite(incomingWaterTotal)
-            ? incomingWaterTotal
-            : null,
-        });
-        try {
-          await queryRunner.manager.save(row);
-        } catch (dupErr: unknown) {
-          // Two telemetry packets within the same MySQL-second share a PK —
-          // skip the duplicate row but keep the token update in this transaction.
-          if ((dupErr as { code?: string })?.code !== 'ER_DUP_ENTRY')
-            throw dupErr;
-        }
       }
 
       await queryRunner.commitTransaction();
@@ -162,8 +149,43 @@ export class DeviceService {
     }
   }
 
+  private async persistRawReading(input: {
+    deviceId: string;
+    voltage: number | null;
+    current: number | null;
+    power: number | null;
+    waterFlow: number | null;
+    incomingEnergyTotal: number;
+    incomingWaterTotal: number;
+  }): Promise<void> {
+    const reading = this.meterRepo.create({
+      time: new Date(),
+      device_id: input.deviceId,
+      voltage: input.voltage,
+      current: input.current,
+      power: input.power,
+      water_flow: input.waterFlow,
+      energy_total: Number.isFinite(input.incomingEnergyTotal)
+        ? input.incomingEnergyTotal
+        : null,
+      water_total: Number.isFinite(input.incomingWaterTotal)
+        ? input.incomingWaterTotal
+        : null,
+    });
+
+    try {
+      await this.meterRepo.insert(reading);
+    } catch (error: unknown) {
+      if (!this.isDuplicateKey(error)) throw error;
+    }
+  }
+
   private toNumber(value: unknown): number | null {
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  private isDuplicateKey(error: unknown): boolean {
+    return (error as { code?: string })?.code === 'ER_DUP_ENTRY';
   }
 }
