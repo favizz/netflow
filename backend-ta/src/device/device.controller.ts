@@ -179,8 +179,7 @@ export class DeviceController {
       // Do not convert arbitrary numeric JSON such as { temperature, humidity }.
       const keys = Object.keys(d);
       const isIndexedBuffer =
-        keys.length === 25 &&
-        keys.every((key, index) => key === String(index));
+        keys.length === 25 && keys.every((key, index) => key === String(index));
       if (isIndexedBuffer) {
         const values = keys.map((key) => d[key]);
         if (values.every((v) => typeof v === 'number')) {

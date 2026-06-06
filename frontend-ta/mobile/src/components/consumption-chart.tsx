@@ -19,37 +19,6 @@ interface ConsumptionChartProps {
   isLive?: boolean
 }
 
-// Persistent label that shows on tap/touch instead of hover
-function MobileTouchLabel({
-  active,
-  payload,
-  label,
-  unit,
-}: {
-  active?: boolean
-  payload?: { value: string | number }[]
-  label?: string
-  unit: string
-}) {
-  if (!active || !payload || payload.length === 0) return null
-  const val = payload[0]?.value
-  return (
-    <div
-      className="rounded-xl border px-3 py-2 text-xs shadow-md"
-      style={{
-        backgroundColor: "var(--card)",
-        borderColor: "var(--border)",
-        color: "var(--foreground)",
-        pointerEvents: "none",
-      }}
-    >
-      <p style={{ color: "var(--muted-foreground)", marginBottom: 2 }}>{label}</p>
-      <p className="font-bold">
-        {typeof val === "number" ? val.toFixed(2) : val} {unit}
-      </p>
-    </div>
-  )
-}
 
 export default function ConsumptionChart({
   data,

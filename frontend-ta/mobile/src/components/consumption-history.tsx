@@ -253,6 +253,7 @@ export default function ConsumptionHistory({ unitId }: ConsumptionHistoryProps) 
   // Clear live error state when leaving the daily view
   useEffect(() => {
     if (timePeriod !== "daily") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setMqttErrorMsg(null)
       setIsConnected(false)
     }

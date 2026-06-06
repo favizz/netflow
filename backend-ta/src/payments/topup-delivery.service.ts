@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { In, LessThan, Repository } from 'typeorm';
 import {
   TopupDelivery,
   TopupDeliveryStatus,
@@ -9,6 +9,7 @@ import {
 @Injectable()
 export class TopupDeliveryService {
   private readonly logger = new Logger(TopupDeliveryService.name);
+  private readonly maxAttempts = 20;
 
   constructor(
     @InjectRepository(TopupDelivery)
@@ -57,6 +58,30 @@ export class TopupDeliveryService {
     delivery.attempt_count += 1;
     delivery.payload_json = payload;
     delivery.last_error = null;
+    await this.deliveryRepo.save(delivery);
+  }
+
+  async findRetryableDeliveries(
+    olderThan: Date,
+    limit = 50,
+  ): Promise<TopupDelivery[]> {
+    return this.deliveryRepo.find({
+      where: [
+        { status: 'pending', attempt_count: LessThan(this.maxAttempts) },
+        {
+          status: 'sent',
+          attempt_count: LessThan(this.maxAttempts),
+          sent_at: LessThan(olderThan),
+        },
+      ],
+      order: { created_at: 'ASC' },
+      take: limit,
+    });
+  }
+
+  async markRetryExhausted(delivery: TopupDelivery): Promise<void> {
+    delivery.status = 'failed';
+    delivery.last_error = 'top-up delivery retry limit exceeded';
     await this.deliveryRepo.save(delivery);
   }
 
@@ -110,6 +135,30 @@ export class TopupDeliveryService {
     return this.deliveryRepo.findOne({
       where: { transaction_id: transactionId },
     });
+  }
+
+  async markLatestConfirmedByTelemetry(
+    deviceId: string,
+    telemetry: Record<string, unknown>,
+  ): Promise<TopupDelivery | null> {
+    const delivery = await this.deliveryRepo.findOne({
+      where: {
+        device_id: deviceId,
+        status: 'acked',
+      },
+      order: { acked_at: 'DESC', created_at: 'DESC' },
+    });
+    if (!delivery) return null;
+
+    delivery.status = 'confirmed';
+    delivery.confirmed_at = new Date();
+    delivery.payload_json = {
+      ...(delivery.payload_json ?? {}),
+      confirmationTelemetry: telemetry,
+    };
+    delivery.last_error = null;
+    await this.deliveryRepo.save(delivery);
+    return delivery;
   }
 
   toResponse(delivery: TopupDelivery | null) {

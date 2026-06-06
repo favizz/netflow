@@ -6,6 +6,7 @@ import { DeviceService } from './device.service';
 import { MeterReading } from './entities/device.entity';
 import { Unit } from '../admin/unit/entities/unit.entity';
 import { AnomalyService } from '../anomaly/anomaly.service';
+import { TopupDeliveryService } from '../payments/topup-delivery.service';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -172,5 +173,67 @@ describe('DeviceService.saveSensorData', () => {
     });
   });
 
+  describe('topup delivery confirmation on telemetry (stage 5)', () => {
+    it('calls markLatestConfirmedByTelemetry when telemetry has te/tw fields and unit is found', async () => {
+      const unit = makeUnit({ token_electricity: 52.5, token_water: 11.0 });
+      const { qr } = await buildModule(unit);
+
+      const mockTopupDeliveryService = {
+        markLatestConfirmedByTelemetry: jest.fn().mockResolvedValue(null),
+      };
+
+      // Re-build module with TopupDeliveryService provided
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          DeviceService,
+          { provide: getRepositoryToken(MeterReading), useValue: mockMeterRepo },
+          { provide: DataSource, useValue: mockDataSource },
+          { provide: 'MQTT_CLIENT', useValue: mockMqttClient },
+          { provide: AnomalyService, useValue: mockAnomalyService },
+          { provide: TopupDeliveryService, useValue: mockTopupDeliveryService },
+        ],
+      }).compile();
+
+      const svc = module.get(DeviceService);
+      await svc.saveSensorData({
+        _deviceId: 'DEV-A-101',
+        et: 1300, wt: 182, te: 52.5, tw: 11.0, p: 650, v: 220, c: 2.95, wf: 2.5,
+      });
+
+      expect(mockTopupDeliveryService.markLatestConfirmedByTelemetry).toHaveBeenCalledWith(
+        'DEV-A-101',
+        expect.objectContaining({ te: 52.5, tw: 11.0 }),
+      );
+    });
+
+    it('does NOT call markLatestConfirmedByTelemetry when telemetry has no te/tw fields', async () => {
+      const unit = makeUnit();
+      await buildModule(unit);
+
+      const mockTopupDeliveryService = {
+        markLatestConfirmedByTelemetry: jest.fn().mockResolvedValue(null),
+      };
+
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          DeviceService,
+          { provide: getRepositoryToken(MeterReading), useValue: mockMeterRepo },
+          { provide: DataSource, useValue: mockDataSource },
+          { provide: 'MQTT_CLIENT', useValue: mockMqttClient },
+          { provide: AnomalyService, useValue: mockAnomalyService },
+          { provide: TopupDeliveryService, useValue: mockTopupDeliveryService },
+        ],
+      }).compile();
+
+      const svc = module.get(DeviceService);
+      // No te/tw fields
+      await svc.saveSensorData({
+        _deviceId: 'DEV-A-101',
+        et: 1300, wt: 182, p: 650, v: 220, c: 2.95, wf: 2.5,
+      });
+
+      expect(mockTopupDeliveryService.markLatestConfirmedByTelemetry).not.toHaveBeenCalled();
+    });
+  });
 
 });

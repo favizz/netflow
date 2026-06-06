@@ -1,10 +1,9 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
-import { ClientProxy } from '@nestjs/microservices';
 import { PaymentCompletedEvent } from '../../payments/events/payment-completed.event';
 import { UnitService } from '../../admin/unit/unit.service';
-import { encodeTopup, encodeCommand } from '../../common/binary-codec';
 import { TopupDeliveryService } from '../../payments/topup-delivery.service';
+import { TopupDeliveryPublisherService } from '../topup-delivery-publisher.service';
 
 @Injectable()
 export class PaymentCompletedListener {
@@ -13,7 +12,7 @@ export class PaymentCompletedListener {
   constructor(
     private readonly unitService: UnitService,
     private readonly topupDeliveryService: TopupDeliveryService,
-    @Inject('MQTT_CLIENT') private readonly mqttClient: ClientProxy,
+    private readonly topupDeliveryPublisher: TopupDeliveryPublisherService,
   ) {}
 
   @OnEvent('payment.completed', { async: true })
@@ -23,18 +22,13 @@ export class PaymentCompletedListener {
       if (!unit.device_id) return;
       const commandTimestamp = Math.floor(Date.now() / 1000);
 
-      const payload = encodeTopup({
-        electricAmount: event.electricityAmountRp,
-        waterAmount: event.waterAmountRp,
-        timestamp: commandTimestamp,
-      });
       const payloadJson = {
         electricAmountRp: event.electricityAmountRp,
         waterAmountRp: event.waterAmountRp,
         timestamp: commandTimestamp,
       };
 
-      await this.topupDeliveryService.createPending({
+      const delivery = await this.topupDeliveryService.createPending({
         transactionId: event.transactionId,
         unitNo: event.unitNo,
         deviceId: unit.device_id,
@@ -48,21 +42,7 @@ export class PaymentCompletedListener {
         `Pushing top-up to device [${unit.device_id}]: elec=Rp${event.electricityAmountRp} water=Rp${event.waterAmountRp}`,
       );
 
-      this.mqttClient.emit(`device/${unit.device_id}/topup`, payload);
-      await this.topupDeliveryService.markSent(
-        event.transactionId,
-        payloadJson,
-      );
-      if (event.electricityAmountRp > 0)
-        this.mqttClient.emit(
-          `device/${unit.device_id}/command`,
-          encodeCommand('relay', 1),
-        );
-      if (event.waterAmountRp > 0)
-        this.mqttClient.emit(
-          `device/${unit.device_id}/command`,
-          encodeCommand('valve', 1),
-        );
+      await this.topupDeliveryPublisher.publishDelivery(delivery);
     } catch (err) {
       await this.topupDeliveryService.markFailed(
         event.transactionId,

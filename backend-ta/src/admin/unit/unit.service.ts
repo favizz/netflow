@@ -67,8 +67,14 @@ export class UnitService {
         `[EMQX] Device ${saved.device_id} registered for unit ${saved.unit_no} — MQTT auth will accept on next connect`,
       );
       void this.auditLogService.log(
-        'admin', 'DEVICE_ASSIGNED', 'unit', saved.unit_no,
-        { device_id: saved.device_id, emqx: 'registered via HTTP auth (units table)' },
+        'admin',
+        'DEVICE_ASSIGNED',
+        'unit',
+        saved.unit_no,
+        {
+          device_id: saved.device_id,
+          emqx: 'registered via HTTP auth (units table)',
+        },
       );
     }
 
@@ -123,8 +129,8 @@ export class UnitService {
   }
 
   async update(id: number, updateUnitDto: UpdateUnitDto) {
-    const unit          = await this.findOne(id);
-    const prevDeviceId  = unit.device_id;
+    const unit = await this.findOne(id);
+    const prevDeviceId = unit.device_id;
     Object.assign(unit, updateUnitDto);
     const saved = await this.unitRepo.save(unit);
 
@@ -137,14 +143,17 @@ export class UnitService {
     ) {
       this.logger.log(
         `[EMQX] Device ${updateUnitDto.device_id ?? 'unassigned'} registered for unit ${saved.unit_no}` +
-        (prevDeviceId ? ` (replaced ${prevDeviceId})` : ''),
+          (prevDeviceId ? ` (replaced ${prevDeviceId})` : ''),
       );
       void this.auditLogService.log(
-        'admin', 'DEVICE_ASSIGNED', 'unit', saved.unit_no,
+        'admin',
+        'DEVICE_ASSIGNED',
+        'unit',
+        saved.unit_no,
         {
-          device_id:          updateUnitDto.device_id ?? null,
+          device_id: updateUnitDto.device_id ?? null,
           previous_device_id: prevDeviceId ?? null,
-          emqx:               'registered via HTTP auth (units table)',
+          emqx: 'registered via HTTP auth (units table)',
         },
       );
     }

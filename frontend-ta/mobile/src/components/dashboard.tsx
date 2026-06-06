@@ -28,6 +28,12 @@ interface DashboardProps {
   onSelectUnit?: (id: number) => Promise<void>
 }
 
+type RawTrendPoint = {
+  bucket: string
+  kwh: number
+  waterM3: number
+}
+
 type LivePoint = {
   date: string
   kwh: number
@@ -90,7 +96,7 @@ function periodKeyLabel(key: string, period: TimePeriod): string {
   return '';
 }
 
-export default function Dashboard({ unitId, availableUnits, onSelectUnit }: DashboardProps) {
+export default function Dashboard({ unitId }: DashboardProps) {
   // ── Summary ──────────────────────────────────────────────────────────────
   const [kwh, setKwh]             = useState(0)
   const [water, setWater]         = useState(0)
@@ -114,7 +120,7 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
   const [periodKey, setPeriodKey]       = useState(() => getDefaultPeriodKey("daily"))
   const [hasPrev, setHasPrev]           = useState(false)
   const [hasNext, setHasNext]           = useState(false)
-  const [rawTrendData, setRawTrendData] = useState<any[]>([])
+  const [rawTrendData, setRawTrendData] = useState<RawTrendPoint[]>([])
 
   // ── MQTT live ────────────────────────────────────────────────────────────
   const [liveData, setLiveData]           = useState<LivePoint[]>([])
@@ -319,7 +325,7 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
     client.on("message", (t, msg) => {
       if (t !== topic) return
       try {
-        let p: any = null
+        let p: Record<string, number> | null = null
         const uint8 = new Uint8Array(msg)
 
         // 1. Try custom binary telemetry frame
@@ -419,7 +425,6 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
   const currentFlow   = latestLive?.flowRate ?? 0
 
   const totalChart = displayData.reduce((s, d) => s + ((d as unknown as Record<string, number>)[chartDataKey] ?? 0), 0)
-  const avgChart   = displayData.length > 0 ? totalChart / displayData.length : 0
 
   // ── Control handlers ─────────────────────────────────────────────────────
   const requestToggle = (target: ControlTarget, next: boolean) => {
@@ -461,6 +466,17 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
 
   return (
     <div className="p-5 space-y-5 w-full pb-20">
+      <div className={`flex items-center justify-between rounded-xl border px-4 py-2.5 ${
+        isDeviceOnline
+          ? "bg-primary/8 border-primary/20 text-primary"
+          : "bg-status-warn/10 border-status-warn/25 text-status-warn"
+      }`}>
+        <div>
+          <p className="text-xs font-bold uppercase tracking-wide">Status Perangkat</p>
+          <p className="text-sm font-semibold">{isDeviceOnline ? "Online" : "Offline"}</p>
+        </div>
+        <span className={`h-2.5 w-2.5 rounded-full ${isDeviceOnline ? "bg-primary animate-pulse" : "bg-status-warn"}`} />
+      </div>
 
       {/* 2-col stat cards */}
       <div className="grid grid-cols-2 gap-3">
@@ -474,7 +490,6 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
           status={kwhStatus}
           controlOn={relayOn}
           controlPending={(controlPending && confirmTarget === "relay") || pendingActuation?.target === "relay"}
-          deviceOnline={isDeviceOnline}
           onControlToggle={(next) => requestToggle("relay", next)}
         />
         <StatCard
@@ -487,7 +502,6 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
           status={waterStatus}
           controlOn={valveOpen}
           controlPending={(controlPending && confirmTarget === "valve") || pendingActuation?.target === "valve"}
-          deviceOnline={isDeviceOnline}
           onControlToggle={(next) => requestToggle("valve", next)}
         />
       </div>
@@ -692,7 +706,7 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
 }
 
 // ── Compact stat card ─────────────────────────────────────────────────────────
-function StatCard({ icon, label, value, unit, rate, percentage, status, controlOn, controlPending, deviceOnline, onControlToggle }: {
+function StatCard({ icon, label, value, unit, rate, percentage, status, controlOn, controlPending, onControlToggle }: {
   icon: React.ReactNode
   label: string
   value: string
@@ -702,7 +716,6 @@ function StatCard({ icon, label, value, unit, rate, percentage, status, controlO
   status: BalanceStatus
   controlOn: boolean
   controlPending: boolean
-  deviceOnline: boolean
   onControlToggle: (next: boolean) => void
 }) {
   const { label: statusLabel, textColor, bgColor, borderColor } = STATUS_MAP[status]

@@ -90,6 +90,7 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
   const [energyTariff, setEnergyTariff] = useState<number>(DEFAULT_TARIFF.kwh)
   const [waterTariff]  = useState<number>(DEFAULT_TARIFF.water)
   const [balanceKwh, setBalanceKwh] = useState<number | null>(null)
+  const [balanceWater, setBalanceWater] = useState<number | null>(null)
   const [loading, setLoading] = useState(false)
   const [initResult, setInitResult] = useState<{ transactionId: string; vaNumber?: string; qrUrl?: string } | null>(null)
   const [transactionId, setTransactionId] = useState("")
@@ -98,6 +99,8 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
   const [bcaExpandedSection, setBcaExpandedSection] = useState<string | null>("mbca")
   const [elecError, setElecError] = useState("")
   const [waterError, setWaterError] = useState("")
+  const [isDeviceOnline, setIsDeviceOnline] = useState<boolean | null>(null)
+  const [showOfflineConfirm, setShowOfflineConfirm] = useState(false)
 
   const elecAmount  = parseRp(electricityRaw)
   const waterAmount = parseRp(waterRaw)
@@ -166,8 +169,10 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
       try {
         const data = await api.getDashboard(unitId)
         if (!active) return
-        setBalanceKwh(data.summary.remainingEstimate.kwh)
+        setBalanceKwh(data.summary.tokenElectricity)
+        setBalanceWater(data.summary.tokenWater)
         setEnergyTariff(data.summary.energyTariff)
+        setIsDeviceOnline(data.summary.connectivity?.online ?? false)
       } catch { /* balance stays null */ }
     }
     void load()
@@ -200,6 +205,15 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
   }
 
   const goToInstruction = async () => {
+    if (!selectedOption) return
+    if (isDeviceOnline === false) {
+      setShowOfflineConfirm(true)
+      return
+    }
+    await startTopup()
+  }
+
+  const startTopup = async () => {
     if (!selectedOption) return
     setLoading(true)
     try {
@@ -235,7 +249,7 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
 
     let active = true
     let checking = false
-    let intervalId: number | undefined
+    const interval = { id: undefined as number | undefined }
 
     const checkStatus = async () => {
       if (checking) return
@@ -246,8 +260,8 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
         const done = handleTopupStatus(result.status, initResult.transactionId, true)
         if (done) {
           active = false
-          if (intervalId !== undefined) {
-            window.clearInterval(intervalId)
+          if (interval.id !== undefined) {
+            window.clearInterval(interval.id)
           }
         }
       } catch {
@@ -264,13 +278,13 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
     }
 
     void checkStatus()
-    intervalId = window.setInterval(() => void checkStatus(), 5_000)
+    interval.id = window.setInterval(() => void checkStatus(), 5_000)
     document.addEventListener("visibilitychange", onVisibilityChange)
 
     return () => {
       active = false
-      if (intervalId !== undefined) {
-        window.clearInterval(intervalId)
+      if (interval.id !== undefined) {
+        window.clearInterval(interval.id)
       }
       document.removeEventListener("visibilitychange", onVisibilityChange)
     }
@@ -356,9 +370,20 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
                 </span>
                 <span className="flex items-center gap-1 text-foreground">
                   <Droplets size={11} className="text-cyan-500" />
-                  {balanceKwh !== null ? `${(balanceKwh / 2.5).toFixed(3)} m³` : "—"}
+                  {balanceWater !== null ? `${balanceWater.toFixed(3)} m³` : "—"}
                 </span>
               </div>
+            </div>
+
+            <div className={`rounded-xl border px-4 py-2.5 ${
+              isDeviceOnline === false
+                ? "bg-status-warn/10 border-status-warn/25 text-status-warn"
+                : "bg-primary/8 border-primary/20 text-primary"
+            }`}>
+              <p className="text-xs font-bold uppercase tracking-wide">Status Perangkat</p>
+              <p className="text-sm font-semibold">
+                {isDeviceOnline === null ? "Memeriksa status..." : isDeviceOnline ? "Online" : "Offline"}
+              </p>
             </div>
 
             {/* Electricity input */}
@@ -671,6 +696,32 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
           )}
         </div>
       </div>
+
+      {showOfflineConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4">
+          <div className="w-full max-w-sm rounded-2xl bg-card shadow-xl ring-1 ring-border">
+            <div className="p-6 space-y-4">
+              <div className="space-y-2">
+                <h2 className="text-lg font-bold text-foreground">Perangkat Sedang Offline</h2>
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  Top up belum dapat diproses karena meter tidak sedang terhubung. Nyalakan perangkat terlebih dahulu atau hubungi teknisi/pengelola agar saldo dapat disinkronkan dengan aman.
+                </p>
+              </div>
+              <div className="flex">
+                <button
+                  onClick={() => {
+                    setShowOfflineConfirm(false)
+                    onBack?.()
+                  }}
+                  className="w-full h-11 rounded-xl bg-primary text-primary-foreground text-sm font-semibold active:bg-primary/80 transition-colors"
+                >
+                  Kembali ke Beranda
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -732,7 +783,7 @@ function SuccessScreen({ transactionId, elecAmount, waterAmount, method, onBuyAg
 
       <div className="text-center">
         <h1 className="text-2xl font-bold text-foreground">Pembayaran Berhasil</h1>
-        <p className="text-muted-foreground text-sm mt-1">Saldo telah dikreditkan ke unit Anda</p>
+        <p className="text-muted-foreground text-sm mt-1">Token akan aktif setelah perangkat mengonfirmasi sinkronisasi</p>
       </div>
 
       <Card className="w-full bg-muted/30 p-5 space-y-3">

@@ -33,7 +33,7 @@ const ANOMALY_META: Record<
   device_offline:        { label: "Perangkat Offline",          Icon: WifiOff,        action: "Hubungi pengelola untuk pemeriksaan perangkat." },
   zero_flow:             { label: "Aliran Air Nol",             Icon: Droplets,       action: "Valve terbuka namun tidak ada aliran. Periksa pipa atau hubungi pengelola." },
   backflow:              { label: "Aliran Air Balik",           Icon: Droplets,       action: "Terdeteksi aliran balik. Hubungi teknisi segera." },
-  topup_success:         { label: "Pembelian Token Berhasil",   Icon: CheckCircle,    action: "" },
+  topup_success:         { label: "Pembayaran Token Berhasil",  Icon: CheckCircle,    action: "Menunggu sinkronisasi perangkat." },
 }
 
 // ── Unit selector (custom dropdown, no system UI) ─────────────────────────────
@@ -99,6 +99,7 @@ export default function App() {
   useEffect(() => {
     if (prevPage.current === "notifications" && currentPage !== "notifications") {
       const now = new Date()
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setNotifLastRead(now)
       try { localStorage.setItem(MOBILE_NOTIF_KEY, now.toISOString()) } catch { /* ignore */ }
     }
