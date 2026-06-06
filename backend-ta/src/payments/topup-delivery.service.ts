@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { In, LessThan, Repository } from 'typeorm';
 import {
   TopupDelivery,
   TopupDeliveryStatus,
@@ -60,6 +60,28 @@ export class TopupDeliveryService {
     await this.deliveryRepo.save(delivery);
   }
 
+  async findPendingForDevice(
+    deviceId: string,
+    sentBefore = new Date(Date.now() - 30_000),
+    limit = 10,
+  ): Promise<TopupDelivery[]> {
+    return this.deliveryRepo.find({
+      where: [
+        {
+          device_id: deviceId,
+          status: 'pending',
+        },
+        {
+          device_id: deviceId,
+          status: 'sent',
+          sent_at: LessThan(sentBefore),
+        },
+      ],
+      order: { created_at: 'ASC' },
+      take: limit,
+    });
+  }
+
   async markFailed(transactionId: string, error: string): Promise<void> {
     const delivery = await this.deliveryRepo.findOne({
       where: { transaction_id: transactionId },
@@ -110,6 +132,30 @@ export class TopupDeliveryService {
     return this.deliveryRepo.findOne({
       where: { transaction_id: transactionId },
     });
+  }
+
+  async markLatestConfirmedByTelemetry(
+    deviceId: string,
+    telemetry: Record<string, unknown>,
+  ): Promise<TopupDelivery | null> {
+    const delivery = await this.deliveryRepo.findOne({
+      where: {
+        device_id: deviceId,
+        status: 'acked',
+      },
+      order: { acked_at: 'DESC', created_at: 'DESC' },
+    });
+    if (!delivery) return null;
+
+    delivery.status = 'confirmed';
+    delivery.confirmed_at = new Date();
+    delivery.payload_json = {
+      ...(delivery.payload_json ?? {}),
+      confirmationTelemetry: telemetry,
+    };
+    delivery.last_error = null;
+    await this.deliveryRepo.save(delivery);
+    return delivery;
   }
 
   toResponse(delivery: TopupDelivery | null) {

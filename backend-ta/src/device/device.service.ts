@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
@@ -6,6 +6,8 @@ import { decodeTelemetry, encodeCommand } from '../common/binary-codec';
 import { Unit } from '../admin/unit/entities/unit.entity';
 import { MeterReading } from './entities/device.entity';
 import { AnomalyService } from '../anomaly/anomaly.service';
+import { TopupDeliveryService } from '../payments/topup-delivery.service';
+import { TopupDeliveryPublisherService } from '../payments/topup-delivery-publisher.service';
 
 @Injectable()
 export class DeviceService {
@@ -17,6 +19,10 @@ export class DeviceService {
     private readonly dataSource: DataSource,
     @Inject('MQTT_CLIENT') private readonly mqttClient: ClientProxy,
     private readonly anomalyService: AnomalyService,
+    @Optional()
+    private readonly topupDeliveryService?: TopupDeliveryService,
+    @Optional()
+    private readonly topupDeliveryPublisher?: TopupDeliveryPublisherService,
   ) {}
 
   async saveSensorData(payload: unknown, fallbackDeviceId?: string) {
@@ -57,6 +63,9 @@ export class DeviceService {
       incomingEnergyTotal,
       incomingWaterTotal,
     });
+    if (this.topupDeliveryPublisher) {
+      void this.topupDeliveryPublisher.publishPendingForDevice(deviceId);
+    }
 
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -125,6 +134,15 @@ export class DeviceService {
       throw error;
     } finally {
       await queryRunner.release();
+    }
+
+    if (savedUnit && hasTokenFields && this.topupDeliveryService) {
+      void this.topupDeliveryService.markLatestConfirmedByTelemetry(deviceId, {
+        te: incomingElectricityToken,
+        tw: incomingWaterToken,
+        et: incomingEnergyTotal,
+        wt: incomingWaterTotal,
+      });
     }
 
     if (savedUnit) {

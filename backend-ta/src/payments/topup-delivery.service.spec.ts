@@ -222,6 +222,72 @@ describe('TopupDeliveryService', () => {
     });
   });
 
+  // ── markLatestConfirmedByTelemetry ───────────────────────────────────────────
+
+  describe('markLatestConfirmedByTelemetry', () => {
+    const telemetry = { te: 52.5, tw: 11.0, et: 1300, wt: 182 };
+
+    it('marks acked delivery as confirmed and sets confirmed_at', async () => {
+      const delivery = makeDelivery({
+        status: 'acked',
+        acked_at: new Date(),
+        payload_json: { electricAmountRp: 15000 },
+      });
+      repo.findOne.mockResolvedValue(delivery);
+
+      const result = await service.markLatestConfirmedByTelemetry('DEV-A-101', telemetry);
+
+      expect(result).not.toBeNull();
+      const saved = repo.save.mock.calls[0][0];
+      expect(saved.status).toBe('confirmed');
+      expect(saved.confirmed_at).toBeInstanceOf(Date);
+      expect(saved.last_error).toBeNull();
+    });
+
+    it('merges confirmationTelemetry into existing payload_json', async () => {
+      const delivery = makeDelivery({
+        status: 'acked',
+        acked_at: new Date(),
+        payload_json: { electricAmountRp: 15000, waterAmountRp: 10000 },
+      });
+      repo.findOne.mockResolvedValue(delivery);
+
+      await service.markLatestConfirmedByTelemetry('DEV-A-101', telemetry);
+
+      const saved = repo.save.mock.calls[0][0];
+      expect(saved.payload_json).toMatchObject({
+        electricAmountRp: 15000,
+        waterAmountRp: 10000,
+        confirmationTelemetry: telemetry,
+      });
+    });
+
+    it('handles null payload_json gracefully (sets only confirmationTelemetry)', async () => {
+      const delivery = makeDelivery({ status: 'acked', acked_at: new Date(), payload_json: null });
+      repo.findOne.mockResolvedValue(delivery);
+
+      await service.markLatestConfirmedByTelemetry('DEV-A-101', telemetry);
+
+      const saved = repo.save.mock.calls[0][0];
+      expect(saved.payload_json).toEqual({ confirmationTelemetry: telemetry });
+    });
+
+    it('returns null and does not save when no acked delivery found', async () => {
+      repo.findOne.mockResolvedValue(null);
+
+      const result = await service.markLatestConfirmedByTelemetry('DEV-A-101', telemetry);
+
+      expect(result).toBeNull();
+      expect(repo.save).not.toHaveBeenCalled();
+    });
+
+    it('does not confirm a delivery that is only pending or sent (not acked)', async () => {
+      repo.findOne.mockResolvedValue(null); // findOne with status:'acked' returns null
+      const result = await service.markLatestConfirmedByTelemetry('DEV-A-101', telemetry);
+      expect(result).toBeNull();
+    });
+  });
+
   // ── toResponse ───────────────────────────────────────────────────────────────
 
   describe('toResponse', () => {

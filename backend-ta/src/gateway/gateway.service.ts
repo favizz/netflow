@@ -43,7 +43,7 @@ export class GatewayService {
       anomalyType: 'topup_success',
       severity: 'info',
       target: 'resident',
-      message: `Pembelian token sebesar Rp${Number(tx.amount).toLocaleString('id-ID')} berhasil masuk ke saldo Anda.`,
+      message: `Pembayaran token sebesar Rp${Number(tx.amount).toLocaleString('id-ID')} berhasil. Token akan aktif setelah perangkat menerima dan mengonfirmasi sinkronisasi.`,
       metadata: { amount: tx.amount, tx_id: tx.id },
       detectedAt: tx.confirmedAt || tx.createdAt,
     }));

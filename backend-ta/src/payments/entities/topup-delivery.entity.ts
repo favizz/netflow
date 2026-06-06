@@ -40,10 +40,22 @@ export class TopupDelivery {
   @Column({ type: 'varchar', length: 100 })
   device_id!: string;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0, transformer: new NumericTransformer() })
+  @Column({
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    default: 0,
+    transformer: new NumericTransformer(),
+  })
   electricity_amount_rp!: number;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0, transformer: new NumericTransformer() })
+  @Column({
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    default: 0,
+    transformer: new NumericTransformer(),
+  })
   water_amount_rp!: number;
 
   @Column({

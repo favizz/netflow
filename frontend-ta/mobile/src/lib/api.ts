@@ -329,7 +329,19 @@ export const api = {
 
 
   getTopupStatus(unitNo: string, transactionId: string) {
-    return request<{ status: string; confirmedAt: string | null }>(
+    return request<{
+      status: string;
+      confirmedAt: string | null;
+      delivery: {
+        status: 'pending' | 'sent' | 'acked' | 'confirmed' | 'failed';
+        attemptCount: number;
+        deviceId: string;
+        sentAt: string | null;
+        ackedAt: string | null;
+        confirmedAt: string | null;
+        lastError: string | null;
+      } | null;
+    }>(
       `/gateway/mobile/${encodeURIComponent(unitNo)}/topup/status/${encodeURIComponent(transactionId)}`,
     );
   },

@@ -64,7 +64,9 @@ export interface TelemetryPayload {
 
 export function decodeTelemetry(buf: Buffer): TelemetryPayload {
   if (buf.length !== 25) {
-    throw new RangeError(`Telemetry frame must be 25 bytes: ${buf.length} bytes`);
+    throw new RangeError(
+      `Telemetry frame must be 25 bytes: ${buf.length} bytes`,
+    );
   }
 
   return {

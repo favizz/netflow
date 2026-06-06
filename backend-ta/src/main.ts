@@ -83,8 +83,8 @@ async function bootstrap() {
   try {
     /* eslint-disable @typescript-eslint/no-require-imports, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
     const { createBullBoard } = require('@bull-board/api');
-    const { BullMQAdapter }   = require('@bull-board/api/bullMQAdapter');
-    const { ExpressAdapter }  = require('@bull-board/express');
+    const { BullMQAdapter } = require('@bull-board/api/bullMQAdapter');
+    const { ExpressAdapter } = require('@bull-board/express');
 
     const serverAdapter = new ExpressAdapter();
     serverAdapter.setBasePath('/api/admin/queues');
@@ -102,7 +102,9 @@ async function bootstrap() {
     console.log('BullBoard mounted at /api/admin/queues');
     /* eslint-enable @typescript-eslint/no-require-imports, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
   } catch (err) {
-    console.warn(`BullBoard unavailable (Redis may be down): ${(err as Error).message}`);
+    console.warn(
+      `BullBoard unavailable (Redis may be down): ${(err as Error).message}`,
+    );
   }
 
   // ── MQTT microservice ────────────────────────────────────────────────────────
