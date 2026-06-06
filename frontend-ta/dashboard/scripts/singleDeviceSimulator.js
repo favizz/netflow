@@ -35,12 +35,12 @@ const DEVICE_ID = rawDeviceArg.startsWith('DEV-') ? rawDeviceArg : `DEV-${rawDev
 const UNIT_NO = DEVICE_ID.replace(/^DEV-/, '');
 // Use .env broker, then command line arg, then fallback
 const BROKER_URL = process.env.MQTT_BROKER_URL || process.argv[3] || 'mqtt://ta252601002.srusun.id:1883';
-const MQTT_USERNAME = process.env.MQTT_USERNAME || DEVICE_ID;
-const MQTT_PASSWORD = process.env.MQTT_PASSWORD || process.env.MQTT_DEVICE_SECRET || undefined;
+// Device simulators must always authenticate as the device being simulated,
+// never as the backend service (MQTT_USERNAME/MQTT_PASSWORD are for the backend).
+const MQTT_USERNAME = DEVICE_ID;
+const MQTT_PASSWORD = process.env.MQTT_DEVICE_SECRET || undefined;
 const MQTT_TLS_VERIFY = process.env.MQTT_TLS_VERIFY === 'true';
 const INTERVAL_MS = 2000;
-const RP_PER_KWH = Number(process.env.RP_PER_KWH || 1450);
-const RP_PER_M3 = Number(process.env.RP_PER_M3 || 5000);
 const NORMAL_POWER_MIN_W = Number(process.env.NORMAL_POWER_MIN_W || 450);
 const NORMAL_POWER_MAX_W = Number(process.env.NORMAL_POWER_MAX_W || 950);
 const NORMAL_FLOW_MIN_LPM = Number(process.env.NORMAL_FLOW_MIN_LPM || 2);
@@ -255,18 +255,18 @@ client.on('message', (topic, message) => {
     }
 
     // ── Token top-up (12 bytes binary) ────────────────────────────────────
-    // bytes [0:3] uint32 BE = electricity amount (Rp)
-    // bytes [4:7] uint32 BE = water amount (Rp)
+    // bytes [0:3] uint32 BE = electricity token (kWh x 1000)
+    // bytes [4:7] uint32 BE = water token (m3 x 1000)
     // bytes [8:11] uint32 BE = timestamp (unix seconds)
     if (topic === `device/${DEVICE_ID}/topup` && message.length === 12) {
-        const elecRp  = message.readUInt32BE(0);
-        const waterRp = message.readUInt32BE(4);
+        const electricTokenKwh = message.readUInt32BE(0) / 1000;
+        const waterTokenM3 = message.readUInt32BE(4) / 1000;
         const ts = message.readUInt32BE(8);
         const duplicate = state.lastTopupTs !== 0 && ts <= state.lastTopupTs;
-        console.log(`\n💰 TOPUP: electricity=Rp${elecRp} water=Rp${waterRp}`);
+        console.log(`\nTOPUP: electricity=${electricTokenKwh.toFixed(3)}kWh water=${waterTokenM3.toFixed(3)}m3`);
         if (!duplicate) {
-            state.elecTokenKwh += elecRp / RP_PER_KWH;
-            state.waterTokenM3 += waterRp / RP_PER_M3;
+            state.elecTokenKwh += electricTokenKwh;
+            state.waterTokenM3 += waterTokenM3;
             state.lastTopupTs = ts;
         }
         if (state.elecTokenKwh > 0) state.relayOn = true;
@@ -275,8 +275,8 @@ client.on('message', (topic, message) => {
             `device/${DEVICE_ID}/topup_ack`,
             JSON.stringify({
                 status: 'ok',
-                elec: elecRp,
-                water: waterRp,
+                electricTokenKwh,
+                waterTokenM3,
                 duplicate,
                 te: Number(state.elecTokenKwh.toFixed(4)),
                 tw: Number(state.waterTokenM3.toFixed(4)),

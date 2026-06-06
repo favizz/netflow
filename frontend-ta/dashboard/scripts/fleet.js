@@ -242,8 +242,6 @@ const BATCH_SIZE     = 50;
 const BATCH_DELAY_MS = 250;
 const REPORT_EVERY_S = 30;
 const REPLENISH_S    = 3600;
-const RP_PER_KWH     = 1450;
-const RP_PER_M3      = 5000;
 const DEFAULT_ST     = 5;
 const TELEMETRY_QOS   = 1;
 
@@ -351,20 +349,20 @@ function onMessage(dev, topic, payload) {
   }
 
   if (topic === `${base}/topup` && payload.length === 12) {
-    const elecRp  = payload.readUInt32BE(0);
-    const waterRp = payload.readUInt32BE(4);
+    const electricTokenKwh = payload.readUInt32BE(0) / 1000;
+    const waterTokenM3 = payload.readUInt32BE(4) / 1000;
     const ts      = payload.readUInt32BE(8);
     if (ts <= dev.lastTopupTs && dev.lastTopupTs !== 0) {
       dev.client.publish(`${base}/topup_ack`,
-        JSON.stringify({ status: 'ok', elec: elecRp, water: waterRp, duplicate: true }));
+        JSON.stringify({ status: 'ok', electricTokenKwh, waterTokenM3, duplicate: true, te: dev.te, tw: dev.tw }));
       return;
     }
-    dev.te += elecRp  / RP_PER_KWH;
-    dev.tw += waterRp / RP_PER_M3;
-    if (elecRp  > 0 && dev.rs === 0) dev.rs = 1;
-    if (waterRp > 0 && dev.vs === 0) dev.vs = 1;
+    dev.te += electricTokenKwh;
+    dev.tw += waterTokenM3;
+    if (electricTokenKwh > 0 && dev.rs === 0) dev.rs = 1;
+    if (waterTokenM3 > 0 && dev.vs === 0) dev.vs = 1;
     dev.lastTopupTs = ts;
-    dev.client.publish(`${base}/topup_ack`, JSON.stringify({ status: 'ok', elec: elecRp, water: waterRp }));
+    dev.client.publish(`${base}/topup_ack`, JSON.stringify({ status: 'ok', electricTokenKwh, waterTokenM3, te: dev.te, tw: dev.tw }));
     return;
   }
 
