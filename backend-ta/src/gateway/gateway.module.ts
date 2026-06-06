@@ -7,7 +7,6 @@ import { SharedMqttClientModule } from '../common/shared-mqtt-client.module';
 import { GatewayController } from './gateway.controller';
 import { GatewayService } from './gateway.service';
 import { PaymentCompletedListener } from './listeners/payment-completed.listener';
-import { TopupDeliveryPublisherService } from './topup-delivery-publisher.service';
 
 @Module({
   imports: [
@@ -21,7 +20,6 @@ import { TopupDeliveryPublisherService } from './topup-delivery-publisher.servic
   providers: [
     GatewayService,
     PaymentCompletedListener,
-    TopupDeliveryPublisherService,
   ],
 })
 export class GatewayModule {}

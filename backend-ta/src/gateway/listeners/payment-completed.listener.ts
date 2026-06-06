@@ -3,7 +3,7 @@ import { OnEvent } from '@nestjs/event-emitter';
 import { PaymentCompletedEvent } from '../../payments/events/payment-completed.event';
 import { UnitService } from '../../admin/unit/unit.service';
 import { TopupDeliveryService } from '../../payments/topup-delivery.service';
-import { TopupDeliveryPublisherService } from '../topup-delivery-publisher.service';
+import { TopupDeliveryPublisherService } from '../../payments/topup-delivery-publisher.service';
 
 @Injectable()
 export class PaymentCompletedListener {

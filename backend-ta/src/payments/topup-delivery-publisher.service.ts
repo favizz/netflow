@@ -1,14 +1,13 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { Interval } from '@nestjs/schedule';
 import { ClientProxy } from '@nestjs/microservices';
-import { TopupDelivery } from '../payments/entities/topup-delivery.entity';
-import { TopupDeliveryService } from '../payments/topup-delivery.service';
+import { TopupDelivery } from './entities/topup-delivery.entity';
+import { TopupDeliveryService } from './topup-delivery.service';
 import { encodeCommand, encodeTopup } from '../common/binary-codec';
 
 @Injectable()
 export class TopupDeliveryPublisherService {
   private readonly logger = new Logger(TopupDeliveryPublisherService.name);
-  private publishing = false;
+  private readonly publishingDevices = new Set<string>();
 
   constructor(
     private readonly topupDeliveryService: TopupDeliveryService,
@@ -49,30 +48,25 @@ export class TopupDeliveryPublisherService {
     }
   }
 
-  @Interval(30_000)
-  async retryUnackedDeliveries(): Promise<void> {
-    if (this.publishing) return;
-    this.publishing = true;
+  async publishPendingForDevice(deviceId: string): Promise<void> {
+    if (this.publishingDevices.has(deviceId)) return;
+    this.publishingDevices.add(deviceId);
     try {
-      const olderThan = new Date(Date.now() - 30_000);
-      const deliveries =
-        await this.topupDeliveryService.findRetryableDeliveries(olderThan);
+      const deliveries = await this.topupDeliveryService.findPendingForDevice(
+        deviceId,
+      );
       for (const delivery of deliveries) {
-        if (delivery.attempt_count >= 20) {
-          await this.topupDeliveryService.markRetryExhausted(delivery);
-          continue;
-        }
         this.logger.log(
-          `Retrying top-up delivery ${delivery.transaction_id} to ${delivery.device_id} (attempt ${delivery.attempt_count + 1})`,
+          `Publishing pending top-up delivery ${delivery.transaction_id} after telemetry from ${deviceId}`,
         );
         await this.publishDelivery(delivery);
       }
     } catch (err) {
       this.logger.error(
-        `Top-up retry worker failed: ${(err as Error).message}`,
+        `Telemetry-triggered top-up publish failed for ${deviceId}: ${(err as Error).message}`,
       );
     } finally {
-      this.publishing = false;
+      this.publishingDevices.delete(deviceId);
     }
   }
 

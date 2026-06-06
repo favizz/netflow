@@ -7,6 +7,7 @@ import { Unit } from '../admin/unit/entities/unit.entity';
 import { MeterReading } from './entities/device.entity';
 import { AnomalyService } from '../anomaly/anomaly.service';
 import { TopupDeliveryService } from '../payments/topup-delivery.service';
+import { TopupDeliveryPublisherService } from '../payments/topup-delivery-publisher.service';
 
 @Injectable()
 export class DeviceService {
@@ -20,6 +21,8 @@ export class DeviceService {
     private readonly anomalyService: AnomalyService,
     @Optional()
     private readonly topupDeliveryService?: TopupDeliveryService,
+    @Optional()
+    private readonly topupDeliveryPublisher?: TopupDeliveryPublisherService,
   ) {}
 
   async saveSensorData(payload: unknown, fallbackDeviceId?: string) {
@@ -60,6 +63,9 @@ export class DeviceService {
       incomingEnergyTotal,
       incomingWaterTotal,
     });
+    if (this.topupDeliveryPublisher) {
+      void this.topupDeliveryPublisher.publishPendingForDevice(deviceId);
+    }
 
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();

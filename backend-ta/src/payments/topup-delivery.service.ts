@@ -9,7 +9,6 @@ import {
 @Injectable()
 export class TopupDeliveryService {
   private readonly logger = new Logger(TopupDeliveryService.name);
-  private readonly maxAttempts = 20;
 
   constructor(
     @InjectRepository(TopupDelivery)
@@ -61,28 +60,26 @@ export class TopupDeliveryService {
     await this.deliveryRepo.save(delivery);
   }
 
-  async findRetryableDeliveries(
-    olderThan: Date,
-    limit = 50,
+  async findPendingForDevice(
+    deviceId: string,
+    sentBefore = new Date(Date.now() - 30_000),
+    limit = 10,
   ): Promise<TopupDelivery[]> {
     return this.deliveryRepo.find({
       where: [
-        { status: 'pending', attempt_count: LessThan(this.maxAttempts) },
         {
+          device_id: deviceId,
+          status: 'pending',
+        },
+        {
+          device_id: deviceId,
           status: 'sent',
-          attempt_count: LessThan(this.maxAttempts),
-          sent_at: LessThan(olderThan),
+          sent_at: LessThan(sentBefore),
         },
       ],
       order: { created_at: 'ASC' },
       take: limit,
     });
-  }
-
-  async markRetryExhausted(delivery: TopupDelivery): Promise<void> {
-    delivery.status = 'failed';
-    delivery.last_error = 'top-up delivery retry limit exceeded';
-    await this.deliveryRepo.save(delivery);
   }
 
   async markFailed(transactionId: string, error: string): Promise<void> {
