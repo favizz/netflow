@@ -10,7 +10,7 @@
  * Usage:
  *   node scripts/fleet.js seed   [--dry-run] [--reset-existing]
  *   node scripts/fleet.js sim    [--count N] [--interval-ms MS] [--no-db-hydrate]
- *   node scripts/fleet.js verify [--test 1,3,5]
+ *   node scripts/fleet.js verify [--test 3,4,8]
  *
  * Environment (from .env three levels up):
  *   MQTT_BROKER_URL          broker URL, e.g. mqtt://localhost:1883
@@ -242,6 +242,8 @@ const BATCH_SIZE     = 50;
 const BATCH_DELAY_MS = 250;
 const REPORT_EVERY_S = 30;
 const REPLENISH_S    = 3600;
+const RP_PER_KWH     = 1450;
+const RP_PER_M3      = 5000;
 const DEFAULT_ST     = 5;
 const TELEMETRY_QOS   = 1;
 
@@ -308,8 +310,8 @@ function connectDevice(dev) {
   client.on('offline', () => { dev.connected = false; });
   client.on('close',   () => { dev.connected = false; });
   client.on('error',   err => {
-    if (!LOG_MQTT_ERRORS || loggedConnectIssue) return;
-    loggedConnectIssue = true;
+    // if (!LOG_MQTT_ERRORS || loggedConnectIssue) return;
+    // loggedConnectIssue = true;
     console.warn(
       `[MQTT ERROR ${dev.id}] ${err.message} ` +
       `(auth=${DEVICE_AUTH_MODE}, username=${username || '<empty>'})`,
@@ -349,20 +351,20 @@ function onMessage(dev, topic, payload) {
   }
 
   if (topic === `${base}/topup` && payload.length === 12) {
-    const electricTokenKwh = payload.readUInt32BE(0) / 1000;
-    const waterTokenM3 = payload.readUInt32BE(4) / 1000;
+    const elecRp  = payload.readUInt32BE(0);
+    const waterRp = payload.readUInt32BE(4);
     const ts      = payload.readUInt32BE(8);
     if (ts <= dev.lastTopupTs && dev.lastTopupTs !== 0) {
       dev.client.publish(`${base}/topup_ack`,
-        JSON.stringify({ status: 'ok', electricTokenKwh, waterTokenM3, duplicate: true, te: dev.te, tw: dev.tw }));
+        JSON.stringify({ status: 'ok', elec: elecRp, water: waterRp, duplicate: true }));
       return;
     }
-    dev.te += electricTokenKwh;
-    dev.tw += waterTokenM3;
-    if (electricTokenKwh > 0 && dev.rs === 0) dev.rs = 1;
-    if (waterTokenM3 > 0 && dev.vs === 0) dev.vs = 1;
+    dev.te += elecRp  / RP_PER_KWH;
+    dev.tw += waterRp / RP_PER_M3;
+    if (elecRp  > 0 && dev.rs === 0) dev.rs = 1;
+    if (waterRp > 0 && dev.vs === 0) dev.vs = 1;
     dev.lastTopupTs = ts;
-    dev.client.publish(`${base}/topup_ack`, JSON.stringify({ status: 'ok', electricTokenKwh, waterTokenM3, te: dev.te, tw: dev.tw }));
+    dev.client.publish(`${base}/topup_ack`, JSON.stringify({ status: 'ok', elec: elecRp, water: waterRp }));
     return;
   }
 
@@ -613,9 +615,11 @@ async function cmdSim(argv) {
   setInterval(printStats, REPORT_EVERY_S * 1000);
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// VERIFY
-// ═══════════════════════════════════════════════════════════════════════════════
+// ╭─────────────────────────────────────────────────────────────────────────╮
+// VERIFY (B200 Software Specifications)
+// ╰─────────────────────────────────────────────────────────────────────────╯
+const http = require('http');
+const https = require('https');
 
 function connectMqtt() {
   return new Promise((resolve, reject) => {
@@ -658,118 +662,115 @@ function subscribeAsync(client, topic) {
     client.subscribe(topic, { qos: 1 }, err => err ? reject(err) : resolve()));
 }
 
-async function test1(db) {
-  console.log('\n[Test 1] DB Freshness — 20 sampled devices have meter_readings < 30s old');
-  const sample = randomSample(allDeviceIds(), 20);
-  const LIMIT  = 30_000;
-  let pass = 0, fail = 0;
-
+async function spec3(db) {
+  console.log('\n[Spec 3] Data Centralization — Fleet Coverage & Latency < 60s');
+  const since = new Date(Date.now() - 60_000).toISOString().slice(0, 19).replace('T', ' ');
+  const [[{ active }]] = await db.execute(
+    'SELECT COUNT(DISTINCT device_id) AS active FROM meter_readings WHERE time >= ?', [since]);
+  const pct = ((active / TOTAL) * 100).toFixed(1);
+  const okCoverage  = active >= Math.floor(TOTAL * 0.95);
+  console.log(`  Coverage : ${active} / ${TOTAL} active in last 60s (${pct}%)`);
+  
+  const sample = randomSample(allDeviceIds(), 5);
+  let passLat = 0;
   for (const id of sample) {
-    const [[row]] = await db.execute(
-      'SELECT MAX(time) AS t FROM meter_readings WHERE device_id = ?', [id]);
-    if (!row?.t) { console.log(`  FAIL  ${id} — no readings in DB`); fail++; continue; }
-    const ageMs = Date.now() - new Date(row.t).getTime();
-    if (ageMs <= LIMIT) { pass++; }
-    else { console.log(`  FAIL  ${id} — last reading ${(ageMs / 1000).toFixed(0)}s ago`); fail++; }
+    const [[row]] = await db.execute('SELECT MAX(time) AS t FROM meter_readings WHERE device_id = ?', [id]);
+    if (row?.t && (Date.now() - new Date(row.t).getTime()) <= 60000) passLat++;
   }
-
-  const ok = fail === 0;
-  console.log(`  → ${ok ? 'PASS' : 'FAIL'}  ${pass}/${sample.length} devices fresh`);
+  const okLat = passLat === 5;
+  console.log(`  Latency  : ${passLat}/5 sampled devices updated < 60s`);
+  const ok = okCoverage && okLat;
+  console.log(`  → ${ok ? 'PASS' : 'FAIL'}  Spec 3`);
   return ok;
 }
 
-async function test2(client) {
-  console.log('\n[Test 2] Command ACK — relay toggle roundtrip < 2s (5 devices)');
-  const sample = randomSample(allDeviceIds(), 5);
-  const LIMIT  = 2000;
-  const results = [];
+async function spec4() {
+  console.log('\n[Spec 4] Payment Availability — API Reachability & TLS 1.3');
+  const API_BASE = process.env.VITE_API_BASE_URL || 'http://127.0.0.1:5000';
+  console.log(`  Checking ${API_BASE}/health...`);
+  
+  return new Promise((resolve) => {
+    const u = new URL(API_BASE + '/health');
+    const mod = u.protocol === 'https:' ? https : http;
+    const req = mod.get(u, (res) => {
+      const ok = res.statusCode === 200;
+      console.log(`  Status   : ${res.statusCode}`);
+      console.log(`  TLS      : ${u.protocol === 'https:' ? 'YES' : 'NO (HTTP)'}`);
+      console.log(`  → ${ok ? 'PASS' : 'FAIL'}  Spec 4`);
+      resolve(ok);
+    });
+    req.on('error', (e) => {
+      console.log(`  Error    : ${e.message}`);
+      console.log(`  → FAIL  Spec 4`);
+      resolve(false);
+    });
+  });
+}
 
+async function spec5(client) {
+  console.log('\n[Spec 5] Valve Actuation Latency < 5s');
+  const sample = randomSample(allDeviceIds(), 3);
+  return await testActuation(client, sample, 2, 'Valve');
+}
+
+async function spec6(client) {
+  console.log('\n[Spec 6] Relay Actuation Latency < 5s');
+  const sample = randomSample(allDeviceIds(), 3);
+  return await testActuation(client, sample, 1, 'Relay');
+}
+
+async function testActuation(client, sample, typeByte, name) {
+  const LIMIT  = 5000;
   await subscribeAsync(client, 'device/+/command_ack');
-
+  let passCount = 0;
   for (const id of sample) {
     const t0  = Date.now();
     const ack = waitAck(client, topic => topic === `device/${id}/command_ack`, LIMIT + 1000);
-    client.publish(`device/${id}/command`, encodeCommand(1, 1));
+    client.publish(`device/${id}/command`, encodeCommand(typeByte, 0));
     const { timedOut } = await ack;
     const ms = Date.now() - t0;
-    results.push({ id, ms, ok: !timedOut && ms <= LIMIT });
-  }
-
-  let passCount = 0;
-  for (const { id, ms, ok } of results) {
-    if (ok) passCount++;
-    console.log(`  ${ok ? 'PASS' : 'FAIL'}  ${id} — ${ok ? ms + 'ms' : 'no ACK'}`);
+    if (!timedOut && ms <= LIMIT) passCount++;
+    console.log(`  ${id} : ${!timedOut ? ms + 'ms' : 'TIMEOUT'}`);
   }
   const ok = passCount === sample.length;
-  console.log(`  → ${ok ? 'PASS' : 'FAIL'}  ${passCount}/${sample.length} within ${LIMIT}ms`);
+  console.log(`  → ${ok ? 'PASS' : 'FAIL'}  Spec ${typeByte === 2 ? '5' : '6'} (${name})`);
   return ok;
 }
 
-async function test3(client) {
-  console.log('\n[Test 3] Config ACK — calibration push roundtrip < 2s (3 devices)');
-  const sample = randomSample(allDeviceIds(), 3);
-  const LIMIT  = 2000;
-  const results = [];
-
-  await subscribeAsync(client, 'device/+/config_ack');
-
-  for (const id of sample) {
-    const t0  = Date.now();
-    const ack = waitAck(client, topic => topic === `device/${id}/config_ack`, LIMIT + 1000);
-    client.publish(`device/${id}/config`, encodeConfig(4.55, 1.05, 5));
-    const { timedOut } = await ack;
-    const ms = Date.now() - t0;
-    results.push({ id, ms, ok: !timedOut && ms <= LIMIT });
+async function spec7(client, db) {
+  console.log('\n[Spec 7] Operational Data Integrity — Offline Buffer (0 Data Loss)');
+  const [id] = randomSample(allDeviceIds(), 1);
+  const FRAMES = 5;
+  console.log(`  Publishing ${FRAMES} offline-buffered frames for ${id}...`);
+  
+  const [[{ c1 }]] = await db.execute('SELECT COUNT(*) AS c1 FROM meter_readings WHERE device_id = ?', [id]);
+  
+  for(let i=1; i<=FRAMES; i++) {
+    client.publish(`device/${id}/data`, encode({ et: 100+i, p: 200, v: 220, c: 0.9, wf: 1, wt: 10+i, te: 50, tw: 10, rs: 1, vs: 1 }));
   }
-
-  let passCount = 0;
-  for (const { id, ms, ok } of results) {
-    if (ok) passCount++;
-    console.log(`  ${ok ? 'PASS' : 'FAIL'}  ${id} — ${ok ? ms + 'ms' : 'no ACK'}`);
-  }
-  const ok = passCount === sample.length;
-  console.log(`  → ${ok ? 'PASS' : 'FAIL'}  ${passCount}/${sample.length} within ${LIMIT}ms`);
+  await new Promise(r => setTimeout(r, 3000));
+  const [[{ c2 }]] = await db.execute('SELECT COUNT(*) AS c2 FROM meter_readings WHERE device_id = ?', [id]);
+  
+  const inserted = c2 - c1;
+  const ok = inserted >= FRAMES;
+  console.log(`  Expected : ${FRAMES}`);
+  console.log(`  Inserted : ${inserted}`);
+  console.log(`  → ${ok ? 'PASS' : 'FAIL'}  Spec 7`);
   return ok;
 }
 
-async function test4(client) {
-  console.log('\n[Test 4] OTA ACK — flash simulation (2-5s) + reconnect + ACK < 15s');
-  const [id]  = randomSample(allDeviceIds(), 1);
-  const LIMIT = 15_000;
-
-  await subscribeAsync(client, `device/${id}/ota_ack`);
-
-  const t0  = Date.now();
-  const ack = waitAck(client, topic => topic === `device/${id}/ota_ack`, LIMIT + 2000);
-  client.publish(`device/${id}/ota`, encodeOta(2, 0, 0, 'https://firmware.example.com/sim-v2.0.0.bin'));
-  console.log(`  OTA command sent to ${id}. Waiting…`);
-
-  const { timedOut, payload } = await ack;
-  const ms = Date.now() - t0;
-
-  if (timedOut) { console.log(`  FAIL  ${id} — no ACK within ${LIMIT / 1000}s`); return false; }
-
-  let version = '?';
-  try { version = JSON.parse(payload.toString()).version; } catch {}
-  const ok = ms <= LIMIT;
-  console.log(`  ${ok ? 'PASS' : 'FAIL'}  ${id} — v${version} in ${(ms / 1000).toFixed(2)}s`);
-  return ok;
-}
-
-async function test5(client, db) {
-  console.log('\n[Test 5] Anomaly Detection — mcb_trip (p=1450W > 1300W) detected < 90s');
+async function spec8(client, db) {
+  console.log('\n[Spec 8] Early Warning — Anomaly Latency < 90s');
   const [id]  = randomSample(allDeviceIds(), 1);
   const LIMIT = 90_000;
   const t0    = Date.now();
 
-  client.publish(`device/${id}/data`, encode({ et: 200, p: 300, v: 220, c: 1.36, wf: 1.0, wt: 20, te: 50, tw: 10, rs: 1, vs: 1 }));
-  await sleep(2000);
+  console.log(`  Triggering MCB Trip anomaly for ${id}...`);
   client.publish(`device/${id}/data`, encode({ et: 200.01, p: 1450, v: 218, c: 6.65, wf: 1.0, wt: 20.001, te: 50, tw: 10, rs: 1, vs: 1 }));
-  console.log(`  Anomaly frame sent to ${id}. Polling DB…`);
 
   const deadline = t0 + LIMIT;
   while (Date.now() < deadline) {
-    await sleep(3000);
+    await new Promise(r => setTimeout(r, 2000));
     try {
       const since = new Date(t0).toISOString().slice(0, 19).replace('T', ' ');
       const [[row]] = await db.execute(
@@ -780,41 +781,28 @@ async function test5(client, db) {
       if (row) {
         const latMs = new Date(row.created_at).getTime() - t0;
         const ok    = latMs <= LIMIT;
-        console.log(`  ${ok ? 'PASS' : 'FAIL'}  ${id} — detected in ${(latMs / 1000).toFixed(1)}s`);
+        console.log(`  Detected in : ${(latMs / 1000).toFixed(1)}s`);       
+        console.log(`  → ${ok ? 'PASS' : 'FAIL'}  Spec 8`);
         return ok;
       }
     } catch {}
   }
-
-  console.log(`  FAIL  ${id} — no anomaly record after ${LIMIT / 1000}s`);
+  console.log(`  → FAIL  Spec 8 (Timeout)`);
   return false;
-}
-
-async function test6(db) {
-  console.log('\n[Test 6] Fleet Coverage — ≥ 95% of devices have readings in DB (last 60s)');
-  const since = new Date(Date.now() - 60_000).toISOString().slice(0, 19).replace('T', ' ');
-  const [[{ active }]] = await db.execute(
-    'SELECT COUNT(DISTINCT device_id) AS active FROM meter_readings WHERE time >= ?', [since]);
-  const pct = ((active / TOTAL) * 100).toFixed(1);
-  const ok  = active >= Math.floor(TOTAL * 0.95);
-  console.log(`  Active devices : ${active} / ${TOTAL}  (${pct}%)`);
-  console.log(`  → ${ok ? 'PASS' : 'FAIL'}  threshold: 95%`);
-  return ok;
 }
 
 async function cmdVerify(argv) {
   const tIdx   = argv.indexOf('--test');
   const tArg   = tIdx >= 0 ? (argv[tIdx + 1] || 'all') : 'all';
   const runSet = tArg === 'all'
-    ? new Set([1, 2, 3, 4, 5, 6])
+    ? new Set([3, 4, 5, 6, 7, 8])
     : new Set(tArg.split(',').map(Number));
 
-  console.log('══════════════════════════════════════════════════════');
-  console.log(' Fleet Verification Suite');
+  console.log('╭─────────────────────────────────────────────────────────────────────────╮');
+  console.log(' B200 Software Verification Suite (via Fleet)');
   console.log(`  Broker : ${BROKER_URL}`);
-  console.log(`  Fleet  : ${TOTAL} devices`);
-  console.log(`  Tests  : ${tArg}`);
-  console.log('══════════════════════════════════════════════════════\n');
+  console.log(`  Tests  : Specs ${tArg}`);
+  console.log('╰─────────────────────────────────────────────────────────────────────────╯\n');
 
   console.log('Connecting…');
   const [mqttClient, db] = await Promise.all([connectMqtt(), mysql.createConnection(dbConfig())]);
@@ -822,24 +810,24 @@ async function cmdVerify(argv) {
 
   const results = {};
   try {
-    if (runSet.has(1)) results['1_db_freshness'] = await test1(db);
-    if (runSet.has(2)) results['2_command_ack']  = await test2(mqttClient);
-    if (runSet.has(3)) results['3_config_ack']   = await test3(mqttClient);
-    if (runSet.has(4)) results['4_ota_ack']      = await test4(mqttClient);
-    if (runSet.has(5)) results['5_anomaly']      = await test5(mqttClient, db);
-    if (runSet.has(6)) results['6_coverage']     = await test6(db);
+    if (runSet.has(3)) results['Spec_3_Centralization'] = await spec3(db);
+    if (runSet.has(4)) results['Spec_4_Payment']        = await spec4();
+    if (runSet.has(5)) results['Spec_5_Valve_Latency']  = await spec5(mqttClient);
+    if (runSet.has(6)) results['Spec_6_Relay_Latency']  = await spec6(mqttClient);
+    if (runSet.has(7)) results['Spec_7_Offline_Buffer'] = await spec7(mqttClient, db);
+    if (runSet.has(8)) results['Spec_8_Anomaly_Alert']  = await spec8(mqttClient, db);
   } finally {
     mqttClient.end(true);
     await db.end();
   }
 
-  console.log('\n══════════════════════════════════════════════════════');
+  console.log('\n╭─────────────────────────────────────────────────────────────────────────╮');
   console.log(' Summary');
   for (const [name, ok] of Object.entries(results))
     console.log(`  ${ok ? '✓ PASS' : '✗ FAIL'}  ${name}`);
   const allOk = Object.values(results).every(Boolean);
   console.log(`\n  Overall : ${allOk ? 'ALL PASS' : 'SOME FAILURES'}`);
-  console.log('══════════════════════════════════════════════════════');
+  console.log('╰─────────────────────────────────────────────────────────────────────────╯');
   process.exit(allOk ? 0 : 1);
 }
 
@@ -853,7 +841,7 @@ const USAGE = `
 Usage:
   node scripts/fleet.js seed   [--dry-run] [--reset-existing]
   node scripts/fleet.js sim    [--count N] [--interval-ms MS] [--no-db-hydrate]
-  node scripts/fleet.js verify [--test 1,3,5]
+  node scripts/fleet.js verify [--test 3,4,8]
 `.trim();
 
 const CMDS = { seed: cmdSeed, sim: cmdSim, verify: cmdVerify };

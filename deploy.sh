@@ -56,13 +56,6 @@ pnpm build
 pm2_start_or_reload "backend" "\"node -r ./dist/src/tracing.js dist/src/main.js\""
 log "Backend live on :5000"
 
-# ── 5. ML service ──────────────────────────────────────────────────
-section "── [5/5] ML service"
-cd "$REPO_DIR/ml-service"
-pip install -r requirements.txt -q
-pm2_start_or_reload "ml-service" "main.py" "--interpreter" "python3"
-log "ML service live"
-
 # ── Save PM2 state ─────────────────────────────────────────────────
 pm2 save
 log "PM2 state saved"

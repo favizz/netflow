@@ -13,7 +13,7 @@ export class NotificationService {
   // TEMPORARILY DISABLED — set to true to re-enable all outgoing notifications
   // (email to residents/admins + Telegram). Disabled during fleet simulation to
   // avoid flooding inboxes with 2,500 simulated-device anomaly/offline alerts.
-  private readonly notificationsEnabled = false;
+  private readonly notificationsEnabled = true;
 
   constructor(
     private readonly configService: ConfigService,

@@ -67,11 +67,11 @@ const FAQ_DATA: FAQSection[] = [
         items: [
             {
                 question: "How does live telemetry work?",
-                answer: "The Unit Detail page connects directly to the EMQX MQTT broker via WebSocket and subscribes to device/{id}/telemetry. When the device publishes a reading, it appears instantly in the live metrics panel. No polling is needed.",
+                answer: "The Unit Detail page connects directly to the EMQX MQTT broker via WebSocket and subscribes to device/{id}/status. Telemetry data is updated constantly via the REST API.",
             },
             {
                 question: "What format is the telemetry payload?",
-                answer: "The backend and devices use a compact 25-byte binary frame. The dashboard decodes it as fixed-width binary (energy×100, power×10, voltage×10, current×1000, waterFlow×100, waterTotal×1000, electricity token kWh×1000, water token m³×1000, flags) with JSON fallback. This minimizes MQTT bandwidth.",
+                answer: "The backend and devices use a compact 25-byte binary frame. The dashboard receives it via the REST API. This minimizes MQTT bandwidth.",
             },
             {
                 question: "What do the charts on Unit Detail show?",
@@ -84,11 +84,11 @@ const FAQ_DATA: FAQSection[] = [
         items: [
             {
                 question: "How does the prepaid top-up work?",
-                answer: "Residents purchase tokens via the mobile app. They enter separate amounts for electricity (Rp) and water (Rp), then pay through the payment gateway. On successful payment, the backend sends a single MQTT topup message to the device with the total credited amount. Balances are stored on the units table for fast reads.",
+                answer: "Residents purchase tokens via the mobile app using Midtrans payment gateway (QRIS or Virtual Account). On successful payment confirmation via webhook, the backend credits the token_electricity and token_water balances in the database, based on the current tariff rates. The updated balances are synchronized with the device during the next telemetry cycle.",
             },
             {
                 question: "What happens when balance runs out?",
-                answer: "When balance drops to zero, the system automatically turns off the relay (cutting electricity). The resident receives an email notification. They must top up to restore service.",
+                answer: "When balance drops to zero, the system automatically turns off the relay (cutting electricity). The resident receives an email notification and a Telegram message. They must top up to restore service.",
             },
             {
                 question: "Where can I see all payment history?",
@@ -131,7 +131,7 @@ const FAQ_DATA: FAQSection[] = [
         items: [
             {
                 question: "What is the Queue Monitor?",
-                answer: "The Queue Monitor (powered by Bull Board) is an embedded dashboard located at the bottom of the Logs page. It provides a visual interface to manage all asynchronous background jobs in the system. The system runs three main queues: 'telemetry' (processing incoming device data), 'payment-expiry' (canceling unpaid Midtrans transactions), and 'broadcast' (sending bulk Telegram messages).",
+                answer: "The Queue Monitor (powered by Bull Board) is an embedded dashboard located at the bottom of the Logs page. It provides a visual interface to manage all asynchronous background jobs in the system. The system runs three main queues: 'telemetry' (processing incoming device data), 'payment-expiry' (canceling unpaid Midtrans transactions), and 'broadcast' (sending bulk Telegram messages and batch MQTT commands).",
             },
             {
                 question: "What actions (CRUD) can I perform on jobs?",
@@ -165,19 +165,19 @@ const FAQ_DATA: FAQSection[] = [
         items: [
             {
                 question: "How does anomaly detection work?",
-                answer: "The system uses a two-layer detection approach. The rule-based layer checks 11 conditions in real time (low balance, voltage out of range, MCB trip, water leak, sensor malfunction, etc.). The statistical ML layer computes a Z-score across power, voltage, current, and water flow using the last 30 days of historical readings - readings with a Z-score above 2.5 are flagged as anomalies. Both layers run in-process without any external dependency.",
+                answer: "The system checks for hard thresholds in real-time (e.g. low balance, voltage out of range, MCB trip, water leak, sensor malfunction, jailbreak) during telemetry ingestion. Any violation triggers an anomaly record.",
             },
             {
                 question: "Who gets notified about anomalies?",
-                answer: "When a Critical or Warning anomaly is detected — including low balance alerts — the system sends an email to the resident via SMTP (nodemailer) and, if the resident has linked a Telegram account, also sends a Telegram message via the Telegram Bot API using HTML parse mode. Admins see anomalies in the dashboard Overview and notification bell.",
+                answer: "When a Critical or Warning anomaly is detected — including low balance alerts — the system sends a Telegram message via the Telegram Bot API using HTML parse mode to linked admin and resident Telegram accounts. Emails are also sent via SMTP.",
             },
             {
                 question: "How fast does an alert appear after an event?",
-                answer: "The system is designed to deliver alerts within 90 seconds of the triggering event (B200 Spec #8). Offline alerts are driven by MQTT LWT (Last Will and Testament), which fires automatically when the broker detects the device has not sent a Keep-Alive packet for 300 seconds (5 minutes). Jumper and tamper alerts are triggered immediately when the anomalous telemetry payload arrives.",
+                answer: "The system is designed to deliver alerts within 90 seconds of the triggering event (B200 Spec #8). Offline alerts are driven by backend logic checking the last updated time. Jumper and tamper alerts are triggered immediately when the anomalous telemetry payload arrives.",
             },
             {
                 question: "What is a 'jumper' anomaly?",
-                answer: "A jumper anomaly is detected when the energy sensor reports non-zero current (A > 0) while the relay status is recorded as open (false / disconnected). This indicates electricity is flowing despite the circuit being cut — a sign the meter has been bypassed. The system flags this and notifies both the admin dashboard and the resident.",
+                answer: "A jumper anomaly is detected when the energy sensor reports non-zero power while the relay status is recorded as OFF. This indicates electricity is flowing despite the circuit being cut — a sign the meter has been bypassed. The system flags this as 'jailbreak' and notifies both the admin dashboard and the resident.",
             },
             {
                 question: "What is a tamper event?",
@@ -185,7 +185,7 @@ const FAQ_DATA: FAQSection[] = [
             },
             {
                 question: "Do anomaly notifications still get sent when the valve or relay is turned off?",
-                answer: "Yes. Anomaly detection runs independently of the relay and valve state. Turning off the relay or valve does not suspend monitoring. The system will still detect and notify for events such as device offline, voltage anomaly, and sensor malfunction. Some anomalies — like MCB trip or water leak — are less likely to trigger when utilities are off because no power or water is flowing, but the pipeline continues to run. Importantly, if sensors report consumption while the relay is OFF and the balance is zero, the system flags a 'jailbreak' anomaly, indicating a potential bypass of the metering system.",
+                answer: "Yes. Anomaly detection runs independently of the relay and valve state. The system will still detect and notify for events such as device offline, voltage anomaly, and sensor malfunction.",
             },
             {
                 question: "How do dashboard notifications work?",
@@ -223,11 +223,7 @@ const FAQ_DATA: FAQSection[] = [
         items: [
             {
                 question: "How is a resident's bill calculated?",
-                answer: "Consumption is calculated as the difference between the maximum and minimum meter readings within the billing period (MAX − MIN, so counter resets do not overcharge). This is then multiplied by the active tariff rate for that period. Water volume is stored in m³ at 64-bit double precision to prevent cumulative rounding errors.",
-            },
-            {
-                question: "What happens when the meter reading counter resets?",
-                answer: "The reporting query uses GREATEST(0, MAX − MIN) per period, so a counter reset back to zero produces a large negative delta that is clamped to zero. No phantom consumption is billed.",
+                answer: "Consumption is calculated as the difference between the maximum and minimum meter readings within the billing period (MAX − MIN, so counter resets do not overcharge). The system uses prepaid token deduction: the token_electricity and token_water fields decrease based on active usage.",
             },
             {
                 question: "What currency and precision does the system use?",
@@ -240,11 +236,11 @@ const FAQ_DATA: FAQSection[] = [
         items: [
             {
                 question: "How long is telemetry data kept?",
-                answer: "A nightly cron job (3 AM) automatically purges meter_readings older than 24 months and transactions older than 60 months. These thresholds match the data retention policy defined in the product specification (B200 §2.1.7). This keeps the database lean without manual intervention.",
+                answer: "A nightly cron job (MySQL Event Scheduler) automatically purges meter_readings older than 1 year. This keeps the database lean without manual intervention.",
             },
             {
                 question: "What happens to data when a device is offline?",
-                answer: "While offline, the device stores readings locally in its controller memory. When the connection is restored, it sends all buffered readings (batching log) to the server in one burst. The server stores them with their original timestamps. Data loss only occurs if the device runs out of local RAM before reconnecting.",
+                answer: "While offline, the device stores readings locally in its SD card. When the connection is restored, it sends all buffered readings to the server in one burst. The server stores them. Data loss only occurs if the SD card is full or corrupted.",
             },
         ],
     },
@@ -253,19 +249,15 @@ const FAQ_DATA: FAQSection[] = [
         items: [
             {
                 question: "Which MQTT topics does the system use?",
-                answer: "device/{id}/telemetry — device publishes sensor readings (QoS 1). device/{id}/relay/set — backend sends relay on/off command (QoS 1, JSON ≤128 bytes). device/{id}/valve/set — backend sends valve open/close command (QoS 1, JSON ≤128 bytes). device/{id}/topup — backend sends top-up credit. device/{id}/status — device heartbeat for Keep-Alive and LWT (offline detection after 300 s silence).",
+                answer: "device/{id}/data — device publishes sensor readings (QoS 1). device/{id}/command — backend sends relay on/off or valve open/close command (QoS 1, Binary 1-byte). device/{id}/config — backend sends calibration parameters (Binary 4-byte). device/{id}/topup — backend sends top-up credit (Binary 12-byte). device/{id}/*_ack — device acknowledgement responses in JSON.",
             },
             {
                 question: "What QoS level does the system use and why?",
-                answer: "Telemetry and command topics use QoS 1 (at-least-once delivery). This guarantees each message reaches its destination at least once while keeping overhead lower than QoS 2. For sensor readings, occasional duplicates are acceptable; the time-series query uses MAX−MIN aggregation so duplicates have no impact on billing. For commands, the device ignores duplicate command_ids it has already executed.",
+                answer: "Telemetry and command topics use QoS 1 (at-least-once delivery). This guarantees each message reaches its destination at least once while keeping overhead lower than QoS 2.",
             },
             {
                 question: "How long can the system scale to?",
-                answer: "The server is designed and tested to handle 2,444 concurrent units (matching the target building capacity) with Data Loss Rate ≤ 1% per month and CPU/RAM both below 80%. End-to-end latency from meter reading to dashboard display must not exceed 60 seconds under this load.",
-            },
-            {
-                question: "Why does the mobile app use WebSocket instead of TCP for MQTT?",
-                answer: "Browsers cannot open raw TCP connections. EMQX provides a WebSocket bridge on port 8083 that wraps MQTT in WebSocket frames, allowing browser clients to subscribe to live telemetry without a proxy.",
+                answer: "The server is designed and tested to handle 2,500 concurrent units (matching the target building capacity) with Data Loss Rate ≤ 1% per month and CPU/RAM both below 80%. End-to-end latency from meter reading to dashboard display must not exceed 60 seconds under this load.",
             },
         ],
     },
@@ -315,7 +307,7 @@ function AccordionItem({ item, query, forceOpen }: { item: FAQItem; query: strin
                 }
             </button>
             {isOpen && (
-                <p className="pb-4 text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
+                <p className="pb-4 text-sm text-gray-500 dark:text-gray-400 leading-relaxed whitespace-pre-line">
                     <Highlight text={item.answer} query={query} />
                 </p>
             )}
@@ -342,7 +334,7 @@ export default function FAQPage() {
     }, [search]);
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 pb-12">
             <div>
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
                     <HelpCircle className="h-6 w-6 text-primary" />

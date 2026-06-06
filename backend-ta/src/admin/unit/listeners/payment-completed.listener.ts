@@ -1,15 +1,50 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { PaymentCompletedEvent } from '../../../payments/events/payment-completed.event';
+import { UnitService } from '../unit.service';
+import { TariffService } from '../../tariff/tariff.service';
 
 @Injectable()
 export class PaymentCompletedListener {
   private readonly logger = new Logger(PaymentCompletedListener.name);
 
+  constructor(
+    private readonly unitService: UnitService,
+    private readonly tariffService: TariffService,
+  ) {}
+
   @OnEvent('payment.completed', { async: true })
-  handle(event: PaymentCompletedEvent): void {
-    this.logger.log(
-      `Token credit deferred to device telemetry for unit ${event.unitNo} (txn: ${event.transactionId})`,
-    );
+  async handle(event: PaymentCompletedEvent): Promise<void> {
+    try {
+      const elecRate = await this.tariffService.findCurrent('electricity');
+      const waterRate = await this.tariffService.findCurrent('water');
+
+      const addedKwh = Number(event.electricityAmountRp) / elecRate;
+      const addedM3 = Number(event.waterAmountRp) / waterRate;
+
+      if (addedKwh > 0) {
+        await this.unitService.creditTokensByUnitNo(
+          event.unitNo,
+          addedKwh,
+          'electricity',
+        );
+      }
+      if (addedM3 > 0) {
+        await this.unitService.creditTokensByUnitNo(
+          event.unitNo,
+          addedM3,
+          'water',
+        );
+      }
+
+      this.logger.log(
+        `Credited ${addedKwh.toFixed(3)} kWh and ${addedM3.toFixed(3)} m3 to unit ${event.unitNo} (txn: ${event.transactionId})`,
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.logger.error(
+        `Failed to credit tokens for unit ${event.unitNo} (txn: ${event.transactionId}): ${msg}`,
+      );
+    }
   }
 }
