@@ -5,7 +5,7 @@ import { ExtractJwt, Strategy } from 'passport-jwt';
 import { JwtPayload } from './interfaces/jwt-payload.interface';
 import { InjectRepository } from '@nestjs/typeorm';
 import { AuthRefreshToken } from './entities/auth-refresh-token.entity';
-import { Repository } from 'typeorm';
+import { Repository, IsNull } from 'typeorm';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
@@ -29,7 +29,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     const activeSession = await this.refreshTokenRepo.findOne({
       where: {
         user_sub: payload.sub,
-        revoked_at: null,
+        revoked_at: IsNull(),
       },
     });
 

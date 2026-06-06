@@ -16,11 +16,8 @@ export class PaymentCompletedListener {
   @OnEvent('payment.completed', { async: true })
   async handle(event: PaymentCompletedEvent): Promise<void> {
     try {
-      const elecTariff = await this.tariffService.findCurrent('electricity');
-      const waterTariff = await this.tariffService.findCurrent('water');
-
-      const elecRate = elecTariff ? Number(elecTariff.price_per_unit) : 1500;
-      const waterRate = waterTariff ? Number(waterTariff.price_per_unit) : 5500;
+      const elecRate = await this.tariffService.findCurrent('electricity');
+      const waterRate = await this.tariffService.findCurrent('water');
 
       const addedKwh = Number(event.electricityAmountRp) / elecRate;
       const addedM3 = Number(event.waterAmountRp) / waterRate;
