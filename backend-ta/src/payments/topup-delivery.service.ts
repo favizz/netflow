@@ -84,15 +84,22 @@ export class TopupDeliveryService {
       order: { sent_at: 'DESC', created_at: 'DESC' },
     });
     if (!delivery) {
-      this.logger.warn(`TOPUP ACK received for ${deviceId}, but no delivery is pending`);
+      this.logger.warn(
+        `TOPUP ACK received for ${deviceId}, but no delivery is pending`,
+      );
       return null;
     }
 
     delivery.status = status as TopupDeliveryStatus;
     delivery.ack_json = ack;
     delivery.acked_at = status === 'acked' ? new Date() : null;
+    const errVal = ack.error;
     delivery.last_error =
-      status === 'failed' ? String(ack.error ?? 'device rejected top-up') : null;
+      status === 'failed'
+        ? typeof errVal === 'string' || typeof errVal === 'number'
+          ? String(errVal)
+          : 'device rejected top-up'
+        : null;
     await this.deliveryRepo.save(delivery);
     return delivery;
   }
