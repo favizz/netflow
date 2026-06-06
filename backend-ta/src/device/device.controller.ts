@@ -202,10 +202,9 @@ export class DeviceController {
 
     try {
       await this.telemetryQueue.add('process', payload, {
-        removeOnComplete: 2_000,
-        removeOnFail: 200,
-        attempts: 3,
-        backoff: { type: 'exponential', delay: 1_000 },
+        removeOnComplete: true,
+        removeOnFail: 100,
+        attempts: 1,
       });
     } catch (queueErr) {
       // Redis unavailable — fall back to inline processing (same as v1).

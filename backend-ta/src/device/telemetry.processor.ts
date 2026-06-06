@@ -42,6 +42,9 @@ export class TelemetryProcessor
 
   async process(job: Job): Promise<void> {
     try {
+      // Discard stale telemetry — sensor readings older than 30 s have no value.
+      if (Date.now() - job.timestamp > 30_000) return;
+
       // Binary payloads were base64-encoded before queuing to survive JSON serialization.
       /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
       const payload = job.data;

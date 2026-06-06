@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { BullModule } from '@nestjs/bullmq';
 import { UnitModule } from '../admin/unit/unit.module';
+import { TariffModule } from '../admin/tariff/tariff.module';
 import { AuditLogModule } from '../admin/audit-log/audit-log.module';
 import { SharedMqttClientModule } from '../common/shared-mqtt-client.module';
 import { Transaction } from './entities/transaction.entity';
@@ -19,6 +20,7 @@ import {
   imports: [
     TypeOrmModule.forFeature([Transaction, TopupDelivery]),
     UnitModule,
+    TariffModule,
     AuditLogModule,
     SharedMqttClientModule,
     BullModule.registerQueue({ name: PAYMENT_EXPIRY_QUEUE }),

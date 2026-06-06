@@ -160,8 +160,8 @@ export function encodeOta(payload: OtaPayload): Buffer {
 // ─────────────────────────────────────────────────────────────
 // TOPUP FRAME (12 bytes) server → device
 //   topic: device/{id}/topup
-//   bytes  [0:3]  uint32 BE : electricity_amount (Rp) — 0 if none
-//   bytes  [4:7]  uint32 BE : water_amount       (Rp) — 0 if none
+//   bytes  [0:3]  uint32 BE : electricity_token_kwh × 1000 — 0 if none
+//   bytes  [4:7]  uint32 BE : water_token_m3       × 1000 — 0 if none
 //   bytes [8:11]  uint32 BE : timestamp (Unix epoch in seconds)
 //
 // Splitting electricity and water lets the device credit and
@@ -169,8 +169,8 @@ export function encodeOta(payload: OtaPayload): Buffer {
 // ─────────────────────────────────────────────────────────────
 
 export interface TopupPayload {
-  electricAmount: number;
-  waterAmount: number;
+  electricTokenKwh: number;
+  waterTokenM3: number;
   timestamp: number;
 }
 
@@ -179,8 +179,8 @@ export interface TopupPayload {
  */
 export function encodeTopup(payload: TopupPayload): Buffer {
   const buf = Buffer.allocUnsafe(12);
-  buf.writeUInt32BE(Math.round(payload.electricAmount), 0);
-  buf.writeUInt32BE(Math.round(payload.waterAmount), 4);
+  buf.writeUInt32BE(Math.round(payload.electricTokenKwh * 1000), 0);
+  buf.writeUInt32BE(Math.round(payload.waterTokenM3 * 1000), 4);
   buf.writeUInt32BE(payload.timestamp, 8);
   return buf;
 }
