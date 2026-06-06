@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useTheme } from "next-themes"
 import { LogOut, Moon, Sun, Zap, Building2 } from "lucide-react"
 import { toast } from "sonner"
@@ -34,13 +34,34 @@ export default function AccountSheet({
   const { theme, setTheme } = useTheme()
   const [relay, setRelay] = useState(initialRelay)
   const [relayLoading, setRelayLoading] = useState(false)
+  const [pendingRelay, setPendingRelay] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    setRelay(initialRelay)
+    if (pendingRelay !== null && initialRelay === pendingRelay) {
+      toast.success(initialRelay ? "Listrik dikonfirmasi aktif" : "Listrik dikonfirmasi mati")
+      setPendingRelay(null)
+    }
+  }, [initialRelay, pendingRelay])
+
+  useEffect(() => {
+    if (pendingRelay === null) return
+    const timeoutId = window.setTimeout(() => {
+      setPendingRelay((current) => {
+        if (current === null) return current
+        toast.error("Perintah sudah dikirim, tetapi perangkat belum mengonfirmasi.")
+        return null
+      })
+    }, 15000)
+    return () => window.clearTimeout(timeoutId)
+  }, [pendingRelay])
 
   const handleRelayToggle = async (on: boolean) => {
     setRelayLoading(true)
     try {
-      const res = await api.setRelay(unitId, on)
-      setRelay(res.relayStatus)
-      toast.success(res.relayStatus ? "Listrik dinyalakan" : "Listrik dimatikan")
+      await api.setRelay(unitId, on)
+      setPendingRelay(on)
+      toast.success("Perintah listrik dikirim. Menunggu konfirmasi perangkat.")
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Gagal mengubah status relay")
     } finally {
@@ -110,12 +131,14 @@ export default function AccountSheet({
             </div>
             <div>
               <p className="font-semibold text-foreground">Aliran Listrik</p>
-              <p className="text-xs text-muted-foreground">{relay ? "Aktif - aliran berjalan" : "Dimatikan"}</p>
+              <p className="text-xs text-muted-foreground">
+                {pendingRelay !== null ? "Menunggu konfirmasi perangkat" : relay ? "Aktif - aliran berjalan" : "Dimatikan"}
+              </p>
             </div>
           </div>
           <Switch
             checked={relay}
-            disabled={relayLoading}
+            disabled={relayLoading || pendingRelay !== null}
             onCheckedChange={(val) => void handleRelayToggle(val)}
             className="data-[state=checked]:bg-primary"
           />

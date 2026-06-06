@@ -4,6 +4,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
   UnauthorizedException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -19,6 +20,7 @@ import { createHash } from 'crypto';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PaymentCompletedEvent } from './events/payment-completed.event';
 import { Unit } from '../admin/unit/entities/unit.entity';
+import { TopupDeliveryService } from './topup-delivery.service';
 
 const PAYMENT_EXPIRY_MS = 30 * 60 * 1_000; // 30 minutes
 
@@ -35,6 +37,8 @@ export class PaymentsService {
     private readonly expiryQueue: Queue,
     private readonly eventEmitter: EventEmitter2,
     @InjectRepository(Unit) private readonly unitRepo: Repository<Unit>,
+    @Optional()
+    private readonly topupDeliveryService?: TopupDeliveryService,
   ) {}
 
   async initiateTopup(dto: InitiateTopupDto) {
@@ -345,9 +349,16 @@ export class PaymentsService {
       }
     }
 
+    const delivery = this.topupDeliveryService
+      ? await this.topupDeliveryService.findByTransactionId(tx.id)
+      : null;
+
     return {
       status: tx.status,
       confirmedAt: tx.confirmed_at?.toISOString() ?? null,
+      delivery: this.topupDeliveryService
+        ? this.topupDeliveryService.toResponse(delivery)
+        : null,
     };
   }
 

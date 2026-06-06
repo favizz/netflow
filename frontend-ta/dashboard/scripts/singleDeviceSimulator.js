@@ -39,6 +39,12 @@ const MQTT_USERNAME = process.env.MQTT_USERNAME || DEVICE_ID;
 const MQTT_PASSWORD = process.env.MQTT_PASSWORD || process.env.MQTT_DEVICE_SECRET || undefined;
 const MQTT_TLS_VERIFY = process.env.MQTT_TLS_VERIFY === 'true';
 const INTERVAL_MS = 2000;
+const RP_PER_KWH = Number(process.env.RP_PER_KWH || 1450);
+const RP_PER_M3 = Number(process.env.RP_PER_M3 || 5000);
+const NORMAL_POWER_MIN_W = Number(process.env.NORMAL_POWER_MIN_W || 450);
+const NORMAL_POWER_MAX_W = Number(process.env.NORMAL_POWER_MAX_W || 950);
+const NORMAL_FLOW_MIN_LPM = Number(process.env.NORMAL_FLOW_MIN_LPM || 2);
+const NORMAL_FLOW_MAX_LPM = Number(process.env.NORMAL_FLOW_MAX_LPM || 6);
 
 console.log('====================================================');
 console.log(`🔌 Single Device Simulator`);
@@ -78,6 +84,7 @@ const state = {
     waterTotal: 368.50,   // m³
     elecTokenKwh: 68.966,
     waterTokenM3: 20.000,
+    lastTopupTs: 0,
     relayOn: true,
     valveOpen: true,
     anomaly: null,
@@ -102,12 +109,12 @@ const client = mqtt.connect(BROKER_URL, {
 });
 
 const generatePayload = () => {
-    // Higher ranges so energy/water totals visibly increment each frame at 2s intervals.
+    // Normal mode must stay below the backend MCB limit (1300 W).
     // At 1000 W × 2 s → 0.00056 kWh delta; encoding precision is 0.01 kWh, so ~18 frames
-    // before the column changes. Raising to ~2500 W peak gives a change roughly every 7 frames.
-    let power = Math.random() * 2000 + 500;  // 500–2500 W (realistic apartment peak)
+    // Use the interactive "overcurrent" command when an anomaly frame is desired.
+    let power = NORMAL_POWER_MIN_W + Math.random() * (NORMAL_POWER_MAX_W - NORMAL_POWER_MIN_W);
     let voltage = Math.random() * 5 + 218;   // 218–223 V
-    let flowRate = Math.random() * 4 + 2;    // 2–6 L/min (shower / washing machine range)
+    let flowRate = NORMAL_FLOW_MIN_LPM + Math.random() * (NORMAL_FLOW_MAX_LPM - NORMAL_FLOW_MIN_LPM);
 
     if (state.anomaly) {
         switch (state.anomaly) {
@@ -119,6 +126,14 @@ const generatePayload = () => {
         }
     }
 
+    if (state.elecTokenKwh <= 0) {
+        state.elecTokenKwh = 0;
+        state.relayOn = false;
+    }
+    if (state.waterTokenM3 <= 0) {
+        state.waterTokenM3 = 0;
+        state.valveOpen = false;
+    }
     if (!state.relayOn && state.anomaly !== 'trip') power = 0;
     if (!state.valveOpen) flowRate = 0;
 
@@ -126,8 +141,14 @@ const generatePayload = () => {
     //   energy (kWh) = power (W) × time (s) / 3_600_000
     //   water  (m³)  = flow (L/min) × time (s) / 60_000
     const intervalSec = INTERVAL_MS / 1000;
-    state.energyTotal += power * intervalSec / 3_600_000;
-    state.waterTotal  += flowRate * intervalSec / 60_000;
+    const energyDeltaKwh = power * intervalSec / 3_600_000;
+    const waterDeltaM3 = flowRate * intervalSec / 60_000;
+    state.energyTotal += energyDeltaKwh;
+    state.waterTotal += waterDeltaM3;
+    state.elecTokenKwh = Math.max(0, state.elecTokenKwh - energyDeltaKwh);
+    state.waterTokenM3 = Math.max(0, state.waterTokenM3 - waterDeltaM3);
+    if (state.elecTokenKwh <= 0) state.relayOn = false;
+    if (state.waterTokenM3 <= 0) state.valveOpen = false;
 
     return {
         et: parseFloat(state.energyTotal.toFixed(4)),
@@ -167,7 +188,8 @@ client.on('connect', () => {
         const cmd = input.trim().toLowerCase();
         if (cmd === 'normal') {
             state.anomaly = null;
-            state.relayOn = true;
+            if (state.elecTokenKwh > 0) state.relayOn = true;
+            if (state.waterTokenM3 > 0) state.valveOpen = true;
             console.log(`\n✅ Kembali ke kondisi normal`);
         } else if (['overvoltage', 'undervoltage', 'overcurrent', 'leakage', 'trip'].includes(cmd)) {
             state.anomaly = cmd;
@@ -187,8 +209,8 @@ client.on('message', (topic, message) => {
         const val    = message[0] & 0x0F;
         const typeStr = type === 1 ? 'relay' : type === 2 ? 'valve' : 'unknown';
 
-        if (type === 1) state.relayOn   = val === 1;
-        if (type === 2) state.valveOpen = val === 1;
+        if (type === 1) state.relayOn = val === 1 && state.elecTokenKwh > 0;
+        if (type === 2) state.valveOpen = val === 1 && state.waterTokenM3 > 0;
 
         console.log(`\n⚡ COMMAND: ${typeStr} → ${val ? 'ON' : 'OFF'}`);
         client.publish(
@@ -239,13 +261,26 @@ client.on('message', (topic, message) => {
     if (topic === `device/${DEVICE_ID}/topup` && message.length === 12) {
         const elecRp  = message.readUInt32BE(0);
         const waterRp = message.readUInt32BE(4);
+        const ts = message.readUInt32BE(8);
+        const duplicate = state.lastTopupTs !== 0 && ts <= state.lastTopupTs;
         console.log(`\n💰 TOPUP: electricity=Rp${elecRp} water=Rp${waterRp}`);
-        // Re-enable relay/valve if they were cut off due to empty token
-        if (elecRp > 0) state.relayOn   = true;
-        if (waterRp > 0) state.valveOpen = true;
+        if (!duplicate) {
+            state.elecTokenKwh += elecRp / RP_PER_KWH;
+            state.waterTokenM3 += waterRp / RP_PER_M3;
+            state.lastTopupTs = ts;
+        }
+        if (state.elecTokenKwh > 0) state.relayOn = true;
+        if (state.waterTokenM3 > 0) state.valveOpen = true;
         client.publish(
             `device/${DEVICE_ID}/topup_ack`,
-            JSON.stringify({ status: 'ok', amount: elecRp + waterRp }),
+            JSON.stringify({
+                status: 'ok',
+                elec: elecRp,
+                water: waterRp,
+                duplicate,
+                te: Number(state.elecTokenKwh.toFixed(4)),
+                tw: Number(state.waterTokenM3.toFixed(4)),
+            }),
         );
         return;
     }

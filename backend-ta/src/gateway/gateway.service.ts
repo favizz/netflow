@@ -72,10 +72,15 @@ export class GatewayService {
     if (!unit.device_id)
       throw new BadRequestException('No device assigned to this unit');
     await this.unitService.checkDeviceOnline(unit.device_id);
-    await this.unitService.setRelayStatus(unit.id, on, actorEmail);
     this.publishRetained(
       `device/${unit.device_id}/command`,
       encodeCommand('relay', on ? 1 : 0),
+    );
+    await this.unitService.logActuationRequest(
+      unit.id,
+      'relay',
+      on,
+      actorEmail,
     );
     return { relayStatus: on };
   }
@@ -85,10 +90,15 @@ export class GatewayService {
     if (!unit.device_id)
       throw new BadRequestException('No device assigned to this unit');
     await this.unitService.checkDeviceOnline(unit.device_id);
-    await this.unitService.setValveStatus(unit.id, open, actorEmail);
     this.publishRetained(
       `device/${unit.device_id}/command`,
       encodeCommand('valve', open ? 1 : 0),
+    );
+    await this.unitService.logActuationRequest(
+      unit.id,
+      'valve',
+      open,
+      actorEmail,
     );
     return { valveStatus: open };
   }
