@@ -204,6 +204,53 @@ describe('PaymentsService', () => {
       const payload = makeWebhookPayload({ order_id: 'NONEXISTENT' });
       await expect(service.handleWebhook(payload)).rejects.toThrow(NotFoundException);
     });
+
+    it('achieves 100% success rate for N simulated off-hours settlement transactions', async () => {
+      const N = 20;
+      const transactions = new Map<string, Partial<Transaction>>();
+
+      txRepo.findOne.mockImplementation(async ({ where }) => {
+        if (where?.webhook_event_id) return null;
+        if (where?.id) return transactions.get(where.id) ?? null;
+        return null;
+      });
+
+      let successCount = 0;
+      const offHoursCreatedAt = new Date('2026-06-06T14:30:00.000Z'); // 21:30 WIB
+
+      for (let i = 1; i <= N; i += 1) {
+        const orderId = `TRX-B200-${String(i).padStart(3, '0')}`;
+        const tx: Partial<Transaction> = {
+          id: orderId,
+          unit_no: 'A-101',
+          electricity_amount_rp: 15_000,
+          water_amount_rp: 15_000,
+          method: 'qris',
+          status: 'pending',
+          webhook_event_id: null as any,
+          confirmed_at: null as any,
+          created_at: offHoursCreatedAt,
+        };
+        transactions.set(orderId, tx);
+
+        const result = await service.handleWebhook(
+          makeWebhookPayload({
+            order_id: orderId,
+            transaction_id: `mdt-b200-${String(i).padStart(3, '0')}`,
+            gross_amount: '30000.00',
+            transaction_status: 'settlement',
+          }),
+        );
+
+        if (result.status === 'success') successCount += 1;
+        expect(tx.status).toBe('success');
+        expect(tx.confirmed_at).toBeInstanceOf(Date);
+      }
+
+      const successRate = (successCount / N) * 100;
+      expect(successRate).toBe(100);
+      expect(eventEmitter.emit).toHaveBeenCalledTimes(N);
+    });
   });
 
   // ── autoConfirm ──────────────────────────────────────────────────────────────

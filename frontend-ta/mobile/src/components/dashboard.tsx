@@ -139,6 +139,29 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
     return () => { active = false }
   }, [unitId])
 
+  useEffect(() => {
+    let active = true
+    const interval = window.setInterval(() => {
+      void api.getDashboard(unitId)
+        .then((d) => {
+          if (!active) return
+          setKwh(d.summary.tokenElectricity)
+          setWater(d.summary.tokenWater)
+          setRelayOn(!!d.summary.relayStatus)
+          setValveOpen(!!d.summary.valveStatus)
+          setIsDeviceOnline(d.summary.connectivity?.online ?? false)
+        })
+        .catch(() => {
+          // Keep the last known balance visible if the poll fails briefly.
+        })
+    }, 10000)
+
+    return () => {
+      active = false
+      window.clearInterval(interval)
+    }
+  }, [unitId])
+
   // Reset periodKey when period changes
   useEffect(() => {
     setPeriodKey(getDefaultPeriodKey(period));
@@ -296,6 +319,8 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
         // Sync actuator state from live telemetry
         if (p.rs !== undefined) setRelayOn(p.rs === 1);
         if (p.vs !== undefined) setValveOpen(p.vs === 1);
+        if (Number.isFinite(Number(p.te))) setKwh(Number(p.te));
+        if (Number.isFinite(Number(p.tw))) setWater(Number(p.tw));
 
         const now = new Date()
         const watts    = Number(p.p ?? p.active_power_w ?? 0)
