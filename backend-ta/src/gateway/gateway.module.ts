@@ -17,9 +17,6 @@ import { PaymentCompletedListener } from './listeners/payment-completed.listener
     SharedMqttClientModule,
   ],
   controllers: [GatewayController],
-  providers: [
-    GatewayService,
-    PaymentCompletedListener,
-  ],
+  providers: [GatewayService, PaymentCompletedListener],
 })
 export class GatewayModule {}

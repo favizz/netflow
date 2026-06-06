@@ -19,20 +19,34 @@ export class PaymentCompletedListener {
       const elecTariff = await this.tariffService.findCurrent('electricity');
       const waterTariff = await this.tariffService.findCurrent('water');
 
-      const elecRate = elecTariff?.price_per_unit || 1500;
-      const waterRate = waterTariff?.price_per_unit || 5500;
+      const elecRate = elecTariff ? Number(elecTariff.price_per_unit) : 1500;
+      const waterRate = waterTariff ? Number(waterTariff.price_per_unit) : 5500;
 
-      const addedKwh = event.electricityAmountRp / elecRate;
-      const addedM3 = event.waterAmountRp / waterRate;
+      const addedKwh = Number(event.electricityAmountRp) / elecRate;
+      const addedM3 = Number(event.waterAmountRp) / waterRate;
 
-      await this.unitService.addTokens(event.unitNo, addedKwh, addedM3);
-      
+      if (addedKwh > 0) {
+        await this.unitService.creditTokensByUnitNo(
+          event.unitNo,
+          addedKwh,
+          'electricity',
+        );
+      }
+      if (addedM3 > 0) {
+        await this.unitService.creditTokensByUnitNo(
+          event.unitNo,
+          addedM3,
+          'water',
+        );
+      }
+
       this.logger.log(
         `Credited ${addedKwh.toFixed(3)} kWh and ${addedM3.toFixed(3)} m3 to unit ${event.unitNo} (txn: ${event.transactionId})`,
       );
     } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
       this.logger.error(
-        `Failed to credit tokens for unit ${event.unitNo} (txn: ${event.transactionId}): ${(err as Error).message}`,
+        `Failed to credit tokens for unit ${event.unitNo} (txn: ${event.transactionId}): ${msg}`,
       );
     }
   }
