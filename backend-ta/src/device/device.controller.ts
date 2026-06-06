@@ -10,6 +10,7 @@ import { Queue } from 'bullmq';
 import { DeviceService } from './device.service';
 import { TELEMETRY_QUEUE } from './telemetry.processor';
 import { AuditLogService } from '../admin/audit-log/audit-log.service';
+import { TopupDeliveryService } from '../payments/topup-delivery.service';
 
 /**
  * MQTT ingestion controller.
@@ -29,6 +30,7 @@ export class DeviceController {
     @InjectQueue(TELEMETRY_QUEUE) private readonly telemetryQueue: Queue,
     private readonly deviceService: DeviceService,
     private readonly auditLogService: AuditLogService,
+    private readonly topupDeliveryService: TopupDeliveryService,
   ) {}
 
   @MessagePattern('device/+/ota_ack')
@@ -137,6 +139,10 @@ export class DeviceController {
 
     const result = ack.status === 'ok' ? 'success' : 'failure';
     this.logger.log(`TOPUP ACK [${deviceId}] → ${JSON.stringify(ack)}`);
+    void this.topupDeliveryService.markLatestAckForDevice(
+      deviceId,
+      ack as Record<string, unknown>,
+    );
     void this.auditLogService.log(
       `device:${deviceId}`,
       'TOPUP_ACK',
@@ -169,11 +175,11 @@ export class DeviceController {
     ) {
       buf = Buffer.from(d.data as number[]);
     } else if (typeof data === 'object' && data !== null) {
-      // Catch the case where NestJS passes a raw Buffer as { "0": 0, ... }.
+      // Catch the case where NestJS passes a raw 25-byte Buffer as { "0": 0, ... }.
       // Do not convert arbitrary numeric JSON such as { temperature, humidity }.
       const keys = Object.keys(d);
       const isIndexedBuffer =
-        (keys.length === 21 || keys.length === 25) &&
+        keys.length === 25 &&
         keys.every((key, index) => key === String(index));
       if (isIndexedBuffer) {
         const values = keys.map((key) => d[key]);

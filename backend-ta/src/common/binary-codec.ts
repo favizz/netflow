@@ -63,11 +63,9 @@ export interface TelemetryPayload {
 }
 
 export function decodeTelemetry(buf: Buffer): TelemetryPayload {
-  if (buf.length < 21) {
-    throw new RangeError(`Telemetry frame too short: ${buf.length} bytes`);
+  if (buf.length !== 25) {
+    throw new RangeError(`Telemetry frame must be 25 bytes: ${buf.length} bytes`);
   }
-
-  const flagsOffset = buf.length >= 25 ? 24 : 20;
 
   return {
     et: buf.readUInt32BE(0) / 100,
@@ -76,10 +74,10 @@ export function decodeTelemetry(buf: Buffer): TelemetryPayload {
     c: buf.readUInt16BE(8) / 1000,
     wf: buf.readUInt16BE(10) / 100,
     wt: buf.readUInt32BE(12) / 1000,
-    te: buf.length >= 25 ? buf.readUInt32BE(16) / 1000 : 0,
-    tw: buf.length >= 25 ? buf.readUInt32BE(20) / 1000 : 0,
-    rs: buf[flagsOffset] & 1,
-    vs: (buf[flagsOffset] >> 1) & 1,
+    te: buf.readUInt32BE(16) / 1000,
+    tw: buf.readUInt32BE(20) / 1000,
+    rs: buf[24] & 1,
+    vs: (buf[24] >> 1) & 1,
   };
 }
 

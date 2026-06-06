@@ -40,6 +40,7 @@ type LivePoint = {
 }
 
 type LiveMetric = "power" | "voltage" | "current"
+type PendingActuation = { target: ControlTarget; next: boolean } | null
 
 const LIVE_METRICS: { id: LiveMetric; label: string }[] = [
   { id: "power",   label: "Daya"     },
@@ -102,6 +103,7 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
   const [confirmTarget, setConfirmTarget]   = useState<ControlTarget | null>(null)
   const [confirmNextVal, setConfirmNextVal] = useState(false)
   const [controlPending, setControlPending] = useState(false)
+  const [pendingActuation, setPendingActuation] = useState<PendingActuation>(null)
 
   // ── Konsumsi section ─────────────────────────────────────────────────────
   const [period, setPeriod]             = useState<TimePeriod>("daily")
@@ -118,6 +120,7 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
   const [liveData, setLiveData]           = useState<LivePoint[]>([])
   const [mqttConnected, setMqttConnected] = useState(false)
   const mqttRef = useRef<ReturnType<typeof mqtt.connect> | null>(null)
+  const mqttErrorToastShownRef = useRef(false)
 
   // ── Load summary ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -138,6 +141,31 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
     void load()
     return () => { active = false }
   }, [unitId])
+
+  useEffect(() => {
+    if (!pendingActuation) return
+    const current = pendingActuation.target === "relay" ? relayOn : valveOpen
+    if (current === pendingActuation.next) {
+      toast.success(
+        pendingActuation.target === "relay"
+          ? pendingActuation.next ? "Aliran listrik dikonfirmasi aktif" : "Aliran listrik dikonfirmasi mati"
+          : pendingActuation.next ? "Aliran air dikonfirmasi aktif" : "Aliran air dikonfirmasi mati"
+      )
+      setPendingActuation(null)
+    }
+  }, [pendingActuation, relayOn, valveOpen])
+
+  useEffect(() => {
+    if (!pendingActuation) return
+    const timeoutId = window.setTimeout(() => {
+      setPendingActuation((current) => {
+        if (!current) return current
+        toast.error("Perintah sudah dikirim, tetapi perangkat belum mengonfirmasi.")
+        return null
+      })
+    }, 15000)
+    return () => window.clearTimeout(timeoutId)
+  }, [pendingActuation])
 
   useEffect(() => {
     let active = true
@@ -268,6 +296,7 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
 
     client.on("connect", () => {
       setMqttConnected(true)
+      mqttErrorToastShownRef.current = false
       client.subscribe(topic, (err) => {
         if (err) toast.error("Gagal berlangganan data live")
       })
@@ -277,6 +306,8 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
 
     client.on("error", (err) => {
       setMqttConnected(false)
+      if (mqttErrorToastShownRef.current) return
+      mqttErrorToastShownRef.current = true
       const raw = err?.message ?? String(err)
       if (raw.includes("Bad username") || raw.includes("Not authorized") || raw.includes("Connection refused")) {
         toast.error("Data live tidak tersedia. Hubungi pengelola gedung.")
@@ -292,9 +323,8 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
         const uint8 = new Uint8Array(msg)
 
         // 1. Try custom binary telemetry frame
-        if (uint8.length === 21 || uint8.length === 25) {
+        if (uint8.length === 25) {
           const view = new DataView(uint8.buffer, uint8.byteOffset, uint8.byteLength)
-          const flagsOffset = uint8.length >= 25 ? 24 : 20
           p = {
             et: view.getUint32(0, false) / 100,
             p:  view.getUint16(4, false) / 10,
@@ -302,10 +332,10 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
             c:  view.getUint16(8, false) / 1000,
             wf: view.getUint16(10, false) / 100,
             wt: view.getUint32(12, false) / 1000,
-            te: uint8.length >= 25 ? view.getUint32(16, false) / 1000 : undefined,
-            tw: uint8.length >= 25 ? view.getUint32(20, false) / 1000 : undefined,
-            rs: uint8[flagsOffset] & 1,
-            vs: (uint8[flagsOffset] >> 1) & 1,
+            te: view.getUint32(16, false) / 1000,
+            tw: view.getUint32(20, false) / 1000,
+            rs: uint8[24] & 1,
+            vs: (uint8[24] >> 1) & 1,
           }
         }
 
@@ -319,8 +349,6 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
         // Sync actuator state from live telemetry
         if (p.rs !== undefined) setRelayOn(p.rs === 1);
         if (p.vs !== undefined) setValveOpen(p.vs === 1);
-        if (Number.isFinite(Number(p.te))) setKwh(Number(p.te));
-        if (Number.isFinite(Number(p.tw))) setWater(Number(p.tw));
 
         const now = new Date()
         const watts    = Number(p.p ?? p.active_power_w ?? 0)
@@ -329,13 +357,14 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
         const flowRate = Number(p.wf ?? p.flow_rate_lpm ?? 0)
         const et       = Number(p.et ?? p.total_energy_kwh ?? 0)
         const wt       = Number(p.wt ?? p.total_volume_m3 ?? 0)
+        const sampleMinutes = 5 / 60
 
         setLiveData((prev) => {
           const last = prev[prev.length - 1]
           const point: LivePoint = {
             date:     now.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
             kwh:      et > 0 ? et : (last?.kwh ?? 0) + watts / 1_000 / 720,
-            water:    wt > 0 ? wt : (last?.water ?? 0) + flowRate / 1_000,
+            water:    wt > 0 ? wt : (last?.water ?? 0) + (flowRate * sampleMinutes) / 1_000,
             watts,
             voltage:  Number(voltage.toFixed(1)),
             current:  Number(current.toFixed(3)),
@@ -402,15 +431,13 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
     setControlPending(true)
     try {
       if (confirmTarget === "relay") {
-        const res = await api.setRelay(unitId, confirmNextVal)
-        const on = !!res.relayStatus
-        setRelayOn(on)
-        toast.success(on ? "Aliran listrik dinyalakan" : "Aliran listrik dimatikan")
+        await api.setRelay(unitId, confirmNextVal)
+        setPendingActuation({ target: "relay", next: confirmNextVal })
+        toast.success("Perintah listrik dikirim. Menunggu konfirmasi perangkat.")
       } else {
-        const res = await api.setValve(unitId, confirmNextVal)
-        const open = !!res.valveStatus
-        setValveOpen(open)
-        toast.success(open ? "Aliran air dibuka" : "Aliran air ditutup")
+        await api.setValve(unitId, confirmNextVal)
+        setPendingActuation({ target: "valve", next: confirmNextVal })
+        toast.success("Perintah air dikirim. Menunggu konfirmasi perangkat.")
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Gagal mengubah status perangkat")
@@ -440,26 +467,26 @@ export default function Dashboard({ unitId, availableUnits, onSelectUnit }: Dash
         <StatCard
           icon={<Zap size={18} />}
           label="Listrik"
-          value={kwh.toFixed(1)}
+          value={kwh.toFixed(2)}
           unit="KWh"
           rate={avgDailyKwh !== null ? `~${avgDailyKwh.toFixed(1)} kWh/hari` : undefined}
           percentage={kwhPercentage}
           status={kwhStatus}
           controlOn={relayOn}
-          controlPending={controlPending && confirmTarget === "relay"}
+          controlPending={(controlPending && confirmTarget === "relay") || pendingActuation?.target === "relay"}
           deviceOnline={isDeviceOnline}
           onControlToggle={(next) => requestToggle("relay", next)}
         />
         <StatCard
           icon={<Droplets size={18} />}
           label="Air Bersih"
-          value={water.toFixed(1)}
+          value={water.toFixed(3)}
           unit="m³"
           rate={avgDailyWater !== null ? `~${avgDailyWater.toFixed(2)} m³/hari` : undefined}
           percentage={waterPercentage}
           status={waterStatus}
           controlOn={valveOpen}
-          controlPending={controlPending && confirmTarget === "valve"}
+          controlPending={(controlPending && confirmTarget === "valve") || pendingActuation?.target === "valve"}
           deviceOnline={isDeviceOnline}
           onControlToggle={(next) => requestToggle("valve", next)}
         />
@@ -695,6 +722,9 @@ function StatCard({ icon, label, value, unit, rate, percentage, status, controlO
         <p className="text-2xl font-bold text-foreground tracking-tight leading-none">{value}</p>
         <p className="text-xs text-muted-foreground mt-0.5">{unit} · {label}</p>
       </div>
+      {controlPending && (
+        <p className="text-[10px] font-semibold text-amber-600">Menunggu konfirmasi perangkat</p>
+      )}
       <div className="space-y-1.5">
         <span className={`inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full border ${bgColor} ${textColor} ${borderColor}`}>
           {statusLabel}

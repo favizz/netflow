@@ -15,9 +15,8 @@ function encodeCommand(type: 'relay' | 'valve', value: 0 | 1): Uint8Array {
 }
 
 function decodeTelemetry(buf: Uint8Array): IoTPayload | null {
-    if (buf.length !== 21 && buf.length !== 25) return null;
+    if (buf.length !== 25) return null;
     const view = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
-    const flagsOffset = buf.length >= 25 ? 24 : 20;
     return {
         et: view.getUint32(0, false)  / 100,
         p:  view.getUint16(4, false)  / 10,
@@ -25,10 +24,10 @@ function decodeTelemetry(buf: Uint8Array): IoTPayload | null {
         c:  view.getUint16(8, false)  / 1000,
         wf: view.getUint16(10, false) / 100,
         wt: view.getUint32(12, false) / 1000,
-        te: buf.length >= 25 ? view.getUint32(16, false) / 1000 : undefined,
-        tw: buf.length >= 25 ? view.getUint32(20, false) / 1000 : undefined,
-        rs: buf[flagsOffset] & 1,
-        vs: (buf[flagsOffset] >> 1) & 1,
+        te: view.getUint32(16, false) / 1000,
+        tw: view.getUint32(20, false) / 1000,
+        rs: buf[24] & 1,
+        vs: (buf[24] >> 1) & 1,
     };
 }
 
@@ -117,6 +116,7 @@ function periodKeyLabel(key: string, period: TimePeriod): string {
 }
 
 type ConfirmAction = { type: 'power'; next: boolean } | { type: 'water'; next: boolean } | { type: 'delete' } | null;
+type PendingActuation = { type: 'power' | 'water'; next: boolean } | null;
 
 function PeriodDropdown({ value, onChange }: { value: TimePeriod; onChange: (v: TimePeriod) => void }) {
     const [open, setOpen] = useState(false);
@@ -201,11 +201,13 @@ export default function UnitDetailPage() {
     // Confirmation modal state
     const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
     const [actionPending, setActionPending] = useState(false);
+    const [pendingActuation, setPendingActuation] = useState<PendingActuation>(null);
 
     const [livePowerMetric, setLivePowerMetric] = useState<LiveMetric>("power");
 
     const [isConnected, setIsConnected] = useState(false);
     const [mqttClient, setMqttClient] = useState<mqtt.MqttClient | null>(null);
+    const mqttErrorToastShownRef = useRef(false);
     const [realTimePower, setRealTimePower] = useState<{ time: string; watts: number; voltage: number; current: number; timestamp: string }[]>([]);
     const [realTimeWater, setRealTimeWater] = useState<{ time: string; value: number; timestamp: string }[]>([]);
     const [liveLogs, setLiveLogs] = useState<LogEntry[]>([]);
@@ -219,6 +221,31 @@ export default function UnitDetailPage() {
 
     const [energyStats, setEnergyStats] = useState({ total_kwh: 0, active_power_w: 0, voltage_v: 0, current_a: 0 });
     const [waterStats, setWaterStats] = useState({ total_m3: 0, flow_rate_lpm: 0 });
+
+    useEffect(() => {
+        if (!pendingActuation) return;
+        const current = pendingActuation.type === 'power' ? powerState : waterState;
+        if (current === pendingActuation.next) {
+            toast.success(
+                pendingActuation.type === 'power'
+                    ? `Power supply ${pendingActuation.next ? 'enabled' : 'disabled'} by device.`
+                    : `Water valve ${pendingActuation.next ? 'opened' : 'closed'} by device.`
+            );
+            setPendingActuation(null);
+        }
+    }, [pendingActuation, powerState, waterState, toast]);
+
+    useEffect(() => {
+        if (!pendingActuation) return;
+        const timeoutId = window.setTimeout(() => {
+            setPendingActuation(current => {
+                if (!current) return current;
+                toast.error('Perintah sudah dikirim, tetapi perangkat belum mengonfirmasi.');
+                return null;
+            });
+        }, 15000);
+        return () => window.clearTimeout(timeoutId);
+    }, [pendingActuation, toast]);
 
     useEffect(() => {
         if (!id) return;
@@ -256,6 +283,33 @@ export default function UnitDetailPage() {
             .catch(() => {})
             .finally(() => setLoadingInfo(false));
 
+    }, [id]);
+
+    useEffect(() => {
+        if (!id) return;
+
+        const refreshUnitBalance = () => {
+            fetchApi(`/unit/${id}`)
+                .then(data => {
+                    setUnitInfo((prev: UnitInfoState | null) => {
+                        if (!prev) return prev;
+                        return {
+                            ...prev,
+                            unit: data.unit_no,
+                            tenant: data.resident_email || "Unassigned",
+                            meterSerial: data.device_id,
+                            token_electricity: Number(data.token_electricity || 0),
+                            token_water: Number(data.token_water || 0),
+                        };
+                    });
+                    setPowerState(!!data.relay_status);
+                    setWaterState(!!data.valve_status);
+                })
+                .catch(() => {});
+        };
+
+        const intervalId = setInterval(refreshUnitBalance, 10000);
+        return () => clearInterval(intervalId);
     }, [id]);
 
     // Reset periodKey when period changes
@@ -365,6 +419,7 @@ export default function UnitDetailPage() {
 
         client.on('connect', () => {
             setIsConnected(true);
+            mqttErrorToastShownRef.current = false;
             client.subscribe([telemetryTopic]);
         });
 
@@ -407,12 +462,12 @@ export default function UnitDetailPage() {
                     setWaterStats(prev => ({ total_m3: parsed.wt ?? prev.total_m3, flow_rate_lpm: parsed.wf ?? 0 }));
                     if (parsed.vs !== undefined) setWaterState(parsed.vs === 1);
 
-                    const rawLabel = 'Binary 21B';
+                    const rawLabel = 'Binary 25B';
                     setLiveLogs(prev => [{
                         timestamp: now.toISOString(),
                         value: parsed?.p ?? 0,
                         unit: 'W',
-                        rawPayload: `[${rawLabel}] et:${parsed?.et} p:${parsed?.p} v:${parsed?.v} c:${parsed?.c} wf:${parsed?.wf} wt:${parsed?.wt} rs:${parsed?.rs} vs:${parsed?.vs}`,
+                        rawPayload: `[${rawLabel}] et:${parsed?.et} p:${parsed?.p} v:${parsed?.v} c:${parsed?.c} wf:${parsed?.wf} wt:${parsed?.wt} te:${parsed?.te} tw:${parsed?.tw} rs:${parsed?.rs} vs:${parsed?.vs}`,
                         details: parsed!,
                     }, ...prev.slice(0, 49)]);
                 }
@@ -422,6 +477,8 @@ export default function UnitDetailPage() {
         client.on('error', (err) => {
             setIsConnected(false);
             setUnitInfo((prev: UnitInfoState | null) => (prev ? { ...prev, status: "Offline" } : null));
+            if (mqttErrorToastShownRef.current) return;
+            mqttErrorToastShownRef.current = true;
             const raw = err?.message ?? String(err);
             if (raw.includes("Bad username") || raw.includes("Not authorized") || raw.includes("Connection refused")) {
                 toast.error("MQTT authentication failed. Check broker credentials in environment config.");
@@ -450,39 +507,35 @@ export default function UnitDetailPage() {
             }
             if (confirmAction.type === 'power') {
                 const newState = confirmAction.next;
-                setPowerState(newState);
-                // Update DB state
-                if (id) await fetchApi(`/unit/${id}/relay`, { method: 'PATCH', body: JSON.stringify({ relayStatus: newState }) });
-                // Send MQTT command via backend (retained publish, works regardless of browser MQTT state)
+                if (!unitInfo?.meterSerial) throw new Error('No device assigned to this unit');
                 if (unitInfo?.meterSerial) {
                     await fetchApi(`/admin/command/${unitInfo.meterSerial}`, {
                         method: 'POST',
                         body: JSON.stringify({ type: 'relay', value: newState ? 1 : 0 }),
                     });
+                    setPendingActuation({ type: 'power', next: newState });
                     setLiveLogs(prev => [{
                         timestamp: new Date().toISOString(), value: newState ? 1 : 0, unit: 'CMD',
                         rawPayload: `OUTGOING [Backend] device/${unitInfo.meterSerial}/command: relay=${newState ? 1 : 0}`,
                     }, ...prev.slice(0, 49)]);
                 }
-                toast.success(`Power supply ${newState ? 'enabled' : 'disabled'}.`);
+                toast.success('Perintah power dikirim. Menunggu konfirmasi perangkat.');
             }
             if (confirmAction.type === 'water') {
                 const newState = confirmAction.next;
-                setWaterState(newState);
-                // Update DB state
-                if (id) await fetchApi(`/unit/${id}/valve`, { method: 'PATCH', body: JSON.stringify({ valveStatus: newState }) });
-                // Send MQTT command via backend (retained publish, works regardless of browser MQTT state)
+                if (!unitInfo?.meterSerial) throw new Error('No device assigned to this unit');
                 if (unitInfo?.meterSerial) {
                     await fetchApi(`/admin/command/${unitInfo.meterSerial}`, {
                         method: 'POST',
                         body: JSON.stringify({ type: 'valve', value: newState ? 1 : 0 }),
                     });
+                    setPendingActuation({ type: 'water', next: newState });
                     setLiveLogs(prev => [{
                         timestamp: new Date().toISOString(), value: newState ? 1 : 0, unit: 'CMD',
                         rawPayload: `OUTGOING [Backend] device/${unitInfo.meterSerial}/command: valve=${newState ? 1 : 0}`,
                     }, ...prev.slice(0, 49)]);
                 }
-                toast.success(`Water valve ${newState ? 'opened' : 'closed'}.`);
+                toast.success('Perintah valve dikirim. Menunggu konfirmasi perangkat.');
             }
         } catch (err) {
             toast.error(err instanceof Error ? err.message : 'Action failed');
@@ -529,11 +582,11 @@ export default function UnitDetailPage() {
                                 ? `This will permanently delete unit ${unitInfo.unit}. This action cannot be undone.`
                                 : confirmAction.type === 'power'
                                 ? confirmAction.next
-                                    ? 'Main grid will be reconnected. Ensure the unit is ready.'
-                                    : 'Power to this unit will be cut. All electrical appliances will turn off.'
+                                    ? 'Command will be sent to enable power. The status changes after the device confirms.'
+                                    : 'Command will be sent to disable power. The status changes after the device confirms.'
                                 : confirmAction.next
-                                    ? 'Water valve will be opened. Water supply will resume.'
-                                    : 'Water supply to this unit will be stopped.'
+                                    ? 'Command will be sent to open the water valve. The status changes after the device confirms.'
+                                    : 'Command will be sent to close the water valve. The status changes after the device confirms.'
                             }
                         </p>
                         <div className="flex gap-3 justify-end">
@@ -627,12 +680,18 @@ export default function UnitDetailPage() {
                             <div className="flex items-center justify-between py-2">
                                 <div className="flex items-center gap-2">
                                     <Power className={cn("w-4 h-4", powerState ? "text-primary" : "text-gray-400 dark:text-gray-500")} />
-                                    <span className="text-sm font-medium text-gray-800 dark:text-gray-200">Power Supply</span>
+                                    <div>
+                                        <span className="text-sm font-medium text-gray-800 dark:text-gray-200">Power Supply</span>
+                                        {pendingActuation?.type === 'power' && (
+                                            <p className="text-xs text-amber-600 dark:text-amber-400">Menunggu konfirmasi perangkat</p>
+                                        )}
+                                    </div>
                                 </div>
-                                <label className="relative inline-flex items-center cursor-pointer">
+                                <label className={cn("relative inline-flex items-center", pendingActuation?.type === 'power' ? "cursor-not-allowed opacity-60" : "cursor-pointer")}>
                                     <input
                                         type="checkbox"
                                         checked={powerState}
+                                        disabled={pendingActuation?.type === 'power'}
                                         onChange={(e) => setConfirmAction({ type: 'power', next: e.target.checked })}
                                         className="sr-only peer"
                                     />
@@ -642,12 +701,18 @@ export default function UnitDetailPage() {
                             <div className="flex items-center justify-between py-2">
                                 <div className="flex items-center gap-2">
                                     <Droplets className={cn("w-4 h-4", waterState ? "text-cyan-500" : "text-gray-400 dark:text-gray-500")} />
-                                    <span className="text-sm font-medium text-gray-800 dark:text-gray-200">Water Supply</span>
+                                    <div>
+                                        <span className="text-sm font-medium text-gray-800 dark:text-gray-200">Water Supply</span>
+                                        {pendingActuation?.type === 'water' && (
+                                            <p className="text-xs text-amber-600 dark:text-amber-400">Menunggu konfirmasi perangkat</p>
+                                        )}
+                                    </div>
                                 </div>
-                                <label className="relative inline-flex items-center cursor-pointer">
+                                <label className={cn("relative inline-flex items-center", pendingActuation?.type === 'water' ? "cursor-not-allowed opacity-60" : "cursor-pointer")}>
                                     <input
                                         type="checkbox"
                                         checked={waterState}
+                                        disabled={pendingActuation?.type === 'water'}
                                         onChange={(e) => setConfirmAction({ type: 'water', next: e.target.checked })}
                                         className="sr-only peer"
                                     />
@@ -728,7 +793,7 @@ export default function UnitDetailPage() {
                                     </p>
                                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                                         Sisa: <span className={cn("font-semibold", (unitInfo.token_water || 0) < 1 ? "text-red-500 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400")}>
-                                            {(unitInfo.token_water || 0).toFixed(2)} m³
+                                            {(unitInfo.token_water || 0).toFixed(3)} m³
                                         </span>
                                     </p>
                                 </div>

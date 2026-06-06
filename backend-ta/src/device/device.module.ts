@@ -11,6 +11,7 @@ import { Unit } from '../admin/unit/entities/unit.entity';
 import { AnomalyModule } from '../anomaly/anomaly.module';
 import { AuditLogModule } from '../admin/audit-log/audit-log.module';
 import { SharedMqttClientModule } from '../common/shared-mqtt-client.module';
+import { PaymentsModule } from '../payments/payments.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { SharedMqttClientModule } from '../common/shared-mqtt-client.module';
     ConfigModule,
     AnomalyModule,
     AuditLogModule,
+    PaymentsModule,
     BullModule.registerQueue({ name: TELEMETRY_QUEUE }),
     SharedMqttClientModule,
   ],

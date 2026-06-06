@@ -26,18 +26,23 @@ export class DeviceService {
     if (!deviceId) return;
 
     let data: Record<string, any>;
+    let hasTokenFields = false;
     if (Buffer.isBuffer(payload) || payload instanceof Uint8Array) {
       const buf = Buffer.isBuffer(payload) ? payload : Buffer.from(payload);
-      if (buf.length !== 21 && buf.length !== 25) return;
+      if (buf.length !== 25) return;
+      hasTokenFields = true;
       data = decodeTelemetry(buf) as Record<string, any>;
     } else if (typeof payload === 'object' && payload !== null) {
       data = payload as Record<string, any>;
+      hasTokenFields = data.te !== undefined || data.tw !== undefined;
     } else {
       return;
     }
 
     const incomingEnergyTotal = Number(data.et || 0);
     const incomingWaterTotal = Number(data.wt || 0);
+    const incomingElectricityToken = this.toNumber(data.te);
+    const incomingWaterToken = this.toNumber(data.tw);
     const voltage = this.toNumber(data.v);
     const current = this.toNumber(data.c);
     const power = this.toNumber(data.p);
@@ -73,37 +78,25 @@ export class DeviceService {
       }
 
       if (unit) {
-        let deltaEnergy = 0;
-        if (incomingEnergyTotal > Number(unit.last_energy_reading)) {
-          deltaEnergy = incomingEnergyTotal - Number(unit.last_energy_reading);
-        } else if (incomingEnergyTotal < Number(unit.last_energy_reading)) {
-          this.logger.warn(
-            `Sensor reset on device ${deviceId}: energy_total dropped from ${unit.last_energy_reading} to ${incomingEnergyTotal}. Updating baseline.`,
-          );
+        if (Number.isFinite(incomingEnergyTotal)) {
           unit.last_energy_reading = incomingEnergyTotal;
         }
-
-        let deltaWater = 0;
-        if (incomingWaterTotal > Number(unit.last_water_reading)) {
-          deltaWater = incomingWaterTotal - Number(unit.last_water_reading);
-        } else if (incomingWaterTotal < Number(unit.last_water_reading)) {
-          this.logger.warn(
-            `Sensor reset on device ${deviceId}: water_total dropped from ${unit.last_water_reading} to ${incomingWaterTotal}. Updating baseline.`,
-          );
+        if (Number.isFinite(incomingWaterTotal)) {
           unit.last_water_reading = incomingWaterTotal;
         }
 
-        if (deltaEnergy > 0) {
-          unit.token_electricity = Math.max(
-            0,
-            Number(unit.token_electricity) - deltaEnergy,
-          );
-          unit.last_energy_reading = incomingEnergyTotal;
+        if (hasTokenFields && incomingElectricityToken !== null) {
+          unit.token_electricity = Math.max(0, incomingElectricityToken);
+        }
+        if (hasTokenFields && incomingWaterToken !== null) {
+          unit.token_water = Math.max(0, incomingWaterToken);
         }
 
-        if (deltaWater > 0) {
-          unit.token_water = Math.max(0, Number(unit.token_water) - deltaWater);
-          unit.last_water_reading = incomingWaterTotal;
+        if (data.rs !== undefined) {
+          unit.relay_status = Number(data.rs) === 1;
+        }
+        if (data.vs !== undefined) {
+          unit.valve_status = Number(data.vs) === 1;
         }
 
         if (Number(unit.token_electricity) <= 0 && unit.relay_status) {

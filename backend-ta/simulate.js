@@ -6,6 +6,8 @@ const mqttSecret     = process.env.MQTT_DEVICE_SECRET   || '';
 const deviceId       = process.argv[2] || 'DEV-A-101';
 const intervalMs     = 5000;
 const statusTopic    = `device/${deviceId}/status`;
+const RP_PER_KWH     = Number(process.env.RP_PER_KWH || 1450);
+const RP_PER_M3      = Number(process.env.RP_PER_M3 || 5000);
 
 console.log(`Connecting to MQTT Broker at ${brokerUrl}...`);
 const client = mqtt.connect(brokerUrl, {
@@ -22,8 +24,9 @@ const client = mqtt.connect(brokerUrl, {
 
 let energyTotal = 1250;
 let waterTotal = 180;
-let electricTokenKwh = 50;
-let waterTokenM3 = 10;
+let electricTokenKwh = Number(process.env.SIM_INITIAL_ELECTRIC_TOKEN_KWH || 50);
+let waterTokenM3 = Number(process.env.SIM_INITIAL_WATER_TOKEN_M3 || 10);
+let lastTopupTs = 0;
 
 // Device Physical States
 let relayOn = true;
@@ -45,18 +48,26 @@ client.on('connect', () => {
     const topics = [
         `device/${deviceId}/command`,
         `device/${deviceId}/ota`,
-        `device/${deviceId}/config`
+        `device/${deviceId}/config`,
+        `device/${deviceId}/topup`
     ];
     client.subscribe(topics, { qos: 1 });
     console.log(`[Listening] Subscribed to: ${topics.join(', ')}`);
 
     setInterval(() => {
         // Drop power and flow to 0 when disconnected
-        const power = relayOn ? (650 + (Math.random() * 100 - 50)) : 0;
-        const flow = valveOpen ? (2.5 + (Math.random() * 1.0 - 0.5)) : 0;
+        const power = relayOn && electricTokenKwh > 0 ? (650 + (Math.random() * 100 - 50)) : 0;
+        const flow = valveOpen && waterTokenM3 > 0 ? (2.5 + (Math.random() * 1.0 - 0.5)) : 0;
+        const elapsedSeconds = intervalMs / 1000;
+        const energyDeltaKwh = power * elapsedSeconds / 3_600_000;
+        const waterDeltaM3 = flow * elapsedSeconds / 60_000;
         
-        energyTotal += (power / 3600); 
-        waterTotal += (flow / 60);
+        energyTotal += energyDeltaKwh; 
+        waterTotal += waterDeltaM3;
+        electricTokenKwh = Math.max(0, electricTokenKwh - energyDeltaKwh);
+        waterTokenM3 = Math.max(0, waterTokenM3 - waterDeltaM3);
+        if (electricTokenKwh <= 0) relayOn = false;
+        if (waterTokenM3 <= 0) valveOpen = false;
 
         const payload = {
             et: parseFloat(energyTotal.toFixed(4)),
@@ -67,8 +78,8 @@ client.on('connect', () => {
             wt: parseFloat(waterTotal.toFixed(4)),
             wf: parseFloat(flow.toFixed(2)),
             vs: valveOpen ? 1 : 0,
-            te: electricTokenKwh,
-            tw: waterTokenM3,
+            te: parseFloat(electricTokenKwh.toFixed(4)),
+            tw: parseFloat(waterTokenM3.toFixed(4)),
         };
 
         const topic = `device/${deviceId}/data`;
@@ -121,6 +132,34 @@ client.on('message', (topic, message) => {
             const ackPayload = JSON.stringify({ status: 'ok' });
             client.publish(ackTopic, ackPayload);
             console.log(`   [ACK] -> ${ackTopic}`);
+        }
+    }
+
+    if (topic === `device/${deviceId}/topup`) {
+        if (message.length === 12) {
+            const elecRp = message.readUInt32BE(0);
+            const waterRp = message.readUInt32BE(4);
+            const ts = message.readUInt32BE(8);
+
+            const duplicate = ts <= lastTopupTs && lastTopupTs !== 0;
+
+            if (!duplicate) {
+                electricTokenKwh += elecRp / RP_PER_KWH;
+                waterTokenM3 += waterRp / RP_PER_M3;
+                if (electricTokenKwh > 0) relayOn = true;
+                if (waterTokenM3 > 0) valveOpen = true;
+                lastTopupTs = ts;
+            }
+
+            const ackTopic = `device/${deviceId}/topup_ack`;
+            const ackPayload = JSON.stringify({
+                status: 'ok',
+                elec: elecRp,
+                water: waterRp,
+                duplicate,
+            });
+            client.publish(ackTopic, ackPayload);
+            console.log(`💳 [TOPUP] elec=Rp${elecRp}, water=Rp${waterRp}`);
         }
     }
 

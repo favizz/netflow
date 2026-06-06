@@ -254,6 +254,23 @@ export class UnitService {
     return saved;
   }
 
+  async logActuationRequest(
+    id: number,
+    type: 'relay' | 'valve',
+    value: boolean,
+    actorEmail?: string,
+  ) {
+    if (!actorEmail) return;
+    const unit = await this.findOne(id);
+    void this.auditLogService.log(
+      actorEmail,
+      'REMOTE_ACTUATION_REQUEST',
+      'unit',
+      id.toString(),
+      { type, value, unit_no: unit.unit_no },
+    );
+  }
+
   async getOwnerDashboard(unitNo: string) {
     const unit = await this.findByUnitNo(unitNo);
     const [energyTariff, waterTariff] = await Promise.all([
