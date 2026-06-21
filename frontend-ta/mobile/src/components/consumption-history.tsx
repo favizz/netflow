@@ -83,7 +83,10 @@ export default function ConsumptionHistory({ unitId }: ConsumptionHistoryProps) 
       try {
         const dash = await api.getDashboard(unitId)
         if (!active) return
-        setTariff({ kwh: dash.summary.energyTariff, water: DEFAULT_TARIFF.water })
+        setTariff({
+          kwh: dash.summary.energyTariff || DEFAULT_TARIFF.kwh,
+          water: dash.summary.waterTariff || DEFAULT_TARIFF.water,
+        })
       } catch {
         // keep default tariff on failure
       }

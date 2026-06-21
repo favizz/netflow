@@ -88,7 +88,7 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
   const [waterRaw, setWaterRaw] = useState("")
   const [selectedOption, setSelectedOption] = useState<PaymentOption | null>(null)
   const [energyTariff, setEnergyTariff] = useState<number>(DEFAULT_TARIFF.kwh)
-  const [waterTariff]  = useState<number>(DEFAULT_TARIFF.water)
+  const [waterTariff, setWaterTariff] = useState<number>(DEFAULT_TARIFF.water)
   const [balanceKwh, setBalanceKwh] = useState<number | null>(null)
   const [balanceWater, setBalanceWater] = useState<number | null>(null)
   const [loading, setLoading] = useState(false)
@@ -171,7 +171,8 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
         if (!active) return
         setBalanceKwh(data.summary.tokenElectricity)
         setBalanceWater(data.summary.tokenWater)
-        setEnergyTariff(data.summary.energyTariff)
+        setEnergyTariff(data.summary.energyTariff || DEFAULT_TARIFF.kwh)
+        setWaterTariff(data.summary.waterTariff || DEFAULT_TARIFF.water)
         setIsDeviceOnline(data.summary.connectivity?.online ?? false)
       } catch { /* balance stays null */ }
     }

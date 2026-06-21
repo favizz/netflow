@@ -392,11 +392,26 @@ export class UnitService {
       timestamp: string;
     }> = [];
 
-    if (Number(unit.token_electricity) <= LOW_TOKEN_THRESHOLD_KWH) {
+    const electricityToken = Number(unit.token_electricity);
+    const waterToken = Number(unit.token_water);
+
+    if (electricityToken > 0 && electricityToken < LOW_TOKEN_THRESHOLD_KWH) {
       notifications.push({
         type: 'warning',
         message:
           'Token listrik hampir habis. Lakukan top-up untuk menghindari cut-off.',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    if (
+      waterToken > 0 &&
+      waterToken < ANOMALY_DETECTION_CONFIG.lowWaterTokenM3
+    ) {
+      notifications.push({
+        type: 'warning',
+        message:
+          'Token air hampir habis. Lakukan top-up untuk menghindari cut-off.',
         timestamp: new Date().toISOString(),
       });
     }

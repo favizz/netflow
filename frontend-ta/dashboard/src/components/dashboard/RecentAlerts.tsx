@@ -13,7 +13,8 @@ const ICON_MAP: Record<string, React.ElementType> = {
     device_offline:     WifiOff,
     jailbreak:          ShieldAlert,
     sensor_malfunction: ShieldAlert,
-    low_balance:        AlertTriangle,
+    low_electricity_token: AlertTriangle,
+    low_water_token:       Droplets,
 };
 
 const COLOR_MAP: Record<string, { text: string; bg: string }> = {
