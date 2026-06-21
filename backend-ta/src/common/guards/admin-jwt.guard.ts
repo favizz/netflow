@@ -1,6 +1,7 @@
 import {
   CanActivate,
   ExecutionContext,
+  ForbiddenException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -29,12 +30,16 @@ export class AdminJwtGuard implements CanActivate {
         unknown
       >;
       if (payload?.role !== 'admin') {
-        throw new UnauthorizedException('Admin access required');
+        throw new ForbiddenException('Admin access required');
       }
       req.user = payload;
       return true;
     } catch (err) {
-      if (err instanceof UnauthorizedException) throw err;
+      if (
+        err instanceof ForbiddenException ||
+        err instanceof UnauthorizedException
+      )
+        throw err;
       throw new UnauthorizedException('Invalid or expired admin token');
     }
   }

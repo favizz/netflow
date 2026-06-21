@@ -71,9 +71,8 @@ export class TopupDeliveryPublisherService {
     if (this.publishingDevices.has(deviceId)) return;
     this.publishingDevices.add(deviceId);
     try {
-      const deliveries = await this.topupDeliveryService.findPendingForDevice(
-        deviceId,
-      );
+      const deliveries =
+        await this.topupDeliveryService.findPendingForDevice(deviceId);
       for (const delivery of deliveries) {
         this.logger.log(
           `Publishing pending top-up delivery ${delivery.transaction_id} after telemetry from ${deviceId}`,

@@ -343,8 +343,10 @@ export default function ControlCenterPage() {
             const batchId  = deviceBatchRef.current.get(batchKey);
             if (batchId) {
                 deviceBatchRef.current.delete(batchKey);
-                setLog(prev => [...prev.slice(-49), { id: makeId(), ts: ts(), level, text }]);
                 const tracker = batchTrackersRef.current.get(batchId);
+                if (tracker && tracker.total <= 50) {
+                    setLog(prev => [...prev.slice(-49), { id: makeId(), ts: ts(), level, text }]);
+                }
                 if (tracker) {
                     tracker.received++;
                     // 'ok' and 'noop' are both acceptable outcomes; only 'err' counts as failure
@@ -412,12 +414,20 @@ export default function ControlCenterPage() {
             const tracker = batchTrackersRef.current.get(batchId);
             if (!tracker) return;
             const remaining = devices.filter(d => deviceBatchRef.current.get(`${ackType}:${d}`) === batchId);
-            remaining.forEach(d => {
-                deviceBatchRef.current.delete(`${ackType}:${d}`);
-                tracker.received++;
-                tracker.failure++;
-                setLog(prev => [...prev.slice(-49), { id: makeId(), ts: ts(), level: 'err', text: `✗ ${deviceLabelFn(d)} — no response (timeout)` }]);
-            });
+            if (tracker.total <= 50) {
+                remaining.forEach(d => {
+                    deviceBatchRef.current.delete(`${ackType}:${d}`);
+                    tracker.received++;
+                    tracker.failure++;
+                    setLog(prev => [...prev.slice(-49), { id: makeId(), ts: ts(), level: 'err', text: `✗ ${deviceLabelFn(d)} — no response (timeout)` }]);
+                });
+            } else {
+                remaining.forEach(d => {
+                    deviceBatchRef.current.delete(`${ackType}:${d}`);
+                    tracker.received++;
+                    tracker.failure++;
+                });
+            }
             const allOk = tracker.failure === 0;
             setLog(prev => prev.map(e => e.id === summaryId
                 ? { ...e, level: allOk ? 'ok' : 'err', ts: ts(),
