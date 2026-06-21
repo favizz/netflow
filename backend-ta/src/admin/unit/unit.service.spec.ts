@@ -138,12 +138,28 @@ describe('UnitService', () => {
   // ── getUnitNotifications ──────────────────────────────────────────────────────
 
   describe('getUnitNotifications', () => {
-    it('returns warning when token_electricity is at or below threshold', async () => {
+    it('does not warn when token_electricity is exactly at threshold', async () => {
       unitRepo.findOne.mockResolvedValue(makeUnit({ token_electricity: 5 }));
       meterRepo.findOne.mockResolvedValue(null);
 
       const notes = await service.getUnitNotifications('A-101');
-      expect(notes.some((n) => n.type === 'warning')).toBe(true);
+      expect(notes.some((n) => n.type === 'warning')).toBe(false);
+    });
+
+    it('returns warning when token_electricity is below threshold', async () => {
+      unitRepo.findOne.mockResolvedValue(makeUnit({ token_electricity: 4.99 }));
+      meterRepo.findOne.mockResolvedValue(null);
+
+      const notes = await service.getUnitNotifications('A-101');
+      expect(notes.some((n) => n.message.includes('Token listrik'))).toBe(true);
+    });
+
+    it('returns warning when token_water is below threshold', async () => {
+      unitRepo.findOne.mockResolvedValue(makeUnit({ token_water: 0.99 }));
+      meterRepo.findOne.mockResolvedValue(null);
+
+      const notes = await service.getUnitNotifications('A-101');
+      expect(notes.some((n) => n.message.includes('Token air'))).toBe(true);
     });
 
     it('returns error when relay is off', async () => {
