@@ -71,7 +71,6 @@ interface IoTPayload {
 const MQTT_CONFIG = {
     brokerUrl: import.meta.env.VITE_MQTT_BROKER_URL as string,
     options: {
-        clientId: 'ta-dashboard-' + Math.random().toString(16).substring(2, 10),
         username: import.meta.env.VITE_MQTT_USERNAME || undefined,
         password: import.meta.env.VITE_MQTT_PASSWORD || undefined,
         reconnectPeriod: 5000,
@@ -177,6 +176,8 @@ export default function UnitDetailPage() {
     const navigate = useNavigate();
     const isDark = useIsDark();
     const toast = useToast();
+    const toastRef = useRef(toast);
+    useEffect(() => { toastRef.current = toast; }, [toast]);
 
     const gridColor = isDark ? '#374151' : '#E5E7EB';
     const tickColor = '#9CA3AF';
@@ -414,7 +415,8 @@ export default function UnitDetailPage() {
             return;
         }
 
-        const client = mqtt.connect(MQTT_CONFIG.brokerUrl, MQTT_CONFIG.options);
+        const clientId = 'ta-dashboard-' + Math.random().toString(16).substring(2, 10);
+        const client = mqtt.connect(MQTT_CONFIG.brokerUrl, { ...MQTT_CONFIG.options, clientId });
         const telemetryTopic = `device/${unitInfo.meterSerial}/data`;
 
         client.on('connect', () => {
@@ -481,19 +483,19 @@ export default function UnitDetailPage() {
             mqttErrorToastShownRef.current = true;
             const raw = err?.message ?? String(err);
             if (raw.includes("Bad username") || raw.includes("Not authorized") || raw.includes("Connection refused")) {
-                toast.error("MQTT authentication failed. Check broker credentials in environment config.");
+                toastRef.current.error("MQTT authentication failed. Check broker credentials in environment config.");
             } else {
-                toast.error("Live connection lost. Reconnecting...");
+                toastRef.current.error("Live connection lost. Reconnecting...");
             }
         });
 
         setMqttClient(client);
         return () => {
-            client.end();
+            client.end(true);
             setIsConnected(false);
             setMqttClient(null);
         };
-    }, [unitInfo?.meterSerial, period, toast]);
+    }, [unitInfo?.meterSerial, period]);
 
     const handleConfirm = async () => {
         if (!confirmAction) return;
