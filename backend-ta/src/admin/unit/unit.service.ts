@@ -37,6 +37,40 @@ export class UnitService {
     this.onlineThresholdMs = Math.max(30_000, ms);
   }
 
+  /**
+   * Live device presence, keyed by device_id, fed by the retained
+   * `device/{id}/status` MQTT topic: { online: true } on connect, 'offline'
+   * on a clean shutdown, and 'offline' via Last-Will on an ungraceful drop.
+   * This is the authoritative signal; telemetry recency is only a fallback
+   * for devices we have not yet heard a status message from.
+   */
+  private readonly presence = new Map<string, { online: boolean; at: number }>();
+
+  /** Called by DeviceController when a `device/+/status` message arrives. */
+  setPresence(deviceId: string, online: boolean): void {
+    if (!deviceId) return;
+    this.presence.set(deviceId, { online, at: Date.now() });
+  }
+
+  /**
+   * Resolve whether a device is online. Prefers the device's own presence
+   * signal; falls back to telemetry recency when no status has been received
+   * yet (e.g. before the device reconnects after a backend restart).
+   */
+  private resolveOnline(
+    deviceId: string | null | undefined,
+    lastTelemetry: Date | string | null | undefined,
+  ): boolean {
+    if (deviceId) {
+      const p = this.presence.get(deviceId);
+      if (p) return p.online;
+    }
+    if (!lastTelemetry) return false;
+    return (
+      Date.now() - new Date(lastTelemetry).getTime() <= this.onlineThresholdMs
+    );
+  }
+
   async create(createUnitDto: CreateUnitDto) {
     const existing = await this.unitRepo.findOne({
       where: { unit_no: createUnitDto.unit_no },
@@ -221,10 +255,7 @@ export class UnitService {
       where: { device_id: deviceId },
       order: { time: 'DESC' },
     });
-    if (!latest?.time) return false;
-    return (
-      Date.now() - new Date(latest.time).getTime() <= this.onlineThresholdMs
-    );
+    return this.resolveOnline(deviceId, latest?.time ?? null);
   }
 
   async setRelayStatus(id: number, relayStatus: boolean, actorEmail?: string) {
@@ -303,10 +334,7 @@ export class UnitService {
     const lastTelemetryAt = latest?.time
       ? new Date(latest.time).toISOString()
       : null;
-    const online = lastTelemetryAt
-      ? Date.now() - new Date(lastTelemetryAt).getTime() <=
-        this.onlineThresholdMs
-      : false;
+    const online = this.resolveOnline(unit.device_id, lastTelemetryAt);
 
     return {
       id: unit.id,
@@ -356,13 +384,10 @@ export class UnitService {
       }
     }
 
-    const now = Date.now();
     const rows = filtered.map((u) => {
       const lastTime = u.device_id ? latestMap.get(u.device_id) : undefined;
       const lastTelemetryAt = lastTime ? lastTime.toISOString() : null;
-      const online = lastTime
-        ? now - lastTime.getTime() <= this.onlineThresholdMs
-        : false;
+      const online = this.resolveOnline(u.device_id, lastTime ?? null);
 
       return {
         unitNo: u.unit_no,
@@ -432,9 +457,7 @@ export class UnitService {
         })
       : null;
 
-    const online = latest?.time
-      ? Date.now() - new Date(latest.time).getTime() <= this.onlineThresholdMs
-      : false;
+    const online = this.resolveOnline(unit.device_id, latest?.time ?? null);
 
     if (!online) {
       notifications.push({
