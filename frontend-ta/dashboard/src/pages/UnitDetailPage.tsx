@@ -309,7 +309,23 @@ export default function UnitDetailPage() {
                 .catch(() => {});
         };
 
-        const intervalId = setInterval(refreshUnitBalance, 10000);
+        // Keep the online/offline badge accurate over time. The backend now
+        // derives this from the device's MQTT presence signal, so re-polling
+        // self-heals a stale "Online" after the device goes offline.
+        const refreshStatus = () => {
+            fetchApi('/unit/connectivity')
+                .then(conn => {
+                    setUnitInfo((prev: UnitInfoState | null) => {
+                        if (!prev) return prev;
+                        const isOnline = Array.isArray(conn.units) && conn.units.some((u: { online: boolean; deviceId: string; }) => u.online && u.deviceId === prev.meterSerial);
+                        const status = isOnline ? "Online" : "Offline";
+                        return prev.status === status ? prev : { ...prev, status };
+                    });
+                })
+                .catch(() => {});
+        };
+
+        const intervalId = setInterval(() => { refreshUnitBalance(); refreshStatus(); }, 10000);
         return () => clearInterval(intervalId);
     }, [id]);
 

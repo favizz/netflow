@@ -11,6 +11,7 @@ import { DeviceService } from './device.service';
 import { TELEMETRY_QUEUE } from './telemetry.processor';
 import { AuditLogService } from '../admin/audit-log/audit-log.service';
 import { TopupDeliveryService } from '../payments/topup-delivery.service';
+import { UnitService } from '../admin/unit/unit.service';
 
 /**
  * MQTT ingestion controller.
@@ -31,7 +32,44 @@ export class DeviceController {
     private readonly deviceService: DeviceService,
     private readonly auditLogService: AuditLogService,
     private readonly topupDeliveryService: TopupDeliveryService,
+    private readonly unitService: UnitService,
   ) {}
+
+  /**
+   * Device presence via the retained `device/{id}/status` topic.
+   * Payload is `{ online: true }` on connect and the literal `offline` on a
+   * clean shutdown or via Last-Will when the device drops ungracefully.
+   * This is the authoritative online/offline signal for the dashboards.
+   */
+  @MessagePattern('device/+/status')
+  handleStatus(@Payload() data: unknown, @Ctx() ctx: MqttContext): void {
+    const topic = ctx.getTopic();
+    const deviceId = topic.split('/')[1] ?? 'unknown';
+
+    const raw = Buffer.isBuffer(data)
+      ? data.toString('utf8')
+      : typeof data === 'string'
+        ? data
+        : JSON.stringify(data ?? '');
+
+    let online = false;
+    const trimmed = raw.trim();
+    if (trimmed === 'offline') {
+      online = false;
+    } else if (trimmed === 'online') {
+      online = true;
+    } else {
+      try {
+        const parsed = JSON.parse(trimmed) as { online?: boolean };
+        online = parsed?.online === true;
+      } catch {
+        online = false;
+      }
+    }
+
+    this.logger.log(`STATUS [${deviceId}] → ${online ? 'online' : 'offline'}`);
+    this.unitService.setPresence(deviceId, online);
+  }
 
   @MessagePattern('device/+/ota_ack')
   handleOtaAck(@Payload() data: unknown, @Ctx() ctx: MqttContext): void {
