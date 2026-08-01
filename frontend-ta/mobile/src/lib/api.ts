@@ -1,4 +1,30 @@
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL as string;
+// Fully static, backend-free mock implementation of the mobile API surface.
+// Every exported name/shape below matches the original real-backend client
+// so callers throughout the app need zero changes. Internally, everything
+// is routed against the in-browser mockDb "database" instead of `fetch`.
+
+import {
+  findUnit,
+  findUnitById,
+  findTransaction,
+  updateUnit,
+  updateTransaction,
+  addTransaction,
+  getUser,
+  getUserUnits,
+  getSession,
+  setSessionUnit,
+  getTransactionsForUnit,
+  getAnomaliesForUnit,
+  genTransactionId,
+  genVaNumber,
+  hashSeed,
+  mulberry32,
+  type MockUnit,
+  type MockTransaction,
+  type MockAnomaly,
+} from './mockDb';
+
 const ACCESS_TOKEN_KEY = 'mobile_access_token';
 const REFRESH_TOKEN_KEY = 'mobile_refresh_token';
 
@@ -30,82 +56,144 @@ function setRefreshToken(token: string | null) {
   localStorage.setItem(REFRESH_TOKEN_KEY, token);
 }
 
-let isRefreshing = false;
-let refreshPromise: Promise<void> | null = null;
-
-async function refreshAccessToken() {
-  const refreshToken = getRefreshToken();
-  if (!refreshToken) {
-    throw new Error('No refresh token');
-  }
-
-  const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ refreshToken }),
-  });
-
-  if (!response.ok) {
-    throw new Error('Refresh token failed');
-  }
-
-  const data = (await response.json()) as TokenPair;
-  setAccessToken(data.accessToken);
-  setRefreshToken(data.refreshToken);
+// ── Small helpers ────────────────────────────────────────────────────────────
+function delay(min = 150, max = 400): Promise<void> {
+  const ms = min + Math.random() * (max - min);
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function request<T>(path: string, init?: RequestInit, retry = true): Promise<T> {
-  const token = getAccessToken();
-  const headers: Record<string, string> = {
-    ...(init?.headers as Record<string, string> | undefined),
+function base64(payload: Record<string, unknown>): string {
+  const json = JSON.stringify(payload);
+  if (typeof window !== 'undefined' && typeof window.btoa === 'function') {
+    return window.btoa(json);
+  }
+  return Buffer.from(json).toString('base64');
+}
+
+function makeFakeToken(kind: 'access' | 'refresh', unitNo: string | null): string {
+  return `demo.${base64({ sub: getUser().email, name: getUser().name, unitNo, kind, iat: Date.now() })}.sig`;
+}
+
+function makeTokenPair(unitNo: string | null): TokenPair {
+  return {
+    accessToken: makeFakeToken('access', unitNo),
+    refreshToken: makeFakeToken('refresh', unitNo),
+    tokenType: 'Bearer',
+    unitNo,
+    expiresIn: '3600',
+    refreshExpiresIn: '2592000',
   };
-
-  const isForm = init?.body instanceof FormData;
-  if (!isForm) {
-    headers['Content-Type'] = headers['Content-Type'] || 'application/json';
-  }
-
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
-
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...init,
-    headers,
-  });
-
-  if (response.status === 401 && retry && getRefreshToken()) {
-    if (!isRefreshing) {
-      isRefreshing = true;
-      refreshPromise = refreshAccessToken()
-        .catch((error) => {
-          authStore.clear();
-          throw error;
-        })
-        .finally(() => {
-          isRefreshing = false;
-        });
-    }
-
-    if (refreshPromise) {
-      await refreshPromise;
-      return request<T>(path, init, false);
-    }
-  }
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(text || `Request failed (${response.status})`);
-  }
-
-  const contentType = response.headers.get('content-type') || '';
-  if (!contentType.includes('application/json')) {
-    return {} as T;
-  }
-
-  return (await response.json()) as T;
 }
 
+function toUnitSummary(u: MockUnit): UnitSummary {
+  return { id: u.id, unitNo: u.unitNo };
+}
+
+function round(n: number, digits: number): number {
+  const f = 10 ** digits;
+  return Math.round(n * f) / f;
+}
+
+function toDashboardSummary(u: MockUnit): DashboardSummary {
+  // A stable, plausible "average daily kWh" per unit, used only to derive a
+  // remaining-hours estimate for the balance card.
+  const avgDailyKwh = 2 + (hashSeed(u.unitNo) % 400) / 100; // ~2.0 - 6.0 kWh/day
+  const hours = u.tokenElectricity > 0 ? (u.tokenElectricity / Math.max(0.5, avgDailyKwh)) * 24 : 0;
+  return {
+    id: u.id,
+    unitNo: u.unitNo,
+    tokenElectricity: round(u.tokenElectricity, 2),
+    tokenWater: round(u.tokenWater, 3),
+    energyTariff: u.energyTariff,
+    waterTariff: u.waterTariff,
+    relayStatus: u.relayStatus,
+    valveStatus: u.valveStatus,
+    remainingEstimate: { kwh: round(u.tokenElectricity, 2), hours: Math.round(hours) },
+    connectivity: { online: u.online, lastTelemetryAt: u.lastTelemetryAt },
+  };
+}
+
+function toAnomalyItem(a: MockAnomaly): AnomalyItem {
+  return {
+    anomalyType: a.anomalyType as AnomalyType,
+    severity: a.severity as AnomalySeverity,
+    message: a.message,
+    metadata: a.metadata,
+    detectedAt: a.detectedAt,
+  };
+}
+
+function toPaymentTransaction(t: MockTransaction): PaymentTransaction {
+  return {
+    id: t.id,
+    unitNo: t.unitNo,
+    amount: t.amount,
+    method: t.method,
+    status: t.status,
+    createdAt: t.createdAt,
+    confirmedAt: t.confirmedAt ?? undefined,
+  };
+}
+
+// ── Deterministic-looking trend generator (seeded, no external dep) ─────────
+function dailyPoint(unitNo: string, date: Date): TrendPoint {
+  const key = `${unitNo}|d|${date.toISOString().slice(0, 10)}`;
+  const rng = mulberry32(hashSeed(key));
+  const dow = date.getDay();
+  const weekendFactor = dow === 0 || dow === 6 ? 1.15 : 1;
+  const kwh = Math.max(0.2, 3.5 * weekendFactor + (rng() - 0.5) * 1.8);
+  const waterM3 = Math.max(0.02, 0.22 * weekendFactor + (rng() - 0.5) * 0.12);
+  return {
+    bucket: date.toISOString(),
+    kwh: round(kwh, 2),
+    waterM3: round(waterM3, 3),
+    avgPowerW: round((kwh * 1000) / 24, 1),
+    avgFlowLpm: round((waterM3 * 1000) / (24 * 60), 2),
+  };
+}
+
+function monthPoint(unitNo: string, year: number, month: number): TrendPoint {
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  let kwh = 0;
+  let waterM3 = 0;
+  for (let d = 1; d <= daysInMonth; d++) {
+    const p = dailyPoint(unitNo, new Date(year, month, d));
+    kwh += p.kwh;
+    waterM3 += p.waterM3;
+  }
+  return {
+    bucket: new Date(year, month, 1).toISOString(),
+    kwh: round(kwh, 2),
+    waterM3: round(waterM3, 3),
+    avgPowerW: round((kwh * 1000) / (daysInMonth * 24), 1),
+    avgFlowLpm: round((waterM3 * 1000) / (daysInMonth * 24 * 60), 2),
+  };
+}
+
+function generateDailySeries(unitNo: string): TrendPoint[] {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const points: TrendPoint[] = [];
+  for (let i = 130; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    points.push(dailyPoint(unitNo, d));
+  }
+  return points;
+}
+
+function generateMonthlySeries(unitNo: string): TrendPoint[] {
+  const now = new Date();
+  const points: TrendPoint[] = [];
+  for (let i = 24; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    points.push(monthPoint(unitNo, d.getFullYear(), d.getMonth()));
+  }
+  return points;
+}
+
+// ── Public types (unchanged shapes — keep in sync with the old real-backend
+// client so every caller in the app keeps working untouched) ────────────────
 export type UnitSummary = { id: number; unitNo: string };
 
 export type TokenPair = {
@@ -220,151 +308,220 @@ export const authStore = {
 };
 
 export const api = {
-  devLogin(email: string) {
-    return request<GoogleLoginResponse>('/auth/dev-login', {
-      method: 'POST',
-      body: JSON.stringify({ email }),
-      headers: { 'Content-Type': 'application/json' },
-    }).then((res) => {
-      authStore.setTokens(res.accessToken, res.refreshToken);
-      return res;
-    });
+  async devLogin(_email: string): Promise<GoogleLoginResponse> {
+    await delay();
+    const user = getUser();
+    const pair = makeTokenPair(null);
+    authStore.setTokens(pair.accessToken, pair.refreshToken);
+    return { ...pair, name: user.name, units: getUserUnits().map(toUnitSummary) };
   },
 
-  googleLogin(credential: string) {
-    return request<GoogleLoginResponse>('/auth/google', {
-      method: 'POST',
-      body: JSON.stringify({ credential }),
-      headers: { 'Content-Type': 'application/json' },
-    }).then((res) => {
-      authStore.setTokens(res.accessToken, res.refreshToken);
-      return res;
-    });
+  async googleLogin(_credential: string): Promise<GoogleLoginResponse> {
+    await delay();
+    const user = getUser();
+    const pair = makeTokenPair(null);
+    authStore.setTokens(pair.accessToken, pair.refreshToken);
+    return { ...pair, name: user.name, units: getUserUnits().map(toUnitSummary) };
   },
 
-  selectUnit(unitId: number) {
-    return request<SelectUnitResponse>('/auth/select-unit', {
-      method: 'POST',
-      body: JSON.stringify({ unitId }),
-    }).then((res) => {
-      authStore.setTokens(res.accessToken, res.refreshToken);
-      return res;
-    });
+  async selectUnit(unitId: number): Promise<SelectUnitResponse> {
+    await delay();
+    const unit = findUnitById(unitId);
+    if (!unit) throw new Error('Unit tidak ditemukan');
+    setSessionUnit(unit.id);
+    const pair = makeTokenPair(unit.unitNo);
+    authStore.setTokens(pair.accessToken, pair.refreshToken);
+    return { ...pair, name: getUser().name, units: getUserUnits().map(toUnitSummary) };
   },
 
   async logout() {
-    const refreshToken = authStore.getRefreshToken();
-    try {
-      await request('/auth/logout', {
-        method: 'POST',
-        body: JSON.stringify({ refreshToken }),
-      });
-    } finally {
-      authStore.clear();
-    }
+    await delay();
+    setSessionUnit(null);
+    authStore.clear();
   },
 
-  me() {
-    return request<MeResponse>('/auth/me');
+  async me(): Promise<MeResponse> {
+    await delay();
+    if (!authStore.getToken()) throw new Error('Unauthorized');
+    const user = getUser();
+    const session = getSession();
+    const unit = session.currentUnitId !== null ? findUnitById(session.currentUnitId) : undefined;
+    return {
+      email: user.email,
+      name: user.name,
+      role: 'resident',
+      unitId: unit ? unit.id : null,
+      unitNo: unit ? unit.unitNo : null,
+      units: getUserUnits().map(toUnitSummary),
+    };
   },
 
   async downloadInvoice(unitNo: string, transactionId: string): Promise<string> {
-    const token = authStore.getToken();
-    const response = await fetch(
-      `${API_BASE_URL}/gateway/mobile/${encodeURIComponent(unitNo)}/invoice/${encodeURIComponent(transactionId)}`,
-      {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      },
-    );
-
-    if (response.status === 401 && authStore.getRefreshToken()) {
-      await refreshAccessToken();
-      return this.downloadInvoice(unitNo, transactionId);
+    await delay(200, 450);
+    const tx = findTransaction(transactionId);
+    if (!tx || tx.unitNo !== unitNo) {
+      throw new Error('Invoice tidak ditemukan');
     }
-
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(text || `Invoice download failed (${response.status})`);
-    }
-
-    return response.text();
+    const unit = findUnit(unitNo);
+    const refNumber = `INV-${tx.id.replace('TRX-', '')}`;
+    const lines = [
+      'NETFLOW - BUKTI PEMBAYARAN',
+      '================================',
+      `Unit            : ${unitNo}`,
+      `No. Referensi   : ${refNumber}`,
+      `ID Transaksi    : ${tx.id}`,
+      `Tanggal         : ${new Date(tx.createdAt).toLocaleString('id-ID')}`,
+      `Metode          : ${tx.method.toUpperCase()}`,
+      `Status          : ${tx.status === 'success' ? 'BERHASIL' : tx.status.toUpperCase()}`,
+      '--------------------------------',
+      tx.elecAmount > 0 ? `Token Listrik   : Rp ${tx.elecAmount.toLocaleString('id-ID')}` : null,
+      tx.waterAmount > 0 ? `Token Air       : Rp ${tx.waterAmount.toLocaleString('id-ID')}` : null,
+      '--------------------------------',
+      `Total           : Rp ${tx.amount.toLocaleString('id-ID')}`,
+      '================================',
+      `Perangkat       : ${unit?.deviceId ?? `DEV-${unitNo}`}`,
+      '',
+      'Terima kasih telah menggunakan NetFlow.',
+    ].filter((l): l is string => l !== null);
+    return lines.join('\n');
   },
 
-  getDashboard(unitNo: string) {
-    return request<{ unitNo: string; summary: DashboardSummary }>(
-      `/gateway/mobile/${encodeURIComponent(unitNo)}/dashboard`,
-    );
+  async getDashboard(unitNo: string): Promise<{ unitNo: string; summary: DashboardSummary }> {
+    await delay();
+    const unit = findUnit(unitNo);
+    if (!unit) throw new Error('Unit tidak ditemukan');
+    return { unitNo: unit.unitNo, summary: toDashboardSummary(unit) };
   },
 
-  getNotifications(unitNo: string) {
-    return request<AnomalyItem[]>(`/gateway/mobile/${encodeURIComponent(unitNo)}/notifications`);
+  async getNotifications(unitNo: string): Promise<AnomalyItem[]> {
+    await delay();
+    return getAnomaliesForUnit(unitNo).map(toAnomalyItem);
   },
 
-  getAnomalies(unitNo: string) {
-    return request<AnomalyItem[]>(`/gateway/mobile/${encodeURIComponent(unitNo)}/anomalies`);
+  async getAnomalies(unitNo: string): Promise<AnomalyItem[]> {
+    await delay();
+    return getAnomaliesForUnit(unitNo).map(toAnomalyItem);
   },
 
-  getTrends(unitNo: string, period: 'daily' | 'monthly') {
-    return request<TrendPoint[]>(`/gateway/mobile/${encodeURIComponent(unitNo)}/trends?period=${period}`);
+  async getTrends(unitNo: string, period: 'daily' | 'monthly'): Promise<TrendPoint[]> {
+    await delay();
+    return period === 'monthly' ? generateMonthlySeries(unitNo) : generateDailySeries(unitNo);
   },
 
-  getTransactions(unitNo: string) {
-    return request<PaymentTransaction[]>(`/gateway/mobile/${encodeURIComponent(unitNo)}/transactions`);
+  async getTransactions(unitNo: string): Promise<PaymentTransaction[]> {
+    await delay();
+    return getTransactionsForUnit(unitNo).map(toPaymentTransaction);
   },
 
-  initiateTopup(
+  async initiateTopup(
     unitNo: string,
     electricityAmount: number,
     waterAmount: number,
     method: 'qris' | 'transfer' | 'ewallet',
-  ) {
-    return request<{ transactionId: string; checkoutUrl: string; status: string; vaNumber?: string; qrUrl?: string }>(
-      `/gateway/mobile/${encodeURIComponent(unitNo)}/topup/initiate`,
-      {
-        method: 'POST',
-        body: JSON.stringify({ electricityAmount, waterAmount, method }),
-      },
-    );
+  ): Promise<{ transactionId: string; checkoutUrl: string; status: string; vaNumber?: string; qrUrl?: string }> {
+    await delay(250, 500);
+    const unit = findUnit(unitNo);
+    if (!unit) throw new Error('Unit tidak ditemukan');
+    const now = Date.now();
+    const tx: MockTransaction = {
+      id: genTransactionId(),
+      unitNo,
+      elecAmount: electricityAmount,
+      waterAmount,
+      amount: electricityAmount + waterAmount,
+      method,
+      status: 'pending',
+      createdAt: new Date(now).toISOString(),
+      confirmedAt: null,
+      vaNumber: method === 'transfer' ? genVaNumber() : undefined,
+      // Deliberate deviation from the literal "25s" spec: a real demo viewer
+      // won't sit around that long. 4s keeps the polling UI (which checks
+      // every 5s) and the manual "Saya Sudah Bayar" button both feeling
+      // instant while still showing a believable pending state at least once.
+      autoConfirmAt: now + 4000,
+    };
+    addTransaction(tx);
+    return { transactionId: tx.id, checkoutUrl: '', status: tx.status, vaNumber: tx.vaNumber };
   },
 
-
-  getTopupStatus(unitNo: string, transactionId: string) {
-    return request<{
-      status: string;
+  async getTopupStatus(
+    unitNo: string,
+    transactionId: string,
+  ): Promise<{
+    status: string;
+    confirmedAt: string | null;
+    delivery: {
+      status: 'pending' | 'sent' | 'acked' | 'confirmed' | 'failed';
+      attemptCount: number;
+      deviceId: string;
+      sentAt: string | null;
+      ackedAt: string | null;
       confirmedAt: string | null;
+      lastError: string | null;
+    } | null;
+  }> {
+    await delay(150, 350);
+    const tx = findTransaction(transactionId);
+    if (!tx || tx.unitNo !== unitNo) throw new Error('Transaksi tidak ditemukan');
+
+    if (tx.status !== 'success' && tx.autoConfirmAt !== undefined && Date.now() >= tx.autoConfirmAt) {
+      const unit = findUnit(unitNo);
+      if (unit) {
+        updateUnit(unitNo, {
+          tokenElectricity: unit.tokenElectricity + tx.elecAmount / unit.energyTariff,
+          tokenWater: unit.tokenWater + tx.waterAmount / unit.waterTariff,
+        });
+      }
+      updateTransaction(tx.id, { status: 'success', confirmedAt: new Date().toISOString() });
+    }
+
+    const fresh = findTransaction(transactionId)!;
+    const unit = findUnit(unitNo);
+    const deviceId = unit?.deviceId ?? `DEV-${unitNo}`;
+
+    if (fresh.status === 'success') {
+      return {
+        status: 'success',
+        confirmedAt: fresh.confirmedAt,
+        delivery: {
+          status: 'confirmed',
+          attemptCount: 1,
+          deviceId,
+          sentAt: fresh.createdAt,
+          ackedAt: fresh.confirmedAt,
+          confirmedAt: fresh.confirmedAt,
+          lastError: null,
+        },
+      };
+    }
+
+    return {
+      status: 'pending',
+      confirmedAt: null,
       delivery: {
-        status: 'pending' | 'sent' | 'acked' | 'confirmed' | 'failed';
-        attemptCount: number;
-        deviceId: string;
-        sentAt: string | null;
-        ackedAt: string | null;
-        confirmedAt: string | null;
-        lastError: string | null;
-      } | null;
-    }>(
-      `/gateway/mobile/${encodeURIComponent(unitNo)}/topup/status/${encodeURIComponent(transactionId)}`,
-    );
-  },
-
-
-  setRelay(unitNo: string, on: boolean) {
-    return request<{ relayStatus: boolean }>(
-      `/gateway/mobile/${encodeURIComponent(unitNo)}/relay`,
-      {
-        method: 'POST',
-        body: JSON.stringify({ status: on }),
+        status: 'pending',
+        attemptCount: 1,
+        deviceId,
+        sentAt: fresh.createdAt,
+        ackedAt: null,
+        confirmedAt: null,
+        lastError: null,
       },
-    );
+    };
   },
 
-  setValve(unitNo: string, open: boolean) {
-    return request<{ valveStatus: boolean }>(
-      `/gateway/mobile/${encodeURIComponent(unitNo)}/valve`,
-      {
-        method: 'POST',
-        body: JSON.stringify({ status: open }),
-      },
-    );
+  async setRelay(unitNo: string, on: boolean): Promise<{ relayStatus: boolean }> {
+    // Simulate the actuator taking a moment to physically switch before the
+    // device confirms — the caller's own reconciliation UI (dashboard.tsx)
+    // relies on the store being updated by the time this resolves.
+    await delay(1200, 1900);
+    const unit = updateUnit(unitNo, { relayStatus: on, lastTelemetryAt: new Date().toISOString() });
+    return { relayStatus: unit ? unit.relayStatus : on };
   },
 
+  async setValve(unitNo: string, open: boolean): Promise<{ valveStatus: boolean }> {
+    await delay(1200, 1900);
+    const unit = updateUnit(unitNo, { valveStatus: open, lastTelemetryAt: new Date().toISOString() });
+    return { valveStatus: unit ? unit.valveStatus : open };
+  },
 };

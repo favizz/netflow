@@ -1,98 +1,39 @@
-import { useState, useEffect, useRef, useSyncExternalStore } from 'react';
-
-// Module-level flag: persists across component unmount/remount so GIS is
-// never initialized twice in the same browser session.
-let _gsiInitialized = false;
-
-function useIsDark() {
-  return useSyncExternalStore(
-    (cb) => { const mq = window.matchMedia('(prefers-color-scheme: dark)'); mq.addEventListener('change', cb); return () => mq.removeEventListener('change', cb); },
-    () => document.documentElement.classList.contains('dark') || window.matchMedia('(prefers-color-scheme: dark)').matches,
-  );
-}
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-
-const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
-
-declare global {
-  interface Window {
-    google?: {
-      accounts: {
-        id: {
-          initialize: (config: object) => void;
-          renderButton: (element: HTMLElement, config: object) => void;
-        };
-      };
-    };
-  }
-}
 
 interface LoginPageProps {
   onSuccess?: (token: string) => void;
 }
 
+function GoogleIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
+      <path fill="#4285F4" d="M23.52 12.27c0-.85-.08-1.66-.22-2.45H12v4.63h6.47c-.28 1.5-1.13 2.77-2.4 3.63v3.02h3.88c2.27-2.09 3.57-5.17 3.57-8.83z" />
+      <path fill="#34A853" d="M12 24c3.24 0 5.96-1.07 7.95-2.9l-3.88-3.02c-1.08.72-2.45 1.15-4.07 1.15-3.13 0-5.78-2.11-6.73-4.96H1.27v3.11C3.25 21.3 7.29 24 12 24z" />
+      <path fill="#FBBC05" d="M5.27 14.27a7.2 7.2 0 010-4.54V6.62H1.27a12 12 0 000 10.76l4-3.11z" />
+      <path fill="#EA4335" d="M12 4.77c1.77 0 3.35.61 4.6 1.8l3.44-3.44C17.95 1.19 15.24 0 12 0 7.29 0 3.25 2.7 1.27 6.62l4 3.11C6.22 6.88 8.87 4.77 12 4.77z" />
+    </svg>
+  );
+}
+
 export default function LoginPage({ onSuccess }: LoginPageProps) {
-  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const buttonRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
-  const isDark = useIsDark();
 
-  const handleCredential = async (response: { credential: string }) => {
+  const handleDemoSignIn = async () => {
     setLoading(true);
-    setError('');
-    try {
-      const BASE_URL = (import.meta.env.VITE_API_BASE_URL as string) || 'http://localhost:5000';
-      const apiBase = BASE_URL.endsWith('/api') ? BASE_URL : BASE_URL.replace(/\/$/, '') + '/api';
-      const res = await fetch(`${apiBase}/auth/admin`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ credential: response.credential }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data?.message || 'Your account does not have admin access.');
-      }
-      const data = await res.json();
-      if (onSuccess) {
-        onSuccess(data.accessToken);
-      } else {
-        localStorage.setItem('admin-token', data.accessToken);
-        navigate('/');
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Sign-in failed. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    const init = () => {
-      if (!window.google || !buttonRef.current || !GOOGLE_CLIENT_ID || _gsiInitialized) return;
-      _gsiInitialized = true;
-      window.google.accounts.id.initialize({
-        client_id: GOOGLE_CLIENT_ID,
-        callback: handleCredential,
-      });
-      window.google.accounts.id.renderButton(buttonRef.current, {
-        theme: 'outline',
-        size: 'large',
-        width: Math.max(Math.round(buttonRef.current.getBoundingClientRect().width), Math.min(360, window.innerWidth - 64)),
-        text: 'signin_with',
-      });
-    };
-
-    if (window.google) {
-      init();
+    // Brief artificial delay so the sign-in doesn't feel instant/fake.
+    await new Promise(resolve => setTimeout(resolve, 900));
+    const payload = { sub: 'admin@netflow.demo', name: 'Admin Netflow', email: 'admin@netflow.demo' };
+    const token = `demo.${btoa(JSON.stringify(payload))}.sig`;
+    if (onSuccess) {
+      onSuccess(token);
     } else {
-      const interval = setInterval(() => {
-        if (window.google) { clearInterval(interval); init(); }
-      }, 100);
-      return () => clearInterval(interval);
+      localStorage.setItem('admin-token', token);
+      navigate('/');
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    setLoading(false);
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[color-mix(in_oklch,var(--primary)_10%,transparent)] via-background to-[color-mix(in_oklch,var(--primary)_5%,transparent)] flex items-center justify-center p-4">
@@ -114,33 +55,26 @@ export default function LoginPage({ onSuccess }: LoginPageProps) {
 
           {/* Sign-in area */}
           <div className="flex flex-col items-center gap-4 pt-2">
-            {!GOOGLE_CLIENT_ID && (
-              <div className="w-full rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-xs text-amber-700">
-                Google Sign-In is not configured. Set{' '}
-                <code className="font-mono font-medium">VITE_GOOGLE_CLIENT_ID</code> to enable it.
-              </div>
-            )}
-
-            {error && (
-              <div className="w-full rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
-                {error}
-              </div>
-            )}
-
             {loading && (
               <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
                 <div className="h-10 w-10 animate-spin rounded-full border-4 border-white border-t-transparent" />
               </div>
             )}
-            <div ref={buttonRef} className="flex justify-center w-full" />
+            <button
+              type="button"
+              onClick={() => void handleDemoSignIn()}
+              disabled={loading}
+              className="flex w-full items-center justify-center gap-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-60"
+            >
+              <GoogleIcon />
+              {loading ? 'Signing in...' : 'Continue with Google'}
+            </button>
           </div>
 
           {/* Footer */}
-          {GOOGLE_CLIENT_ID && (
-            <div className="border-t border-[var(--card-border)] pt-5 text-center text-[12px] text-muted-text">
-              By continuing, you confirm you have administrator access to this system.
-            </div>
-          )}
+          <div className="border-t border-[var(--card-border)] pt-5 text-center text-[12px] text-muted-text">
+            By continuing, you confirm you have administrator access to this system.
+          </div>
         </div>
       </div>
     </div>

@@ -11,6 +11,7 @@ import Dashboard from "@/components/dashboard"
 import TokenPurchase from "@/components/token-purchase"
 import LoginForm from "@/components/login-form"
 import { api, authStore, type AnomalyItem, type AnomalyType, type UnitSummary } from "@/lib/api"
+import { resetMockDb } from "@/lib/mockDb"
 import { interactive, dropdown, MOBILE_NOTIF_KEY, type Page } from "@/lib/styles"
 import { cn } from "@/lib/utils"
 import logoWhite from "@/assets/netflow-logo-white.png"
@@ -321,6 +322,12 @@ export default function App() {
                   Keluar
                 </button>
               </div>
+              <button
+                onClick={() => { resetMockDb(); window.location.reload() }}
+                className="text-[11px] text-muted-foreground underline underline-offset-2 active:text-foreground transition-colors"
+              >
+                Reset demo data
+              </button>
             </div>
           </div>
         </div>

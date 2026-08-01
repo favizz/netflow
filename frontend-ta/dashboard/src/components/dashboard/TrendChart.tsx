@@ -5,8 +5,7 @@ import {
 import { ChevronLeft, ChevronRight, Zap, Droplets, Radio } from "lucide-react";
 import { fetchApi } from "@/lib/api";
 import { useIsDark } from "@/lib/useIsDark";
-import { MQTT_CONFIG } from "@/lib/constants";
-import mqtt from "mqtt";
+import { subscribeLiveTelemetry } from "@/lib/mockTelemetry";
 
 type Utility = 'electricity' | 'water';
 type Period = 'daily' | 'monthly' | 'yearly' | 'live';
@@ -52,17 +51,6 @@ function periodLabel(key: string, period: Period): string {
     }
     if (period === 'monthly') return key;
     return 'All Time';
-}
-
-function decodeTelemetry(buf: Uint8Array): { p?: number; v?: number; c?: number; wf?: number } | null {
-    if (buf.length < 21) return null;
-    const view = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
-    return {
-        p:  view.getUint16(4, false) / 10,
-        v:  view.getUint16(6, false) / 10,
-        c:  view.getUint16(8, false) / 1000,
-        wf: view.getUint16(10, false) / 100,
-    };
 }
 
 interface TrendData {
@@ -203,48 +191,31 @@ export function TrendChart() {
         return () => { cancelled = true; };
     }, [firstUnitNo, periodKey, period]);
 
-    // MQTT live connection
+    // Live telemetry (mocked)
     useEffect(() => {
-        if (period !== 'live' || !firstDeviceId || !MQTT_CONFIG.brokerUrl) return;
+        if (period !== 'live' || !firstDeviceId) return;
 
         setIsConnected(false);
         setLiveElecData([]);
         setLiveWaterData([]);
 
-        const client = mqtt.connect(MQTT_CONFIG.brokerUrl, {
-            ...MQTT_CONFIG.options,
-            clientId: `ta-dashboard-overview-${Math.random().toString(16).slice(2, 8)}`,
-        });
-
-        const topic = `device/${firstDeviceId}/data`;
-
-        client.on('connect', () => {
+        const unsubscribe = subscribeLiveTelemetry(firstDeviceId, (point) => {
             setIsConnected(true);
-            client.subscribe(topic);
-        });
-
-        client.on('message', (msgTopic, message) => {
-            if (msgTopic !== topic) return;
-            const buf = new Uint8Array(message.buffer, message.byteOffset, message.byteLength);
-            const decoded = decodeTelemetry(buf);
-            if (!decoded) return;
             const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
             setLiveElecData(prev => [...prev.slice(-59), {
                 time: timeStr,
-                power: decoded.p ?? 0,
-                voltage: decoded.v ?? 0,
-                current: decoded.c ?? 0,
+                power: point.watts,
+                voltage: point.voltage,
+                current: point.current,
             }]);
             setLiveWaterData(prev => [...prev.slice(-59), {
                 time: timeStr,
-                flow: decoded.wf ?? 0,
+                flow: point.flowRate,
             }]);
-        });
-
-        client.on('error', () => setIsConnected(false));
+        }, 2000);
 
         return () => {
-            client.end();
+            unsubscribe();
             setIsConnected(false);
         };
     }, [period, firstDeviceId]);

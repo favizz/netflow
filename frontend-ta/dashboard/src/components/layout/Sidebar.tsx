@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getAdminName } from "@/lib/auth";
+import { resetMockDb } from "@/lib/mockDb";
 
 const navigation = [
     { name: "Overview", href: "/", icon: LayoutDashboard },
@@ -36,6 +37,12 @@ export function Sidebar({ onClose }: SidebarProps) {
     const adminName = getAdminName();
 
     const confirmLogout = () => {
+        localStorage.removeItem('admin-token');
+        window.location.reload();
+    };
+
+    const handleResetDemoData = () => {
+        resetMockDb();
         localStorage.removeItem('admin-token');
         window.location.reload();
     };
@@ -115,6 +122,14 @@ export function Sidebar({ onClose }: SidebarProps) {
                                 className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 transition-colors"
                             >
                                 Sign out
+                            </button>
+                        </div>
+                        <div className="mt-4 border-t border-gray-100 dark:border-gray-700 pt-3 text-center">
+                            <button
+                                onClick={handleResetDemoData}
+                                className="text-xs text-gray-400 dark:text-gray-500 hover:text-primary transition-colors underline underline-offset-2"
+                            >
+                                Reset demo data
                             </button>
                         </div>
                     </div>

@@ -1,10 +1,6 @@
 import { render, screen } from '@testing-library/react'
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import App from './App'
-
-vi.mock('@react-oauth/google', () => ({
-  GoogleLogin: () => <button type="button">Masuk dengan Google</button>,
-}))
 
 describe('App Migration Component', () => {
   it('renders the login screen by default', () => {

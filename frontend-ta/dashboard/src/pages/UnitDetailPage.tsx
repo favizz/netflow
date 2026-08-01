@@ -5,31 +5,9 @@ import { useIsDark } from "@/lib/useIsDark";
 import { ArrowLeft, Power, Droplets, Zap, FileText, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Wifi, WifiOff, Activity, AlertTriangle, Trash2, Radio } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, AreaChart, Area } from "recharts";
 import { cn } from "@/lib/utils";
-import mqtt from "mqtt";
 import { fetchApi } from "@/lib/api";
+import { subscribeLiveTelemetry } from "@/lib/mockTelemetry";
 import { useToast } from "@/components/layout/ToastProvider";
-
-function encodeCommand(type: 'relay' | 'valve', value: 0 | 1): Uint8Array {
-    const typeNibble = type === 'relay' ? 0x10 : 0x20;
-    return new Uint8Array([typeNibble | (value & 0x0f)]);
-}
-
-function decodeTelemetry(buf: Uint8Array): IoTPayload | null {
-    if (buf.length !== 25) return null;
-    const view = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
-    return {
-        et: view.getUint32(0, false)  / 100,
-        p:  view.getUint16(4, false)  / 10,
-        v:  view.getUint16(6, false)  / 10,
-        c:  view.getUint16(8, false)  / 1000,
-        wf: view.getUint16(10, false) / 100,
-        wt: view.getUint32(12, false) / 1000,
-        te: view.getUint32(16, false) / 1000,
-        tw: view.getUint32(20, false) / 1000,
-        rs: buf[24] & 1,
-        vs: (buf[24] >> 1) & 1,
-    };
-}
 
 type TimePeriod = "live" | "daily" | "yearly" | "monthly";
 type LiveMetric = "power" | "voltage" | "current";
@@ -67,15 +45,6 @@ interface IoTPayload {
     rs?: number;
     vs?: number;
 }
-
-const MQTT_CONFIG = {
-    brokerUrl: import.meta.env.VITE_MQTT_BROKER_URL as string,
-    options: {
-        username: import.meta.env.VITE_MQTT_USERNAME || undefined,
-        password: import.meta.env.VITE_MQTT_PASSWORD || undefined,
-        reconnectPeriod: 5000,
-    }
-};
 
 type RawTrendRow = { bucket: string; kwh?: unknown; waterM3?: unknown; water_m3?: unknown };
 type AnomalyRow = {
@@ -176,8 +145,6 @@ export default function UnitDetailPage() {
     const navigate = useNavigate();
     const isDark = useIsDark();
     const toast = useToast();
-    const toastRef = useRef(toast);
-    useEffect(() => { toastRef.current = toast; }, [toast]);
 
     const gridColor = isDark ? '#374151' : '#E5E7EB';
     const tickColor = '#9CA3AF';
@@ -207,8 +174,6 @@ export default function UnitDetailPage() {
     const [livePowerMetric, setLivePowerMetric] = useState<LiveMetric>("power");
 
     const [isConnected, setIsConnected] = useState(false);
-    const [mqttClient, setMqttClient] = useState<mqtt.MqttClient | null>(null);
-    const mqttErrorToastShownRef = useRef(false);
     const [realTimePower, setRealTimePower] = useState<{ time: string; watts: number; voltage: number; current: number; timestamp: string }[]>([]);
     const [realTimeWater, setRealTimeWater] = useState<{ time: string; value: number; timestamp: string }[]>([]);
     const [liveLogs, setLiveLogs] = useState<LogEntry[]>([]);
@@ -425,91 +390,53 @@ export default function UnitDetailPage() {
         return () => clearInterval(intervalId);
     }, [unitInfo?.unit]);
 
-    // MQTT live connection
+    // Live telemetry (mocked)
     useEffect(() => {
         if (!unitInfo?.meterSerial || period !== "live") {
             return;
         }
 
-        const clientId = 'ta-dashboard-' + Math.random().toString(16).substring(2, 10);
-        const client = mqtt.connect(MQTT_CONFIG.brokerUrl, { ...MQTT_CONFIG.options, clientId });
-        const telemetryTopic = `device/${unitInfo.meterSerial}/data`;
+        const deviceId = unitInfo.meterSerial;
 
-        client.on('connect', () => {
-            setIsConnected(true);
-            mqttErrorToastShownRef.current = false;
-            client.subscribe([telemetryTopic]);
-        });
-
-        client.on('message', (topic, message) => {
+        const unsubscribe = subscribeLiveTelemetry(deviceId, (point) => {
             const now = new Date();
             const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
-            try {
-                let parsed: IoTPayload | null = null;
+            setIsConnected(true);
+            setUnitInfo((prev: UnitInfoState | null) => prev?.status !== "Online" ? (prev ? { ...prev, status: "Online" } : prev) : prev);
+            // Device is provably online — clear stale offline anomaly immediately
+            setAnomalies(prev => prev.filter(a => (a.anomalyType ?? a.type) !== 'device_offline'));
+            setEnergyStats({
+                total_kwh: point.energyTotal,
+                active_power_w: point.watts,
+                voltage_v: point.voltage,
+                current_a: point.current,
+            });
+            setPowerState(point.relayOn);
 
-                parsed = decodeTelemetry(new Uint8Array(message));
+            setRealTimePower(prev => [...prev.slice(-59), {
+                time: timeStr,
+                watts: point.watts,
+                voltage: point.voltage,
+                current: point.current,
+                timestamp: now.toISOString(),
+            }]);
+            setRealTimeWater(prev => [...prev.slice(-59), { time: timeStr, value: point.flowRate, timestamp: now.toISOString() }]);
 
-                if (!parsed) return;
+            setWaterStats({ total_m3: point.waterTotal, flow_rate_lpm: point.flowRate });
+            setWaterState(point.valveOn);
 
-                if (topic === telemetryTopic) {
-                    setUnitInfo((prev: UnitInfoState | null) => prev?.status !== "Online" ? { ...prev!, status: "Online" } : prev);
-                    // Device is provably online — clear stale offline anomaly immediately
-                    setAnomalies(prev => prev.filter(a => (a.anomalyType ?? a.type) !== 'device_offline'));
-                    setEnergyStats(prev => ({
-                        total_kwh: parsed.et ?? prev.total_kwh,
-                        active_power_w: parsed.p ?? 0,
-                        voltage_v: parsed.v ?? 0,
-                        current_a: parsed.c ?? 0,
-                    }));
-                    if (parsed.rs !== undefined) setPowerState(parsed.rs === 1);
+            setLiveLogs(prev => [{
+                timestamp: now.toISOString(),
+                value: point.watts,
+                unit: 'W',
+                rawPayload: `[Mock] et:${point.energyTotal} p:${point.watts} v:${point.voltage} c:${point.current} wf:${point.flowRate} wt:${point.waterTotal} rs:${point.relayOn ? 1 : 0} vs:${point.valveOn ? 1 : 0}`,
+            }, ...prev.slice(0, 49)]);
+        }, 2000);
 
-                    if (parsed.p !== undefined || parsed.v !== undefined || parsed.c !== undefined) {
-                        setRealTimePower(prev => [...prev.slice(-59), {
-                            time: timeStr,
-                            watts:   parsed!.p ?? 0,
-                            voltage: parsed!.v ?? 0,
-                            current: parsed!.c ?? 0,
-                            timestamp: now.toISOString(),
-                        }]);
-                    }
-                    if (parsed.wf !== undefined) {
-                        setRealTimeWater(prev => [...prev.slice(-59), { time: timeStr, value: parsed!.wf ?? 0, timestamp: now.toISOString() }]);
-                    }
-
-                    setWaterStats(prev => ({ total_m3: parsed.wt ?? prev.total_m3, flow_rate_lpm: parsed.wf ?? 0 }));
-                    if (parsed.vs !== undefined) setWaterState(parsed.vs === 1);
-
-                    const rawLabel = 'Binary 25B';
-                    setLiveLogs(prev => [{
-                        timestamp: now.toISOString(),
-                        value: parsed?.p ?? 0,
-                        unit: 'W',
-                        rawPayload: `[${rawLabel}] et:${parsed?.et} p:${parsed?.p} v:${parsed?.v} c:${parsed?.c} wf:${parsed?.wf} wt:${parsed?.wt} te:${parsed?.te} tw:${parsed?.tw} rs:${parsed?.rs} vs:${parsed?.vs}`,
-                        details: parsed!,
-                    }, ...prev.slice(0, 49)]);
-                }
-            } catch { /* malformed frame */ }
-        });
-
-        client.on('error', (err) => {
-            setIsConnected(false);
-            setUnitInfo((prev: UnitInfoState | null) => (prev ? { ...prev, status: "Offline" } : null));
-            if (mqttErrorToastShownRef.current) return;
-            mqttErrorToastShownRef.current = true;
-            const raw = err?.message ?? String(err);
-            if (raw.includes("Bad username") || raw.includes("Not authorized") || raw.includes("Connection refused")) {
-                toastRef.current.error("MQTT authentication failed. Check broker credentials in environment config.");
-            } else {
-                toastRef.current.error("Live connection lost. Reconnecting...");
-            }
-        });
-
-        setMqttClient(client);
         return () => {
-            client.end(true);
+            unsubscribe();
             setIsConnected(false);
-            setMqttClient(null);
         };
     }, [unitInfo?.meterSerial, period]);
 

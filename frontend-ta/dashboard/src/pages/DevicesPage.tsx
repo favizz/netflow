@@ -1,12 +1,11 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { InventoryTable } from "@/components/inventory/InventoryTable";
 import { AddDeviceModal } from "@/components/inventory/AddDeviceModal";
 import { EditUnitModal } from "@/components/inventory/EditUnitModal";
 import type { InventoryItem } from "@/lib/mockData";
 import { fetchApi } from "@/lib/api";
-import mqtt from "mqtt";
-import { MQTT_CONFIG } from "@/lib/constants";
+import { subscribeLiveTelemetry } from "@/lib/mockTelemetry";
 
 type BuildingResponse = { id: number; code: string; name: string };
 type UnitResponse = {
@@ -73,29 +72,10 @@ export default function DevicesPage() {
     }, [loadData]);
 
     // Live connectivity: flip any device row to Online as soon as telemetry arrives
+    const deviceIds = useMemo(() => data.map(item => item.meterSerial), [data]);
+
     useEffect(() => {
-        if (!MQTT_CONFIG.brokerUrl) return;
-        const client = mqtt.connect(MQTT_CONFIG.brokerUrl, {
-            ...MQTT_CONFIG.options,
-            clientId: `dashboard-devices-${Math.random().toString(16).slice(2, 8)}`,
-        });
-        client.on('connect', () => { client.subscribe('device/+/data'); });
-        client.on('message', (topic, message) => {
-            const m = topic.match(/^device\/([^/]+)\/data$/);
-            if (!m) return;
-            const deviceId = m[1];
-
-            let relayOn: boolean | null = null;
-            let valveOn: boolean | null = null;
-
-            const uint8 = new Uint8Array(message.buffer, message.byteOffset, message.byteLength);
-            // 21-byte frame: flags at byte 20; 25-byte frame: flags at byte 24
-            const flagsOffset = uint8.length >= 25 ? 24 : 20;
-            if (uint8.length === 21 || uint8.length === 25) {
-                relayOn = (uint8[flagsOffset] & 1) === 1;
-                valveOn = ((uint8[flagsOffset] >> 1) & 1) === 1;
-            }
-
+        const unsubs = deviceIds.map(deviceId => subscribeLiveTelemetry(deviceId, (point) => {
             setData(prev => {
                 const idx = prev.findIndex(item => item.meterSerial === deviceId);
                 if (idx === -1) return prev;
@@ -104,8 +84,8 @@ export default function DevicesPage() {
                     ...cur,
                     status: "Online",
                     lastUpdate: "Live",
-                    ...(relayOn !== null && { power: relayOn }),
-                    ...(valveOn !== null && { water: valveOn }),
+                    power: point.relayOn,
+                    water: point.valveOn,
                 };
                 if (
                     cur.status === updated.status &&
@@ -116,9 +96,9 @@ export default function DevicesPage() {
                 next[idx] = updated;
                 return next;
             });
-        });
-        return () => { try { client.end(true); } catch { /* ignore close race */ } };
-    }, []);
+        }, 5000));
+        return () => { unsubs.forEach(unsub => unsub()); };
+    }, [deviceIds]);
 
     return (
         <div className="space-y-6">

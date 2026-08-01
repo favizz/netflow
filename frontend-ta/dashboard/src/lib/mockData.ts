@@ -14,5 +14,6 @@ export interface InventoryItem {
     lastUpdate: string;
 }
 
-// No hardcoded demo data - all data comes from the backend API via /unit
+// No hardcoded demo data here - DevicesPage loads everything from the mock
+// store via fetchApi('/unit'), matching how it worked against the real API.
 export const initialData: InventoryItem[] = [];

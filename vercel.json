@@ -1,0 +1,11 @@
+{
+  "installCommand": "echo 'Skipping root install — buildCommand installs each app individually'",
+  "buildCommand": "cd frontend-ta/mobile && npm install && npm run build && cd ../dashboard && npm install && npm run build && cd ../.. && rm -rf frontend-ta/mobile/dist/admin && cp -r frontend-ta/dashboard/dist frontend-ta/mobile/dist/admin",
+  "outputDirectory": "frontend-ta/mobile/dist",
+  "framework": null,
+  "rewrites": [
+    { "source": "/admin", "destination": "/admin/index.html" },
+    { "source": "/admin/:path*", "destination": "/admin/index.html" },
+    { "source": "/:path*", "destination": "/index.html" }
+  ]
+}

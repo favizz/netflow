@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { SlidersHorizontal, Save, CheckCircle, AlertCircle, Zap, Droplets, Loader2, Clock, Pencil, Check, X, Terminal, Radio, UploadCloud, ExternalLink } from "lucide-react";
+import { SlidersHorizontal, Save, CheckCircle, AlertCircle, Zap, Droplets, Loader2, Clock, Pencil, Check, X, Terminal, Radio, UploadCloud, Ban } from "lucide-react";
 import { fetchApi } from "@/lib/api";
-import mqtt from "mqtt";
-import { MQTT_CONFIG, API_BASE_URL } from "@/lib/constants";
+import { subscribeBroker, type AckChannel, type AckPayload } from "@/lib/mockBroker";
+import { useToast } from "@/components/layout/ToastProvider";
 
 interface CalibrationConfig {
     CAL_FACTOR_FLOWRATE: number;
@@ -197,6 +197,8 @@ function makeId() { return `${Date.now().toString(36)}-${(++_logSeq).toString(36
 function ts() { return new Date().toLocaleTimeString('id-ID', { hour12: false }); }
 
 export default function ControlCenterPage() {
+    const toast = useToast();
+
     // ── Calibration ───────────────────────────────────────────────────────────
     const [config, setConfig] = useState<CalibrationConfig>(DEFAULTS);
     const [serverConfig, setServerConfig] = useState<CalibrationConfig>(DEFAULTS);
@@ -232,88 +234,9 @@ export default function ControlCenterPage() {
     const [lastOtaLink, setLastOtaLink] = useState(() => localStorage.getItem('ota_last_link') ?? '');
     const [lastOtaVersion, setLastOtaVersion] = useState(() => localStorage.getItem('ota_last_version') ?? '');
 
-    // ── Subscribe to ACKs from devices ──────────────────────────────────────
+    // ── Subscribe to simulated device ACKs (replaces MQTT in the demo build) ──
     useEffect(() => {
-        if (!MQTT_CONFIG.brokerUrl) return;
-
-        let active = true;
-        const client = mqtt.connect(MQTT_CONFIG.brokerUrl, {
-            ...MQTT_CONFIG.options,
-            clientId: `dashboard-ctrl-${Math.random().toString(16).slice(2, 8)}`,
-        });
-
-        client.on('connect', () => {
-            if (!active) return;
-            client.subscribe('device/+/ota_ack');
-            client.subscribe('device/+/config_ack');
-            client.subscribe('device/+/command_ack');
-            client.subscribe('device/+/status');
-        });
-
-        client.on('error', (err) => {
-            if (active) console.error(`[MQTT] Connection error:`, err);
-        });
-
-        client.on('message', (topic, payload) => {
-            if (!active) return;
-            const parts = topic.split('/');
-            const deviceId = parts[1] ?? 'unknown';
-            const type = parts[2] ?? 'unknown';
-
-            // ── LWT / device status ───────────────────────────────────────────
-            if (type === 'status') {
-                let online = true;
-                try {
-                    const s = payload.toString().trim();
-                    if (s === 'offline' || s === '0') {
-                        online = false;
-                    } else {
-                        const parsed = JSON.parse(s) as { online?: boolean | number };
-                        online = parsed.online !== false && parsed.online !== 0;
-                    }
-                } catch { online = false; }
-
-                if (!online) {
-                    // Mark any pending ACK for this device as immediately failed
-                    const ackTypes = ['command_ack', 'config_ack', 'ota_ack'];
-                    ackTypes.forEach(ackType => {
-                        const batchKey = `${ackType}:${deviceId}`;
-                        const batchId = deviceBatchRef.current.get(batchKey);
-                        if (!batchId) return;
-                        deviceBatchRef.current.delete(batchKey);
-                        const tracker = batchTrackersRef.current.get(batchId);
-                        if (!tracker) return;
-                        tracker.received++;
-                        tracker.failure++;
-                        setLog(prev => [...prev.slice(-49), {
-                            id: makeId(), ts: ts(), level: 'err',
-                            text: `✗ [${deviceId}] went offline — command not confirmed`,
-                        }]);
-                        if (tracker.received >= tracker.total) {
-                            const allOk = tracker.failure === 0;
-                            setLog(prev => prev.map(e => e.id === tracker.summaryId
-                                ? { ...e, level: allOk ? 'ok' : 'err', ts: ts(),
-                                    text: allOk
-                                        ? `✓ ${tracker.label} — SUCCESS (${tracker.total}/${tracker.total})`
-                                        : `✗ ${tracker.label} — FAILED (${tracker.success}/${tracker.total} ok, ${tracker.failure} failed)` }
-                                : e));
-                            batchTrackersRef.current.delete(batchId);
-                        }
-                    });
-                }
-                return;
-            }
-
-            interface MqttAck {
-                status?: 'ok' | 'noop' | 'error' | 'failed' | 'unknown';
-                version?: string;
-                error?: string | number;
-                type?: string;
-            }
-
-            let ack: MqttAck = {};
-            try { ack = JSON.parse(payload.toString()); } catch { ack = { status: 'unknown' }; }
-
+        return subscribeBroker(({ channel: type, deviceId, payload: ack }: { channel: AckChannel; deviceId: string; payload: AckPayload }) => {
             // 'noop' = device already in requested state — counts as acceptable, not failure
             const level: LogEntry['level'] = ack.status === 'ok' ? 'ok' : ack.status === 'noop' ? 'info' : 'err';
             let text = '';
@@ -368,10 +291,6 @@ export default function ControlCenterPage() {
                 setLog(prev => [...prev.slice(-49), { id: makeId(), ts: ts(), level, text }]);
             }
         });
-        return () => {
-            active = false;
-            try { client.end(true); } catch { /* ignore close race */ }
-        };
     }, []);
 
     const isDirty = useMemo(
@@ -777,18 +696,15 @@ export default function ControlCenterPage() {
 
             {/* System Tools */}
             {(() => {
-                const origin = new URL(API_BASE_URL).origin;
                 const tools = [
                     {
                         label: 'Queue Monitor',
                         description: 'BullMQ job queues — telemetry, payment expiry, broadcast',
-                        href: `${API_BASE_URL}/admin/queues`,
                         icon: <Terminal className="h-5 w-5 text-primary" />,
                     },
                     {
                         label: 'EMQX Dashboard',
                         description: 'MQTT broker — connections, authentication, topics',
-                        href: `${origin}/emqx/`,
                         icon: <Radio className="h-5 w-5 text-primary" />,
                     },
                 ];
@@ -797,12 +713,11 @@ export default function ControlCenterPage() {
                         <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-4">System Tools</h2>
                         <div className="grid gap-3 sm:grid-cols-2">
                             {tools.map(tool => (
-                                <a
-                                    key={tool.href}
-                                    href={tool.href}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="flex items-start gap-3 rounded-lg border border-gray-200 dark:border-gray-600 p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors group"
+                                <button
+                                    key={tool.label}
+                                    type="button"
+                                    onClick={() => toast.error("This tool isn't available in the demo.")}
+                                    className="flex items-start gap-3 rounded-lg border border-gray-200 dark:border-gray-600 p-4 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors group"
                                 >
                                     <div className="mt-0.5 rounded-lg bg-primary/10 dark:bg-primary/20 p-2 shrink-0">
                                         {tool.icon}
@@ -810,11 +725,11 @@ export default function ControlCenterPage() {
                                     <div className="min-w-0">
                                         <div className="flex items-center gap-1.5">
                                             <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{tool.label}</span>
-                                            <ExternalLink className="h-3.5 w-3.5 text-gray-400 group-hover:text-primary transition-colors" />
+                                            <Ban className="h-3.5 w-3.5 text-gray-400 group-hover:text-primary transition-colors" />
                                         </div>
                                         <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{tool.description}</p>
                                     </div>
-                                </a>
+                                </button>
                             ))}
                         </div>
                     </div>

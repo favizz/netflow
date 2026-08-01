@@ -1,0 +1,8 @@
+# This is a static demo — only frontend-ta/mobile and frontend-ta/dashboard are deployed.
+# Everything below is kept in the repo for reference/history but excluded from the Vercel upload.
+backend-ta
+device
+infra
+deploy.sh
+device2.zip
+dump.md

@@ -1,16 +1,3 @@
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL as string;
-
-export const MQTT_CONFIG = {
-    brokerUrl: import.meta.env.VITE_MQTT_BROKER_URL as string,
-    options: {
-        username: import.meta.env.VITE_MQTT_USERNAME || undefined,
-        password: import.meta.env.VITE_MQTT_PASSWORD || undefined,
-        reconnectPeriod: 0,
-    },
-};
-
-export const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
-
 export const PAGE_SIZE = 10;
 
 export const STORAGE_KEYS = {

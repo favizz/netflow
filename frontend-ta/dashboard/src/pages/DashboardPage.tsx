@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { Activity, Droplets, Zap, ShieldCheck, ShieldAlert, ShieldX } from "lucide-react";
 import { fetchApi } from "@/lib/api";
-import { API_BASE_URL } from "@/lib/constants";
 import { TrendChart } from "@/components/dashboard/TrendChart";
 
 interface StatRowItem {
@@ -36,14 +35,15 @@ export default function DashboardPage() {
         totalDevices: 0,
         loaded: false,
     });
-    const [health, setHealth] = useState<'healthy' | 'degraded' | 'critical' | null>(null);
+    // Health is a purely cosmetic stat in this demo — there is no real backend
+    // to probe, so it's hardcoded to a healthy state.
+    const [health] = useState<'healthy' | 'degraded' | 'critical' | null>('healthy');
 
     useEffect(() => {
         Promise.all([
             fetchApi('/unit').catch(() => []),
             fetchApi('/unit/connectivity').catch(() => ({})),
-            fetch(`${API_BASE_URL}/health`).then(r => r.json()).catch(() => null),
-        ]).then(([units, conn, healthData]) => {
+        ]).then(([units, conn]) => {
             let pPower = 0;
             let pWater = 0;
             (units || []).forEach((u: { last_energy_reading?: number; last_water_reading?: number }) => {
@@ -57,9 +57,6 @@ export default function DashboardPage() {
                 totalDevices: conn.totalUnits || (units || []).length,
                 loaded: true,
             });
-            if (healthData && typeof healthData === 'object') {
-                setHealth((healthData as { overall?: 'healthy' | 'degraded' | 'critical' }).overall ?? null);
-            }
         });
     }, []);
 
