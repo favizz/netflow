@@ -13,9 +13,9 @@ type TimePeriod = "live" | "daily" | "yearly" | "monthly";
 type LiveMetric = "power" | "voltage" | "current";
 
 const PERIODS: { id: TimePeriod; label: string }[] = [
-    { id: "daily",   label: "Harian"  },
-    { id: "monthly", label: "Bulanan" },
-    { id: "yearly",  label: "Tahunan" },
+    { id: "daily",   label: "Daily"   },
+    { id: "monthly", label: "Monthly" },
+    { id: "yearly",  label: "Yearly"  },
     { id: "live",    label: "Live"    },
 ];
 
@@ -77,7 +77,7 @@ function offsetKey(key: string, period: TimePeriod, delta: number): string {
 function periodKeyLabel(key: string, period: TimePeriod): string {
     if (period === "daily") {
         const [y, m] = key.split('-').map(Number);
-        return new Date(y, m - 1).toLocaleDateString('id-ID', { month: 'short', year: 'numeric' });
+        return new Date(y, m - 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
     }
     if (period === "monthly") return key;
     return '';
@@ -206,7 +206,7 @@ export default function UnitDetailPage() {
         const timeoutId = window.setTimeout(() => {
             setPendingActuation(current => {
                 if (!current) return current;
-                toast.error('Perintah sudah dikirim, tetapi perangkat belum mengonfirmasi.');
+                toast.error('Command sent, but the device has not confirmed yet.');
                 return null;
             });
         }, 15000);
@@ -356,8 +356,8 @@ export default function UnitDetailPage() {
 
         setHistoricalTrends(filtered.map(t => ({
             time: period === "daily"
-                ? new Date(t.bucket).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })
-                : new Date(t.bucket).toLocaleDateString('id-ID', { month: 'short' }),
+                ? new Date(t.bucket).toLocaleDateString('en-US', { day: 'numeric', month: 'short' })
+                : new Date(t.bucket).toLocaleDateString('en-US', { month: 'short' }),
             powerVal: Number(t.kwh || 0),
             waterVal: Number(t.waterM3 || t.water_m3 || 0),
         })));
@@ -464,7 +464,7 @@ export default function UnitDetailPage() {
                         rawPayload: `OUTGOING [Backend] device/${unitInfo.meterSerial}/command: relay=${newState ? 1 : 0}`,
                     }, ...prev.slice(0, 49)]);
                 }
-                toast.success('Perintah power dikirim. Menunggu konfirmasi perangkat.');
+                toast.success('Power command sent. Waiting for device confirmation.');
             }
             if (confirmAction.type === 'water') {
                 const newState = confirmAction.next;
@@ -480,7 +480,7 @@ export default function UnitDetailPage() {
                         rawPayload: `OUTGOING [Backend] device/${unitInfo.meterSerial}/command: valve=${newState ? 1 : 0}`,
                     }, ...prev.slice(0, 49)]);
                 }
-                toast.success('Perintah valve dikirim. Menunggu konfirmasi perangkat.');
+                toast.success('Valve command sent. Waiting for device confirmation.');
             }
         } catch (err) {
             toast.error(err instanceof Error ? err.message : 'Action failed');
@@ -608,7 +608,7 @@ export default function UnitDetailPage() {
                                     {anomaly.message}
                                 </p>
                                 <span className="text-xs text-red-500/80 dark:text-red-400/70 mt-1 block font-medium">
-                                    Terdeteksi: {new Date(anomaly.timestamp || anomaly.detectedAt || Date.now()).toLocaleString('id-ID')}
+                                    Detected: {new Date(anomaly.timestamp || anomaly.detectedAt || Date.now()).toLocaleString('en-US')}
                                 </span>
                             </div>
                         </div>
@@ -628,7 +628,7 @@ export default function UnitDetailPage() {
                                     <div>
                                         <span className="text-sm font-medium text-gray-800 dark:text-gray-200">Power Supply</span>
                                         {pendingActuation?.type === 'power' && (
-                                            <p className="text-xs text-amber-600 dark:text-amber-400">Menunggu konfirmasi perangkat</p>
+                                            <p className="text-xs text-amber-600 dark:text-amber-400">Waiting for device confirmation</p>
                                         )}
                                     </div>
                                 </div>
@@ -649,7 +649,7 @@ export default function UnitDetailPage() {
                                     <div>
                                         <span className="text-sm font-medium text-gray-800 dark:text-gray-200">Water Supply</span>
                                         {pendingActuation?.type === 'water' && (
-                                            <p className="text-xs text-amber-600 dark:text-amber-400">Menunggu konfirmasi perangkat</p>
+                                            <p className="text-xs text-amber-600 dark:text-amber-400">Waiting for device confirmation</p>
                                         )}
                                     </div>
                                 </div>
@@ -797,7 +797,7 @@ export default function UnitDetailPage() {
                             <span className="text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
                                 {isLive
                                     ? `Live (${activeLiveMetric.unit})`
-                                    : period === "yearly" ? "Tahunan (kWh)" : period === "monthly" ? "Bulanan (kWh)" : "Harian (kWh)"}
+                                    : period === "yearly" ? "Yearly (kWh)" : period === "monthly" ? "Monthly (kWh)" : "Daily (kWh)"}
                             </span>
                         </div>
 
@@ -864,7 +864,7 @@ export default function UnitDetailPage() {
                         <div className="flex items-center justify-between mb-4">
                             <h3 className="font-semibold text-gray-900 dark:text-gray-100">Water</h3>
                             <span className="text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
-                                {isLive ? "Live (L/min)" : period === "yearly" ? "Tahunan (m³)" : period === "monthly" ? "Bulanan (m³)" : "Harian (m³)"}
+                                {isLive ? "Live (L/min)" : period === "yearly" ? "Yearly (m³)" : period === "monthly" ? "Monthly (m³)" : "Daily (m³)"}
                             </span>
                         </div>
                         {trendLoading ? (

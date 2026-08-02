@@ -57,7 +57,7 @@ function BuildingModal({
             await onSave(form);
             onClose();
         } catch (err: unknown) {
-            setError(friendlyError(err, 'Gagal menyimpan.'));
+            setError(friendlyError(err, 'Failed to save.'));
         } finally {
             setSaving(false);
         }
@@ -233,7 +233,7 @@ export default function BuildingsPage() {
                                     <td className="px-6 py-4 font-medium text-gray-900 dark:text-gray-100">{b.name}</td>
                                     <td className="px-6 py-4 text-gray-500 dark:text-gray-400">{b.address || '—'}</td>
                                     <td className="px-6 py-4">{b.floors}</td>
-                                    <td className="px-6 py-4 text-xs">{new Date(b.created_at).toLocaleDateString('id-ID')}</td>
+                                    <td className="px-6 py-4 text-xs">{new Date(b.created_at).toLocaleDateString('en-US')}</td>
                                     <td className="px-6 py-4">
                                         <div className="flex items-center justify-end gap-1">
                                             <button

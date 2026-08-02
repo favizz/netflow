@@ -100,7 +100,7 @@ export default function SystemAuditLog({ unitNo, entries }: SystemAuditLogProps)
                   </div>
                 </div>
                 <p className="text-xs text-muted-foreground mt-2">
-                  {new Date(entry.timestamp).toLocaleString("id-ID")}
+                  {new Date(entry.timestamp).toLocaleString("en-US")}
                 </p>
               </div>
             </div>

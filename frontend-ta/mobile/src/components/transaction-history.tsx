@@ -87,11 +87,11 @@ export default function TransactionHistory({ transactions, onDownloadInvoice }: 
                 <div className="flex-1">
                   <p className="text-sm font-semibold text-foreground">{isPurchase ? "Pembelian Token" : "Konsumsi Utilitas"}</p>
                   <p className="text-xs text-muted-foreground">ID: {transaction.id}</p>
-                  <p className="text-xs text-muted-foreground mt-1">{new Date(txTime).toLocaleString("id-ID")}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{new Date(txTime).toLocaleString("en-US")}</p>
                 </div>
               </div>
               <div className="text-right">
-                <p className="text-sm font-bold text-foreground">Rp {transaction.amount.toLocaleString("id-ID")}</p>
+                <p className="text-sm font-bold text-foreground">Rp {transaction.amount.toLocaleString("en-US")}</p>
                 {transaction.method && <p className="text-xs text-muted-foreground">{transaction.method}</p>}
               </div>
             </div>

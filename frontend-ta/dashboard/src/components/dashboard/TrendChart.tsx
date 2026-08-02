@@ -47,7 +47,7 @@ function offsetPeriodKey(key: string, period: 'daily' | 'monthly' | 'yearly', de
 function periodLabel(key: string, period: Period): string {
     if (period === 'daily') {
         const [y, m] = key.split('-').map(Number);
-        return new Date(y, m - 1).toLocaleDateString('id-ID', { month: 'short', year: 'numeric' });
+        return new Date(y, m - 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
     }
     if (period === 'monthly') return key;
     return 'All Time';
@@ -140,14 +140,14 @@ export function TrendChart() {
                         return k === periodKey;
                     });
                     mapped = filtered.map(t => ({
-                        name: new Date(t.bucket).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }),
+                        name: new Date(t.bucket).toLocaleDateString('en-US', { day: 'numeric', month: 'short' }),
                         electricity: Number(t.kwh || 0),
                         water: Number(t.waterM3 || t.water_m3 || 0),
                     }));
                 } else if (period === 'monthly') {
                     const filtered = raw.filter(t => String(new Date(t.bucket).getFullYear()) === periodKey);
                     mapped = filtered.map(t => ({
-                        name: new Date(t.bucket).toLocaleDateString('id-ID', { month: 'short' }),
+                        name: new Date(t.bucket).toLocaleDateString('en-US', { month: 'short' }),
                         electricity: Number(t.kwh || 0),
                         water: Number(t.waterM3 || t.water_m3 || 0),
                     }));

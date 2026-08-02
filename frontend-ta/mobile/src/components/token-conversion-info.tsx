@@ -28,7 +28,7 @@ export default function TokenConversionInfo({ kwhRate, waterRate }: TokenConvers
                         <Zap size={18} className="text-yellow-500" />
                     </div>
                     <div>
-                        <p className="text-2xl font-bold text-foreground">Rp {kwhRate.toLocaleString("id-ID")}</p>
+                        <p className="text-2xl font-bold text-foreground">Rp {kwhRate.toLocaleString("en-US")}</p>
                         <p className="text-xs text-muted-foreground">per KWh</p>
                     </div>
                 </Card>
@@ -39,7 +39,7 @@ export default function TokenConversionInfo({ kwhRate, waterRate }: TokenConvers
                         <Droplets size={18} className="text-blue-500" />
                     </div>
                     <div>
-                        <p className="text-2xl font-bold text-foreground">Rp {waterRate.toLocaleString("id-ID")}</p>
+                        <p className="text-2xl font-bold text-foreground">Rp {waterRate.toLocaleString("en-US")}</p>
                         <p className="text-xs text-muted-foreground">per M³</p>
                     </div>
                 </Card>

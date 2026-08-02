@@ -1,7 +1,7 @@
 // Unified design tokens - import from here, never hardcode Tailwind class strings inline
 
 // ── Domain types ──────────────────────────────────────────────────────────────
-export type BalanceStatus = "aman" | "kurang" | "kritis" | "terputus"
+export type BalanceStatus = "good" | "low" | "critical" | "offline"
 export type UtilityType   = "electricity" | "water"
 export type TimePeriod    = "daily" | "yearly" | "monthly" | "live"
 export type TxStatus      = "pending" | "success" | "failed"
@@ -16,7 +16,7 @@ export const POPULAR_IDX = 2 // 0-indexed → 100k package
 
 export const PAYMENT_METHODS = [
   { id: "qris"     as PaymentMethod, label: "QRIS" },
-  { id: "transfer" as PaymentMethod, label: "Transfer Bank" },
+  { id: "transfer" as PaymentMethod, label: "Bank Transfer" },
   { id: "ewallet"  as PaymentMethod, label: "E-Wallet" },
 ] as const
 
@@ -30,10 +30,10 @@ export type StatusInfo = {
 }
 
 export const STATUS_MAP: Record<BalanceStatus, StatusInfo> = {
-  aman:     { label: "Normal",       barColor: "bg-status-good",     textColor: "text-status-good",     bgColor: "bg-status-good/10",     borderColor: "border-status-good/20"     },
-  kurang:   { label: "Hampir Habis", barColor: "bg-status-warn",     textColor: "text-status-warn",     bgColor: "bg-status-warn/10",     borderColor: "border-status-warn/20"     },
-  kritis:   { label: "Kritis",       barColor: "bg-status-critical", textColor: "text-status-critical", bgColor: "bg-status-critical/10", borderColor: "border-status-critical/20" },
-  terputus: { label: "Terputus",     barColor: "bg-status-offline",  textColor: "text-status-offline",  bgColor: "bg-muted",              borderColor: "border-border"             },
+  good:     { label: "Normal",       barColor: "bg-status-good",     textColor: "text-status-good",     bgColor: "bg-status-good/10",     borderColor: "border-status-good/20"     },
+  low:      { label: "Running Low",  barColor: "bg-status-warn",     textColor: "text-status-warn",     bgColor: "bg-status-warn/10",     borderColor: "border-status-warn/20"     },
+  critical: { label: "Critical",     barColor: "bg-status-critical", textColor: "text-status-critical", bgColor: "bg-status-critical/10", borderColor: "border-status-critical/20" },
+  offline:  { label: "Disconnected", barColor: "bg-status-offline",  textColor: "text-status-offline",  bgColor: "bg-muted",              borderColor: "border-border"             },
 }
 
 // ── Typography ────────────────────────────────────────────────────────────────

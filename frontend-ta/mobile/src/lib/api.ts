@@ -327,7 +327,7 @@ export const api = {
   async selectUnit(unitId: number): Promise<SelectUnitResponse> {
     await delay();
     const unit = findUnitById(unitId);
-    if (!unit) throw new Error('Unit tidak ditemukan');
+    if (!unit) throw new Error('Unit not found');
     setSessionUnit(unit.id);
     const pair = makeTokenPair(unit.unitNo);
     authStore.setTokens(pair.accessToken, pair.refreshToken);
@@ -360,28 +360,28 @@ export const api = {
     await delay(200, 450);
     const tx = findTransaction(transactionId);
     if (!tx || tx.unitNo !== unitNo) {
-      throw new Error('Invoice tidak ditemukan');
+      throw new Error('Invoice not found');
     }
     const unit = findUnit(unitNo);
     const refNumber = `INV-${tx.id.replace('TRX-', '')}`;
     const lines = [
-      'NETFLOW - BUKTI PEMBAYARAN',
+      'NETFLOW - PAYMENT RECEIPT',
       '================================',
       `Unit            : ${unitNo}`,
-      `No. Referensi   : ${refNumber}`,
-      `ID Transaksi    : ${tx.id}`,
-      `Tanggal         : ${new Date(tx.createdAt).toLocaleString('id-ID')}`,
-      `Metode          : ${tx.method.toUpperCase()}`,
-      `Status          : ${tx.status === 'success' ? 'BERHASIL' : tx.status.toUpperCase()}`,
+      `Reference No.   : ${refNumber}`,
+      `Transaction ID  : ${tx.id}`,
+      `Date            : ${new Date(tx.createdAt).toLocaleString('en-US')}`,
+      `Method          : ${tx.method.toUpperCase()}`,
+      `Status          : ${tx.status === 'success' ? 'SUCCESS' : tx.status.toUpperCase()}`,
       '--------------------------------',
-      tx.elecAmount > 0 ? `Token Listrik   : Rp ${tx.elecAmount.toLocaleString('id-ID')}` : null,
-      tx.waterAmount > 0 ? `Token Air       : Rp ${tx.waterAmount.toLocaleString('id-ID')}` : null,
+      tx.elecAmount > 0 ? `Electricity     : Rp ${tx.elecAmount.toLocaleString('en-US')}` : null,
+      tx.waterAmount > 0 ? `Water           : Rp ${tx.waterAmount.toLocaleString('en-US')}` : null,
       '--------------------------------',
-      `Total           : Rp ${tx.amount.toLocaleString('id-ID')}`,
+      `Total           : Rp ${tx.amount.toLocaleString('en-US')}`,
       '================================',
-      `Perangkat       : ${unit?.deviceId ?? `DEV-${unitNo}`}`,
+      `Device          : ${unit?.deviceId ?? `DEV-${unitNo}`}`,
       '',
-      'Terima kasih telah menggunakan NetFlow.',
+      'Thank you for using NetFlow.',
     ].filter((l): l is string => l !== null);
     return lines.join('\n');
   },
@@ -389,7 +389,7 @@ export const api = {
   async getDashboard(unitNo: string): Promise<{ unitNo: string; summary: DashboardSummary }> {
     await delay();
     const unit = findUnit(unitNo);
-    if (!unit) throw new Error('Unit tidak ditemukan');
+    if (!unit) throw new Error('Unit not found');
     return { unitNo: unit.unitNo, summary: toDashboardSummary(unit) };
   },
 
@@ -421,7 +421,7 @@ export const api = {
   ): Promise<{ transactionId: string; checkoutUrl: string; status: string; vaNumber?: string; qrUrl?: string }> {
     await delay(250, 500);
     const unit = findUnit(unitNo);
-    if (!unit) throw new Error('Unit tidak ditemukan');
+    if (!unit) throw new Error('Unit not found');
     const now = Date.now();
     const tx: MockTransaction = {
       id: genTransactionId(),
@@ -462,7 +462,7 @@ export const api = {
   }> {
     await delay(150, 350);
     const tx = findTransaction(transactionId);
-    if (!tx || tx.unitNo !== unitNo) throw new Error('Transaksi tidak ditemukan');
+    if (!tx || tx.unitNo !== unitNo) throw new Error('Transaction not found');
 
     if (tx.status !== 'success' && tx.autoConfirmAt !== undefined && Date.now() >= tx.autoConfirmAt) {
       const unit = findUnit(unitNo);

@@ -252,7 +252,7 @@ export default function LogsPage() {
                             {pageItems.map(log => (
                                 <tr key={log.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
                                     <td className="px-4 py-3 whitespace-nowrap font-mono text-xs text-gray-900 dark:text-gray-300">
-                                        {log.timestamp ? new Date(log.timestamp).toLocaleString('id-ID') : '-'}
+                                        {log.timestamp ? new Date(log.timestamp).toLocaleString('en-US') : '-'}
                                     </td>
                                     <td className="px-4 py-3 text-xs text-primary font-medium whitespace-nowrap">{log.actor}</td>
                                     <td className="px-4 py-3 font-mono text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">{log.action}</td>

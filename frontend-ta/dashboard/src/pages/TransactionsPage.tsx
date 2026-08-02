@@ -195,12 +195,12 @@ export default function TransactionsPage() {
                             <tr key={tx.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
                                 <td className="px-6 py-4 font-mono text-xs text-gray-900 dark:text-gray-100">{tx.id}</td>
                                 <td className="px-6 py-4 text-xs">
-                                    {tx.createdAt ? new Date(tx.createdAt).toLocaleString('id-ID') : '-'}
+                                    {tx.createdAt ? new Date(tx.createdAt).toLocaleString('en-US') : '-'}
                                 </td>
                                 <td className="px-6 py-4 font-medium text-gray-900 dark:text-gray-100">{tx.unitNo ?? '-'}</td>
                                 <td className="px-6 py-4">{METHOD_LABEL[tx.method] ?? tx.method ?? '-'}</td>
                                 <td className="px-6 py-4 font-medium text-gray-900 dark:text-gray-100">
-                                    Rp {tx.amount.toLocaleString('id-ID')}
+                                    Rp {tx.amount.toLocaleString('en-US')}
                                 </td>
                                 <td className="px-6 py-4">
                                     <span className={cn(

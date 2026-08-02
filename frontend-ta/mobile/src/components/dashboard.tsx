@@ -48,9 +48,9 @@ type LiveMetric = "power" | "voltage" | "current"
 type PendingActuation = { target: ControlTarget; next: boolean } | null
 
 const LIVE_METRICS: { id: LiveMetric; label: string }[] = [
-  { id: "power",   label: "Daya"     },
-  { id: "voltage", label: "Tegangan" },
-  { id: "current", label: "Arus"     },
+  { id: "power",   label: "Power"   },
+  { id: "voltage", label: "Voltage" },
+  { id: "current", label: "Current" },
 ]
 
 type TrendPoint = {
@@ -63,10 +63,10 @@ type TrendPoint = {
 type ControlTarget = "relay" | "valve"
 
 const PERIODS: { id: TimePeriod; label: string }[] = [
-  { id: "daily",   label: "Harian"   },
-  { id: "monthly", label: "Bulanan"  },
-  { id: "yearly",  label: "Tahunan"  },
-  { id: "live",    label: "Live"     },
+  { id: "daily",   label: "Daily"   },
+  { id: "monthly", label: "Monthly" },
+  { id: "yearly",  label: "Yearly"  },
+  { id: "live",    label: "Live"    },
 ]
 
 function getDefaultPeriodKey(period: TimePeriod): string {
@@ -89,7 +89,7 @@ function offsetKey(key: string, period: TimePeriod, delta: number): string {
 function periodKeyLabel(key: string, period: TimePeriod): string {
   if (period === "daily") {
     const [y, m] = key.split('-').map(Number);
-    return new Date(y, m - 1).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+    return new Date(y, m - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
   }
   if (period === "monthly") return `Tahun ${key}`;
   return '';
@@ -152,8 +152,8 @@ export default function Dashboard({ unitId }: DashboardProps) {
     if (current === pendingActuation.next) {
       toast.success(
         pendingActuation.target === "relay"
-          ? pendingActuation.next ? "Aliran listrik dikonfirmasi aktif" : "Aliran listrik dikonfirmasi mati"
-          : pendingActuation.next ? "Aliran air dikonfirmasi aktif" : "Aliran air dikonfirmasi mati"
+          ? pendingActuation.next ? "Power supply confirmed on" : "Power supply confirmed off"
+          : pendingActuation.next ? "Water supply confirmed on" : "Water supply confirmed off"
       )
       setPendingActuation(null)
     }
@@ -164,7 +164,7 @@ export default function Dashboard({ unitId }: DashboardProps) {
     const timeoutId = window.setTimeout(() => {
       setPendingActuation((current) => {
         if (!current) return current
-        toast.error("Perintah sudah dikirim, tetapi perangkat belum mengonfirmasi.")
+        toast.error("Command sent, but the device has not confirmed yet.")
         return null
       })
     }, 15000)
@@ -203,7 +203,7 @@ export default function Dashboard({ unitId }: DashboardProps) {
     setTrendData([]);
   }, [period]);
 
-  // Load trend (Harian / Tahunan / Bulanan)
+  // Load trend (Daily / Yearly / Monthly)
   useEffect(() => {
     if (period === "live") return
     let active = true
@@ -256,8 +256,8 @@ export default function Dashboard({ unitId }: DashboardProps) {
 
     setTrendData(filtered.map((r) => ({
       date: period === "monthly"
-        ? new Date(r.bucket).toLocaleDateString("id-ID", { month: "short" })
-        : new Date(r.bucket).toLocaleDateString("id-ID", { day: "2-digit", month: "short" }),
+        ? new Date(r.bucket).toLocaleDateString("en-US", { month: "short" })
+        : new Date(r.bucket).toLocaleDateString("en-US", { day: "2-digit", month: "short" }),
       kwh: r.kwh,
       water: r.waterM3,
       fullDate: r.bucket,
@@ -297,7 +297,7 @@ export default function Dashboard({ unitId }: DashboardProps) {
       const now = new Date()
       setLiveData((prev) => {
         const point: LivePoint = {
-          date:     now.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
+          date:     now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
           kwh:      p.kwh,
           water:    p.water,
           watts:    p.watts,
@@ -322,8 +322,8 @@ export default function Dashboard({ unitId }: DashboardProps) {
   // ── Derived ───────────────────────────────────────────────────────────────
   const kwhPercentage   = useMemo(() => Math.min(100, Math.max(0, kwh)),       [kwh])
   const waterPercentage = useMemo(() => Math.min(100, Math.max(0, water * 2)), [water])
-  const kwhStatus:   BalanceStatus = kwh   <= 0 ? "terputus" : kwh   <= 5  ? "kritis" : kwh   <= 20 ? "kurang" : "aman"
-  const waterStatus: BalanceStatus = water <= 0 ? "terputus" : water <= 0.5 ? "kritis" : water <= 3  ? "kurang" : "aman"
+  const kwhStatus:   BalanceStatus = kwh   <= 0 ? "offline" : kwh   <= 5  ? "critical" : kwh   <= 20 ? "low" : "good"
+  const waterStatus: BalanceStatus = water <= 0 ? "offline" : water <= 0.5 ? "critical" : water <= 3  ? "low" : "good"
 
   const avgDailyKwh = useMemo(() => {
     if (trendData.length === 0) return null
@@ -367,14 +367,14 @@ export default function Dashboard({ unitId }: DashboardProps) {
       if (confirmTarget === "relay") {
         await api.setRelay(unitId, confirmNextVal)
         setPendingActuation({ target: "relay", next: confirmNextVal })
-        toast.success("Perintah listrik dikirim. Menunggu konfirmasi perangkat.")
+        toast.success("Power command sent. Waiting for device confirmation.")
       } else {
         await api.setValve(unitId, confirmNextVal)
         setPendingActuation({ target: "valve", next: confirmNextVal })
-        toast.success("Perintah air dikirim. Menunggu konfirmasi perangkat.")
+        toast.success("Water command sent. Waiting for device confirmation.")
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Gagal mengubah status perangkat")
+      toast.error(err instanceof Error ? err.message : "Failed to change device status")
     } finally {
       setControlPending(false); setConfirmTarget(null)
     }
@@ -401,7 +401,7 @@ export default function Dashboard({ unitId }: DashboardProps) {
           : "bg-status-warn/10 border-status-warn/25 text-status-warn"
       }`}>
         <div>
-          <p className="text-xs font-bold uppercase tracking-wide">Status Perangkat</p>
+          <p className="text-xs font-bold uppercase tracking-wide">Device Status</p>
           <p className="text-sm font-semibold">{isDeviceOnline ? "Online" : "Offline"}</p>
         </div>
         <span className={`h-2.5 w-2.5 rounded-full ${isDeviceOnline ? "bg-primary animate-pulse" : "bg-status-warn"}`} />
@@ -411,10 +411,10 @@ export default function Dashboard({ unitId }: DashboardProps) {
       <div className="grid grid-cols-2 gap-3">
         <StatCard
           icon={<Zap size={18} />}
-          label="Listrik"
+          label="Electricity"
           value={kwh.toFixed(2)}
           unit="KWh"
-          rate={avgDailyKwh !== null ? `~${avgDailyKwh.toFixed(1)} kWh/hari` : undefined}
+          rate={avgDailyKwh !== null ? `~${avgDailyKwh.toFixed(1)} kWh/day` : undefined}
           percentage={kwhPercentage}
           status={kwhStatus}
           controlOn={relayOn}
@@ -423,10 +423,10 @@ export default function Dashboard({ unitId }: DashboardProps) {
         />
         <StatCard
           icon={<Droplets size={18} />}
-          label="Air Bersih"
+          label="Clean Water"
           value={water.toFixed(3)}
           unit="m³"
-          rate={avgDailyWater !== null ? `~${avgDailyWater.toFixed(2)} m³/hari` : undefined}
+          rate={avgDailyWater !== null ? `~${avgDailyWater.toFixed(2)} m³/day` : undefined}
           percentage={waterPercentage}
           status={waterStatus}
           controlOn={valveOpen}
@@ -441,14 +441,14 @@ export default function Dashboard({ unitId }: DashboardProps) {
 
         {/* Header */}
         <div className="flex items-center justify-between">
-          <h2 className="font-bold text-base text-foreground">Konsumsi</h2>
+          <h2 className="font-bold text-base text-foreground">Consumption</h2>
           {/* Utility toggle */}
           <div className="flex gap-0.5 bg-muted rounded-lg p-0.5">
             {(["electricity", "water"] as const).map((u) => (
               <button
                 key={u}
                 onClick={() => setChartUtility(u)}
-                title={u === "electricity" ? "Listrik" : "Air"}
+                title={u === "electricity" ? "Electricity" : "Water"}
                 className={`flex items-center justify-center w-8 h-7 rounded-md text-xs font-semibold transition-all ${
                   chartUtility === u ? "bg-card text-primary shadow-sm" : "text-muted-foreground hover:text-foreground"
                 }`}
@@ -527,7 +527,7 @@ export default function Dashboard({ unitId }: DashboardProps) {
             {chartUtility === "electricity" ? (
               <>
                 <p className="text-xs text-muted-foreground mb-0.5">
-                  {liveMeterMetric === "power" ? "Daya Saat Ini" : liveMeterMetric === "voltage" ? "Tegangan Saat Ini" : "Arus Saat Ini"}
+                  {liveMeterMetric === "power" ? "Current Power" : liveMeterMetric === "voltage" ? "Current Voltage" : "Current Amperage"}
                 </p>
                 <p className="text-xl font-bold text-foreground leading-none">
                   {liveMeterMetric === "power"
@@ -540,7 +540,7 @@ export default function Dashboard({ unitId }: DashboardProps) {
               </>
             ) : (
               <>
-                <p className="text-xs text-muted-foreground mb-0.5">Debit Air</p>
+                <p className="text-xs text-muted-foreground mb-0.5">Water Flow Rate</p>
                 <p className="text-xl font-bold text-foreground leading-none">
                   {currentFlow.toFixed(1)}
                   <span className="text-xs font-normal text-muted-foreground ml-1">L/min</span>
@@ -554,7 +554,7 @@ export default function Dashboard({ unitId }: DashboardProps) {
         {isLive && !liveConnected && (
           <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/40 rounded-xl px-3 py-2">
             <WifiOff size={14} />
-            Menghubungkan ke perangkat...
+            Connecting to device...
           </div>
         )}
 
@@ -564,8 +564,8 @@ export default function Dashboard({ unitId }: DashboardProps) {
         ) : displayData.length === 0 ? (
           <div className="h-48 flex flex-col items-center justify-center gap-2 text-muted-foreground">
             {isLive
-              ? <><Wifi size={24} className="opacity-40" /><p className="text-sm">Menunggu data dari perangkat...</p></>
-              : <p className="text-sm">Belum ada data untuk periode ini</p>
+              ? <><Wifi size={24} className="opacity-40" /><p className="text-sm">Waiting for data from device...</p></>
+              : <p className="text-sm">No data yet for this period</p>
             }
           </div>
         ) : (
@@ -582,7 +582,7 @@ export default function Dashboard({ unitId }: DashboardProps) {
         {/* Stats row */}
         {displayData.length > 0 && (
           <div className="pt-1 border-t border-border">
-            <p className="text-xs text-muted-foreground">{isLive ? "Puncak" : "Total"}</p>
+            <p className="text-xs text-muted-foreground">{isLive ? "Peak" : "Total"}</p>
             <p className="font-bold text-foreground">
               {isLive
                 ? Math.max(...displayData.map((d) => (d as unknown as Record<string, number>)[chartDataKey] ?? 0)).toFixed(
@@ -602,29 +602,29 @@ export default function Dashboard({ unitId }: DashboardProps) {
           <AlertDialogHeader>
             <AlertDialogTitle>
               {confirmNextVal
-                ? `Nyalakan ${confirmTarget === "relay" ? "aliran listrik" : "aliran air"}?`
-                : `Matikan ${confirmTarget === "relay" ? "aliran listrik" : "aliran air"}?`
+                ? `Turn on ${confirmTarget === "relay" ? "power supply" : "water supply"}?`
+                : `Turn off ${confirmTarget === "relay" ? "power supply" : "water supply"}?`
               }
             </AlertDialogTitle>
             <AlertDialogDescription>
               {confirmTarget === "relay"
                 ? confirmNextVal
-                  ? "Relay akan dinyalakan. Pastikan perangkat siap menerima aliran listrik."
-                  : "Relay akan dimatikan. Aliran listrik ke unit akan terputus."
+                  ? "The relay will be turned on. Make sure the device is ready to receive power."
+                  : "The relay will be turned off. Power to the unit will be cut."
                 : confirmNextVal
-                  ? "Katup air akan dibuka. Aliran air akan kembali aktif."
-                  : "Katup air akan ditutup. Aliran air ke unit akan terputus."
+                  ? "The water valve will be opened. Water flow will resume."
+                  : "The water valve will be closed. Water flow to the unit will stop."
               }
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={controlPending}>Batal</AlertDialogCancel>
+            <AlertDialogCancel disabled={controlPending}>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => void confirmToggle()}
               disabled={controlPending}
               className={!confirmNextVal ? "bg-destructive hover:bg-destructive/90 text-destructive-foreground" : ""}
             >
-              {controlPending ? "Memproses..." : "Ya, Lanjutkan"}
+              {controlPending ? "Processing..." : "Yes, Continue"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -665,7 +665,7 @@ function StatCard({ icon, label, value, unit, rate, percentage, status, controlO
         <p className="text-xs text-muted-foreground mt-0.5">{unit} · {label}</p>
       </div>
       {controlPending && (
-        <p className="text-[10px] font-semibold text-amber-600">Menunggu konfirmasi perangkat</p>
+        <p className="text-[10px] font-semibold text-amber-600">Waiting for device confirmation</p>
       )}
       <div className="space-y-1.5">
         <span className={`inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full border ${bgColor} ${textColor} ${borderColor}`}>

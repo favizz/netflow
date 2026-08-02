@@ -64,7 +64,7 @@ const generateMockData = (unitId: string) => {
     maxKwh: 100,
     water: random(30),
     maxWater: 50,
-    lastUpdated: new Date().toLocaleString("id-ID"),
+    lastUpdated: new Date().toLocaleString("en-US"),
     conversionRate: {
       kwh: 1800,
       water: 4800,
@@ -133,7 +133,7 @@ export function useAppState() {
       ...prev,
       kwh: Math.max(0, Math.min(prev.maxKwh, kwh)),
       water: Math.max(0, Math.min(prev.maxWater, water)),
-      lastUpdated: new Date().toLocaleString("id-ID"),
+      lastUpdated: new Date().toLocaleString("en-US"),
     }))
   }, [])
 

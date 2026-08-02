@@ -80,7 +80,7 @@ function TariffCard({ icon, label, unit, tariff, pendingTariff, onSave }: {
                 tariff ? (
                     <div>
                         <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                            Rp {Number(tariff.price_per_unit).toLocaleString('id-ID')}
+                            Rp {Number(tariff.price_per_unit).toLocaleString('en-US')}
                         </p>
                         <p className="mt-1 flex items-center gap-1 text-xs text-gray-400 dark:text-gray-500">
                             <Clock className="h-3 w-3" /> Effective from {tariff.effective_date}
@@ -88,7 +88,7 @@ function TariffCard({ icon, label, unit, tariff, pendingTariff, onSave }: {
                         {pendingTariff && (
                             <p className="mt-1.5 flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
                                 <Clock className="h-3 w-3" />
-                                Scheduled: Rp {Number(pendingTariff.price_per_unit).toLocaleString('id-ID')} from {pendingTariff.effective_date}
+                                Scheduled: Rp {Number(pendingTariff.price_per_unit).toLocaleString('en-US')} from {pendingTariff.effective_date}
                             </p>
                         )}
                     </div>
@@ -194,7 +194,7 @@ type LogEntry = {
 
 let _logSeq = 0;
 function makeId() { return `${Date.now().toString(36)}-${(++_logSeq).toString(36)}`; }
-function ts() { return new Date().toLocaleTimeString('id-ID', { hour12: false }); }
+function ts() { return new Date().toLocaleTimeString('en-US', { hour12: false }); }
 
 export default function ControlCenterPage() {
     const toast = useToast();
@@ -398,7 +398,7 @@ export default function ControlCenterPage() {
             .catch(() => {})
             .finally(() => setLoadingConfig(false));
         loadTariffs();
-        setLastUpdated(new Date().toLocaleString('id-ID'));
+        setLastUpdated(new Date().toLocaleString('en-US'));
     }, [loadTariffs]);
 
     const handleSave = async () => {
@@ -408,7 +408,7 @@ export default function ControlCenterPage() {
             await fetchApi('/admin/settings', { method: 'PATCH', body: JSON.stringify(config) });
             setServerConfig({ ...config });
             setSaveStatus('success');
-            setLastUpdated(new Date().toLocaleString('id-ID'));
+            setLastUpdated(new Date().toLocaleString('en-US'));
         } catch {
             setSaveStatus('error');
         } finally {

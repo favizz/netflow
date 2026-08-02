@@ -145,9 +145,9 @@ function genTxId(seq: number): string {
 
 function seed(): MockDbShape {
   const buildings: MockBuilding[] = [
-    { id: 1, code: 'TOWER-A', name: 'Menara Anggrek' },
-    { id: 2, code: 'TOWER-B', name: 'Menara Bougenville' },
-    { id: 3, code: 'TOWER-C', name: 'Menara Cempaka' },
+    { id: 1, code: 'TOWER-A', name: 'Tower A' },
+    { id: 2, code: 'TOWER-B', name: 'Tower B' },
+    { id: 3, code: 'TOWER-C', name: 'Tower C' },
   ]
 
   const unitDefs: { unitNo: string; buildingId: number }[] = [
@@ -180,7 +180,7 @@ function seed(): MockDbShape {
 
   const user: MockUser = {
     email: 'resident@netflow.demo',
-    name: 'Nadia Putri',
+    name: 'Jane Doe',
     unitIds: [aUnit.id, bUnit.id],
   }
 
@@ -224,28 +224,28 @@ function seed(): MockDbShape {
     {
       id: 'ANM-1001', unitNo: 'A-101', deviceId: 'DEV-A-101',
       anomalyType: 'low_electricity_token', severity: 'warning',
-      message: 'Token listrik tersisa 4.2 kWh, segera lakukan pengisian ulang.',
+      message: 'Electricity token has 4.2 kWh remaining — top up soon.',
       metadata: { remainingKwh: 4.2 },
       detectedAt: daysAgoIso(2, 4),
     },
     {
       id: 'ANM-1002', unitNo: 'A-101', deviceId: 'DEV-A-101',
       anomalyType: 'usage_spike', severity: 'info',
-      message: 'Konsumsi listrik naik 65% dibanding rata-rata harian.',
+      message: 'Electricity consumption is up 65% compared to the daily average.',
       metadata: { increasePct: 65 },
       detectedAt: daysAgoIso(5, 2),
     },
     {
       id: 'ANM-1003', unitNo: 'A-101', deviceId: 'DEV-A-101',
       anomalyType: 'voltage_anomaly', severity: 'critical',
-      message: 'Tegangan terdeteksi 245V, di luar rentang normal 210-230V.',
+      message: 'Voltage detected at 245V, outside the normal range of 210-230V.',
       metadata: { voltage: 245 },
       detectedAt: daysAgoIso(9, 1),
     },
     {
       id: 'ANM-1004', unitNo: 'A-101', deviceId: 'DEV-A-101',
       anomalyType: 'device_offline', severity: 'warning',
-      message: 'Perangkat DEV-A-101 tidak mengirim data selama 20 menit.',
+      message: 'Device DEV-A-101 has not sent data for 20 minutes.',
       metadata: { minutesOffline: 20 },
       detectedAt: daysAgoIso(13, 5),
     },

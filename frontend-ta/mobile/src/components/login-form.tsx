@@ -21,7 +21,7 @@ export default function LoginForm({ onGoogleLogin }: LoginFormProps) {
     try {
       await onGoogleLogin("demo-credential")
     } catch (err) {
-      const raw = err instanceof Error ? err.message : "Login gagal"
+      const raw = err instanceof Error ? err.message : "Login failed"
       const parsed = (() => { try { return JSON.parse(raw) as { message?: string } } catch { return null } })()
       setError(parsed?.message ?? raw)
     } finally {
@@ -42,7 +42,7 @@ export default function LoginForm({ onGoogleLogin }: LoginFormProps) {
               />
             </div>
             <h1 className="text-4xl font-extrabold text-slate-900 dark:text-white tracking-tight">NETFLOW</h1>
-            <p className="text-base text-slate-500 dark:text-slate-400">Manajemen Utilitas Apartemen Anda</p>
+            <p className="text-base text-slate-500 dark:text-slate-400">Your Apartment Utility Management</p>
           </div>
 
           <div className="flex flex-col items-center gap-4 pt-2">
@@ -64,7 +64,7 @@ export default function LoginForm({ onGoogleLogin }: LoginFormProps) {
                 <path fill="#FBBC05" d="M3.97 10.72A5.4 5.4 0 0 1 3.68 9c0-.6.1-1.18.29-1.72V4.95H.96A9 9 0 0 0 0 9c0 1.45.35 2.83.96 4.05l3.01-2.33z" />
                 <path fill="#EA4335" d="M9 3.58c1.32 0 2.51.46 3.44 1.35l2.58-2.58C13.46.89 11.43 0 9 0A9 9 0 0 0 .96 4.95l3.01 2.33C4.68 5.16 6.66 3.58 9 3.58z" />
               </svg>
-              <span>{isLoading ? "Memproses..." : "Masuk dengan Google"}</span>
+              <span>{isLoading ? "Signing in..." : "Continue with Google"}</span>
             </button>
 
             {error && (

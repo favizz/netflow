@@ -416,7 +416,7 @@ export default function UsersPage() {
                                             </div>
                                         </td>
                                         <td className="px-3 sm:px-6 py-3 text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">
-                                            {res.created_at ? new Date(res.created_at).toLocaleDateString('id-ID') : '-'}
+                                            {res.created_at ? new Date(res.created_at).toLocaleDateString('en-US') : '-'}
                                         </td>
                                         <td className="px-3 sm:px-6 py-3 text-right">
                                             <div className="flex items-center justify-end gap-1">

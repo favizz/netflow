@@ -22,19 +22,19 @@ const ANOMALY_META: Record<
   AnomalyType,
   { label: string; Icon: React.ElementType; action: string }
 > = {
-  low_electricity_token: { label: "Token Listrik Hampir Habis", Icon: BatteryWarning, action: "Segera beli token listrik di menu Beli Token." },
-  low_water_token:       { label: "Token Air Hampir Habis",     Icon: BatteryWarning, action: "Segera beli token air di menu Beli Token." },
-  mcb_trip:              { label: "MCB Trip / Overload",        Icon: Zap,            action: "Kurangi beban listrik, lalu nyalakan ulang relay dari Beranda." },
-  water_leak:            { label: "Kebocoran Air",              Icon: Droplets,       action: "Periksa seluruh kran dan pipa. Hubungi teknisi jika tidak ditemukan." },
-  voltage_anomaly:       { label: "Tegangan Tidak Normal",      Icon: AlertTriangle,  action: "Hentikan pemakaian perangkat sensitif dan laporkan ke pengelola." },
-  sensor_malfunction:    { label: "Sensor Tidak Berfungsi",     Icon: Cpu,            action: "Hubungi teknisi untuk pemeriksaan sensor dan kabel." },
-  low_power_factor:      { label: "Faktor Daya Rendah",         Icon: Gauge,          action: "Kurangi beban induktif atau hubungi teknisi listrik." },
-  usage_spike:           { label: "Lonjakan Konsumsi",          Icon: TrendingUp,     action: "Periksa perangkat yang baru dinyalakan. Matikan yang tidak diperlukan." },
-  jailbreak:             { label: "Bypass Sistem",              Icon: ShieldAlert,    action: "Hubungi pengelola gedung segera." },
-  device_offline:        { label: "Perangkat Offline",          Icon: WifiOff,        action: "Hubungi pengelola untuk pemeriksaan perangkat." },
-  zero_flow:             { label: "Aliran Air Nol",             Icon: Droplets,       action: "Valve terbuka namun tidak ada aliran. Periksa pipa atau hubungi pengelola." },
-  backflow:              { label: "Aliran Air Balik",           Icon: Droplets,       action: "Terdeteksi aliran balik. Hubungi teknisi segera." },
-  topup_success:         { label: "Pembayaran Token Berhasil",  Icon: CheckCircle,    action: "Menunggu sinkronisasi perangkat." },
+  low_electricity_token: { label: "Electricity Token Running Low", Icon: BatteryWarning, action: "Top up electricity token soon from the Buy Token menu." },
+  low_water_token:       { label: "Water Token Running Low",       Icon: BatteryWarning, action: "Top up water token soon from the Buy Token menu." },
+  mcb_trip:              { label: "MCB Trip / Overload",           Icon: Zap,            action: "Reduce the electrical load, then restart the relay from Home." },
+  water_leak:            { label: "Water Leak",                    Icon: Droplets,       action: "Check all faucets and pipes. Contact a technician if nothing is found." },
+  voltage_anomaly:       { label: "Abnormal Voltage",               Icon: AlertTriangle,  action: "Stop using sensitive devices and report it to the manager." },
+  sensor_malfunction:    { label: "Sensor Malfunction",             Icon: Cpu,            action: "Contact a technician to inspect the sensor and wiring." },
+  low_power_factor:      { label: "Low Power Factor",               Icon: Gauge,          action: "Reduce inductive load or contact an electrician." },
+  usage_spike:           { label: "Usage Spike",                    Icon: TrendingUp,     action: "Check for recently switched-on devices. Turn off any that aren't needed." },
+  jailbreak:             { label: "System Bypass",                  Icon: ShieldAlert,    action: "Contact building management immediately." },
+  device_offline:        { label: "Device Offline",                 Icon: WifiOff,        action: "Contact management to have the device inspected." },
+  zero_flow:             { label: "Zero Water Flow",                Icon: Droplets,       action: "Valve is open but there's no flow. Check the pipes or contact management." },
+  backflow:              { label: "Backflow",                       Icon: Droplets,       action: "Backflow detected. Contact a technician immediately." },
+  topup_success:         { label: "Token Payment Successful",       Icon: CheckCircle,    action: "Waiting for device sync." },
 }
 
 // ── Unit selector (custom dropdown, no system UI) ─────────────────────────────
@@ -172,7 +172,7 @@ export default function App() {
       const sel = await api.selectUnit(result.units[0].id)
       setUserUnit(sel.unitNo!); setAvailableUnits(sel.units); setIsLoggedIn(true)
     } else {
-      throw new Error(JSON.stringify({ message: 'Akun belum memiliki unit yang terdaftar. Hubungi administrator.' }))
+      throw new Error(JSON.stringify({ message: 'This account has no registered units yet. Please contact an administrator.' }))
     }
   }
 
@@ -209,14 +209,14 @@ export default function App() {
           <button
             onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
             className={`${interactive.ghost} text-muted-foreground`}
-            aria-label="Ganti tema"
+            aria-label="Toggle theme"
           >
             {theme === "dark" ? <Sun size={20} /> : <Moon size={20} />}
           </button>
           <button
             onClick={() => setShowLogoutConfirm(true)}
             className={`${interactive.ghost} text-muted-foreground hover:text-destructive`}
-            aria-label="Keluar"
+            aria-label="Log out"
           >
             <LogOut size={20} />
           </button>
@@ -244,7 +244,7 @@ export default function App() {
       {/* ── Bottom nav with centre FAB ──────────────────────────────────── */}
       <nav className="flex-none relative h-16 bg-card/95 backdrop-blur-sm border-t border-border z-20 overflow-visible">
         <div className="flex h-full">
-          {/* Left - Beli Token */}
+          {/* Left - Buy Token */}
           <button
             onClick={() => setCurrentPage("purchase")}
             className={`flex-1 flex flex-col items-center justify-center gap-1 transition-colors duration-150 ${
@@ -252,13 +252,13 @@ export default function App() {
             }`}
           >
             <ShoppingCart size={22} />
-            <span className="text-xs font-medium">Beli Token</span>
+            <span className="text-xs font-medium">Buy Token</span>
           </button>
 
           {/* Centre spacer - keeps left/right balanced */}
           <div className="w-20 flex-shrink-0" />
 
-          {/* Right - Notifikasi */}
+          {/* Right - Notifications */}
           <button
             onClick={() => setCurrentPage("notifications")}
             className={`flex-1 flex flex-col items-center justify-center gap-1 transition-colors duration-150 relative ${
@@ -277,11 +277,11 @@ export default function App() {
                 </span>
               )}
             </div>
-            <span className="text-xs font-medium">Notifikasi</span>
+            <span className="text-xs font-medium">Notifications</span>
           </button>
         </div>
 
-        {/* Centre FAB - Beranda, pops out above the nav */}
+        {/* Centre FAB - Home, pops out above the nav */}
         <button
           onClick={() => setCurrentPage("home")}
           className={`
@@ -294,7 +294,7 @@ export default function App() {
               : "bg-primary/90 text-primary-foreground shadow-primary/20 ring-4 ring-background hover:bg-primary"
             }
           `}
-          aria-label="Beranda"
+          aria-label="Home"
         >
           <Home size={24} />
         </button>
@@ -306,20 +306,20 @@ export default function App() {
           <div className="w-full max-w-xs rounded-2xl bg-card shadow-xl ring-1 ring-border">
             <div className="p-6 flex flex-col items-center text-center gap-4">
               <p className="text-sm font-semibold text-foreground">
-                Keluar dari pengguna <span className="font-normal text-muted-foreground">{userName || `Unit ${userUnit}`}</span>?
+                Log out of <span className="font-normal text-muted-foreground">{userName || `Unit ${userUnit}`}</span>?
               </p>
               <div className="flex gap-3 w-full">
                 <button
                   onClick={() => setShowLogoutConfirm(false)}
                   className="flex-1 h-11 rounded-xl border border-border text-sm font-semibold text-foreground active:bg-muted transition-colors"
                 >
-                  Batal
+                  Cancel
                 </button>
                 <button
                   onClick={() => { setShowLogoutConfirm(false); void handleLogout() }}
                   className="flex-1 h-11 rounded-xl bg-destructive text-destructive-foreground text-sm font-semibold active:bg-destructive/80 transition-colors"
                 >
-                  Keluar
+                  Log Out
                 </button>
               </div>
               <button
@@ -348,15 +348,15 @@ function NotificationsPage({ anomalies, lastReadAt }: { anomalies: AnomalyItem[]
       {/* Heading */}
       <div className="flex items-center gap-2 pt-1">
         <Bell size={20} className="text-primary" />
-        <h1 className="text-xl font-bold text-foreground">Notifikasi</h1>
+        <h1 className="text-xl font-bold text-foreground">Notifications</h1>
         {criticalCount > 0 && (
           <span className="text-xs font-bold bg-status-critical/10 text-status-critical px-2 py-0.5 rounded-full">
-            {criticalCount} kritis
+            {criticalCount} critical
           </span>
         )}
         {warningCount > 0 && (
           <span className="text-xs font-bold bg-status-warn/10 text-status-warn px-2 py-0.5 rounded-full">
-            {warningCount} peringatan
+            {warningCount} warning
           </span>
         )}
       </div>
@@ -365,9 +365,9 @@ function NotificationsPage({ anomalies, lastReadAt }: { anomalies: AnomalyItem[]
       {shown.length === 0 && (
         <div className="flex flex-col items-center justify-center py-20 gap-3 text-muted-foreground">
           <CheckCircle size={40} className="text-primary opacity-40" />
-          <p className="text-sm font-medium">Semua normal</p>
+          <p className="text-sm font-medium">All clear</p>
           <p className="text-xs text-center max-w-xs">
-            Tidak ada anomali terdeteksi. Sistem berjalan normal.
+            No anomalies detected. Everything is running normally.
           </p>
         </div>
       )}
@@ -399,7 +399,7 @@ function NotificationsPage({ anomalies, lastReadAt }: { anomalies: AnomalyItem[]
               : isInfo
               ? "bg-primary/15 text-primary"
               : "bg-status-warn/15 text-status-warn"
-            const badgeLabel = isCritical ? "Kritis" : isInfo ? "Info" : "Peringatan"
+            const badgeLabel = isCritical ? "Critical" : isInfo ? "Info" : "Warning"
 
             return (
               <div key={idx} className={`rounded-2xl border px-4 py-3 transition-opacity ${colorWrap} ${isRead ? "opacity-50" : ""}`}>
@@ -425,9 +425,9 @@ function NotificationsPage({ anomalies, lastReadAt }: { anomalies: AnomalyItem[]
 function formatTimeAgo(timestamp: string): string {
   const diff = Date.now() - new Date(timestamp).getTime()
   const mins = Math.floor(diff / 60_000)
-  if (mins < 1)  return "Baru saja"
-  if (mins < 60) return `${mins} menit lalu`
+  if (mins < 1)  return "Just now"
+  if (mins < 60) return `${mins}m ago`
   const hrs = Math.floor(mins / 60)
-  if (hrs < 24)  return `${hrs} jam lalu`
-  return `${Math.floor(hrs / 24)} hari lalu`
+  if (hrs < 24)  return `${hrs}h ago`
+  return `${Math.floor(hrs / 24)}d ago`
 }

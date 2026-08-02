@@ -23,14 +23,14 @@ const PAYMENT_OPTIONS: PaymentOption[] = [
   {
     id: "qris",
     label: "QRIS",
-    sublabel: "Scan dengan semua m-banking & e-wallet",
+    sublabel: "Scan with any mobile banking or e-wallet app",
     method: "qris",
     icon: <QrCode size={22} />,
   },
   {
     id: "va-bca",
     label: "BCA Virtual Account",
-    sublabel: "Transfer via m-BCA / ATM BCA",
+    sublabel: "Transfer via m-BCA / BCA ATM",
     method: "transfer",
     icon: <Building2 size={22} />,
   },
@@ -40,31 +40,31 @@ const BCA_STEPS = {
   mbca: {
     label: "m-BCA (BCA Mobile)",
     steps: [
-      "Lakukan log in pada aplikasi BCA Mobile",
-      "Pilih menu m-BCA, masukkan kode akses m-BCA",
-      "Pilih m-Transfer → BCA Virtual Account",
-      "Masukkan nomor Virtual Account di atas",
-      "Masukkan pin m-BCA dan konfirmasi",
-      "Pembayaran selesai - simpan notifikasi sebagai bukti",
+      "Log in to the BCA Mobile app",
+      "Select the m-BCA menu and enter your m-BCA access code",
+      "Select m-Transfer → BCA Virtual Account",
+      "Enter the Virtual Account number above",
+      "Enter your m-BCA PIN and confirm",
+      "Payment complete — save the notification as proof",
     ],
   },
   internet: {
-    label: "Internet Banking BCA",
+    label: "BCA Internet Banking",
     steps: [
-      "Login di klikbca.com",
-      "Pilih menu Pembayaran Tagihan → BCA Virtual Account",
-      "Masukkan nomor Virtual Account di atas",
-      "Pastikan detail pembayaran sesuai, lalu konfirmasi",
-      "Masukkan password dan mToken",
+      "Log in at klikbca.com",
+      "Select Bill Payment → BCA Virtual Account",
+      "Enter the Virtual Account number above",
+      "Confirm the payment details, then submit",
+      "Enter your password and mToken",
     ],
   },
   atm: {
-    label: "ATM BCA",
+    label: "BCA ATM",
     steps: [
-      "Masukkan kartu ATM dan PIN BCA",
-      "Pilih Transaksi Lainnya → Transfer → ke Rek BCA Virtual Account",
-      "Masukkan nomor Virtual Account di atas",
-      "Periksa nominal lalu tekan Benar",
+      "Insert your ATM card and enter your BCA PIN",
+      "Select Other Transactions → Transfer → to BCA Virtual Account",
+      "Enter the Virtual Account number above",
+      "Check the amount, then press Correct",
     ],
   },
 }
@@ -110,7 +110,7 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
     setTransactionId(paidTransactionId)
     setStep("success")
     if (automatic) {
-      toast.success("Pembayaran terkonfirmasi otomatis")
+      toast.success("Payment confirmed automatically")
     }
   }, [])
 
@@ -121,12 +121,12 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
     }
 
     if (status === "expired" || status === "failed") {
-      toast.error("Transaksi sudah tidak aktif. Silakan buat transaksi baru.")
+      toast.error("This transaction is no longer active. Please start a new one.")
       return true
     }
 
     if (!silent) {
-      toast.error("Pembayaran belum terkonfirmasi. Selesaikan pembayaran lalu coba lagi.")
+      toast.error("Payment not yet confirmed. Complete the payment, then try again.")
     }
 
     return false
@@ -145,7 +145,7 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
           // Handle expiry inside the interval — avoids the race condition where
           // a separate useEffect sees timeLeft=0 before the timer ever started.
           setTimeout(() => {
-            toast.error("Waktu pembayaran habis. Silakan buat transaksi baru.")
+            toast.error("Payment window expired. Please start a new transaction.")
             restartRef.current()
           }, 0)
           return 0
@@ -160,7 +160,7 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
   useEffect(() => {
     if (step !== "instruction" || selectedOption?.method !== "transfer" || !initResult?.vaNumber) return
     void navigator.clipboard.writeText(initResult.vaNumber).catch(() => {})
-    toast.success("Nomor VA disalin otomatis")
+    toast.success("VA number copied automatically")
   }, [step, initResult?.vaNumber, selectedOption?.method])
 
   useEffect(() => {
@@ -183,11 +183,11 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
   const validateField = (val: string, setter: (e: string) => void): boolean => {
     const n = parseRp(val)
     if (val !== "" && n < MIN_AMOUNT) {
-      setter(`Minimum Rp ${MIN_AMOUNT.toLocaleString("id-ID")}`)
+      setter(`Minimum Rp ${MIN_AMOUNT.toLocaleString("en-US")}`)
       return false
     }
     if (n > MAX_AMOUNT) {
-      setter(`Maksimum Rp ${MAX_AMOUNT.toLocaleString("id-ID")}`)
+      setter(`Maximum Rp ${MAX_AMOUNT.toLocaleString("en-US")}`)
       return false
     }
     setter("")
@@ -199,7 +199,7 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
     const waterOk = validateField(waterRaw, setWaterError)
     if (!elecOk || !waterOk) return
     if (totalAmount < MIN_AMOUNT) {
-      toast.error("Isi minimal satu jenis tagihan (min. Rp 1.000)")
+      toast.error("Enter at least one amount (min. Rp 1,000)")
       return
     }
     setStep("method")
@@ -226,7 +226,7 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
       })
       setStep("instruction")
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Gagal memulai transaksi")
+      toast.error(err instanceof Error ? err.message : "Failed to start transaction")
     } finally {
       setLoading(false)
     }
@@ -239,7 +239,7 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
       const result = await api.getTopupStatus(unitId, initResult.transactionId)
       handleTopupStatus(result.status, initResult.transactionId)
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Gagal memeriksa status. Coba lagi.")
+      toast.error(err instanceof Error ? err.message : "Failed to check status. Please try again.")
     } finally {
       setLoading(false)
     }
@@ -317,7 +317,7 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
     return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${sec.toString().padStart(2, "0")}`
   }
 
-  const vaNumber = initResult?.vaNumber ?? "Mendapatkan nomor..."
+  const vaNumber = initResult?.vaNumber ?? "Getting number..."
 
   if (step === "success") {
     return (
@@ -342,14 +342,14 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
           <button
             onClick={() => setStep(step === "method" ? "amount" : "method")}
             className="p-2 rounded-xl hover:bg-muted active:bg-muted/70 transition-colors flex-shrink-0"
-            aria-label="Kembali"
+            aria-label="Back"
           >
             <ArrowLeft size={20} className="text-foreground" />
           </button>
         )}
         <div>
           <h1 className="text-base font-bold text-foreground leading-tight">
-            {step === "amount" ? "Isi Saldo" : step === "method" ? "Pilih Metode Pembayaran" : "Instruksi Pembayaran"}
+            {step === "amount" ? "Top Up" : step === "method" ? "Choose Payment Method" : "Payment Instructions"}
           </h1>
           <StepIndicator current={step} />
         </div>
@@ -381,9 +381,9 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
                 ? "bg-status-warn/10 border-status-warn/25 text-status-warn"
                 : "bg-primary/8 border-primary/20 text-primary"
             }`}>
-              <p className="text-xs font-bold uppercase tracking-wide">Status Perangkat</p>
+              <p className="text-xs font-bold uppercase tracking-wide">Device Status</p>
               <p className="text-sm font-semibold">
-                {isDeviceOnline === null ? "Memeriksa status..." : isDeviceOnline ? "Online" : "Offline"}
+                {isDeviceOnline === null ? "Checking status..." : isDeviceOnline ? "Online" : "Offline"}
               </p>
             </div>
 
@@ -391,7 +391,7 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
             <div className="space-y-1.5">
               <div className="flex items-center gap-2">
                 <Zap size={15} className="text-primary flex-shrink-0" />
-                <label className="text-sm font-semibold text-foreground">Token Listrik</label>
+                <label className="text-sm font-semibold text-foreground">Electricity Token</label>
               </div>
               <div className="relative">
                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-medium pointer-events-none select-none">Rp</span>
@@ -413,11 +413,11 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
                 <p className="text-xs text-destructive pl-1">{elecError}</p>
               ) : elecAmount >= MIN_AMOUNT ? (
                 <p className="text-xs text-muted-foreground pl-1">
-                  {(elecAmount / energyTariff).toFixed(2)} KWh listrik
+                  {(elecAmount / energyTariff).toFixed(2)} kWh of electricity
                 </p>
               ) : (
                 <p className="text-xs text-muted-foreground pl-1">
-                  Min. Rp {MIN_AMOUNT.toLocaleString("id-ID")} · Maks. Rp {MAX_AMOUNT.toLocaleString("id-ID")}
+                  Min. Rp {MIN_AMOUNT.toLocaleString("en-US")} · Max. Rp {MAX_AMOUNT.toLocaleString("en-US")}
                 </p>
               )}
             </div>
@@ -426,7 +426,7 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
             <div className="space-y-1.5">
               <div className="flex items-center gap-2">
                 <Droplets size={15} className="text-cyan-500 flex-shrink-0" />
-                <label className="text-sm font-semibold text-foreground">Token Air</label>
+                <label className="text-sm font-semibold text-foreground">Water Token</label>
               </div>
               <div className="relative">
                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-medium pointer-events-none select-none">Rp</span>
@@ -448,11 +448,11 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
                 <p className="text-xs text-destructive pl-1">{waterError}</p>
               ) : waterAmount >= MIN_AMOUNT ? (
                 <p className="text-xs text-muted-foreground pl-1">
-                  {(waterAmount / waterTariff).toFixed(3)} m³ air
+                  {(waterAmount / waterTariff).toFixed(3)} m³ of water
                 </p>
               ) : (
                 <p className="text-xs text-muted-foreground pl-1">
-                  Min. Rp {MIN_AMOUNT.toLocaleString("id-ID")} · Maks. Rp {MAX_AMOUNT.toLocaleString("id-ID")}
+                  Min. Rp {MIN_AMOUNT.toLocaleString("en-US")} · Max. Rp {MAX_AMOUNT.toLocaleString("en-US")}
                 </p>
               )}
             </div>
@@ -460,8 +460,8 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
             {/* Total summary */}
             {totalAmount >= MIN_AMOUNT && (
               <div className="flex items-center justify-between rounded-xl bg-muted/40 px-4 py-3">
-                <span className="text-sm text-muted-foreground font-medium">Total Pembayaran</span>
-                <span className="font-bold text-lg text-foreground">Rp {totalAmount.toLocaleString("id-ID")}</span>
+                <span className="text-sm text-muted-foreground font-medium">Total Payment</span>
+                <span className="font-bold text-lg text-foreground">Rp {totalAmount.toLocaleString("en-US")}</span>
               </div>
             )}
           </>
@@ -476,29 +476,29 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
                 <div className="flex items-center justify-between px-4 py-3 border-b border-border last:border-0">
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Zap size={14} className="text-primary" />
-                    <span>Token Listrik</span>
+                    <span>Electricity Token</span>
                   </div>
-                  <span className="font-semibold text-foreground text-sm">Rp {elecAmount.toLocaleString("id-ID")}</span>
+                  <span className="font-semibold text-foreground text-sm">Rp {elecAmount.toLocaleString("en-US")}</span>
                 </div>
               )}
               {waterAmount > 0 && (
                 <div className="flex items-center justify-between px-4 py-3 border-b border-border last:border-0">
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Droplets size={14} className="text-cyan-500" />
-                    <span>Token Air</span>
+                    <span>Water Token</span>
                   </div>
-                  <span className="font-semibold text-foreground text-sm">Rp {waterAmount.toLocaleString("id-ID")}</span>
+                  <span className="font-semibold text-foreground text-sm">Rp {waterAmount.toLocaleString("en-US")}</span>
                 </div>
               )}
               <div className="flex items-center justify-between px-4 py-3 bg-muted/30">
                 <span className="text-sm font-semibold text-foreground">Total</span>
-                <span className="font-bold text-lg text-foreground">Rp {totalAmount.toLocaleString("id-ID")}</span>
+                <span className="font-bold text-lg text-foreground">Rp {totalAmount.toLocaleString("en-US")}</span>
               </div>
             </div>
 
             {/* QRIS */}
             <div className="space-y-2">
-              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Bayar Cepat</p>
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Quick Pay</p>
               {PAYMENT_OPTIONS.filter((o) => o.method === "qris").map((opt) => (
                 <MethodRow key={opt.id} option={opt} selected={selectedOption?.id === opt.id} onSelect={setSelectedOption} />
               ))}
@@ -506,7 +506,7 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
 
             {/* Transfer */}
             <div className="space-y-2">
-              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Transfer Bank</p>
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Bank Transfer</p>
               {PAYMENT_OPTIONS.filter((o) => o.method === "transfer").map((opt) => (
                 <MethodRow key={opt.id} option={opt} selected={selectedOption?.id === opt.id} onSelect={setSelectedOption} />
               ))}
@@ -519,15 +519,15 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
           <>
             {/* Total */}
             <div className="text-center py-2">
-              <p className="text-sm text-muted-foreground">Total Tagihan</p>
-              <p className="text-3xl font-bold text-foreground mt-1">Rp {totalAmount.toLocaleString("id-ID")}</p>
+              <p className="text-sm text-muted-foreground">Total Amount</p>
+              <p className="text-3xl font-bold text-foreground mt-1">Rp {totalAmount.toLocaleString("en-US")}</p>
               <p className="text-xs text-muted-foreground mt-1">Ref: {initResult.transactionId}</p>
             </div>
 
             {/* QRIS */}
             {selectedOption.method === "qris" && (
               <Card className="p-6 flex flex-col items-center gap-4">
-                <p className="text-sm font-semibold text-foreground">Scan kode QRIS berikut</p>
+                <p className="text-sm font-semibold text-foreground">Scan the QRIS code below</p>
                 <div className="w-48 h-48 bg-white rounded-2xl border-2 border-border flex flex-col items-center justify-center gap-2 shadow-inner overflow-hidden">
                   {initResult.qrUrl ? (
                     <img src={initResult.qrUrl} alt="QRIS Code" className="w-full h-full object-contain" />
@@ -539,8 +539,8 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
                   )}
                 </div>
                 <div className="text-center space-y-1">
-                  <p className="text-xs text-muted-foreground">Berlaku selama <span className="font-semibold text-foreground">15 menit</span></p>
-                  <p className="text-xs text-muted-foreground">Gunakan m-banking atau dompet digital apapun</p>
+                  <p className="text-xs text-muted-foreground">Valid for <span className="font-semibold text-foreground">15 minutes</span></p>
+                  <p className="text-xs text-muted-foreground">Use any mobile banking or e-wallet app</p>
                 </div>
               </Card>
             )}
@@ -555,7 +555,7 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
                     </div>
                     <div>
                       <p className="font-semibold text-sm text-foreground">BCA Virtual Account</p>
-                      <p className="text-xs text-muted-foreground">Berlaku 24 jam</p>
+                      <p className="text-xs text-muted-foreground">Valid for 24 hours</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-1.5 bg-muted/60 rounded-xl px-3 py-1.5">
@@ -568,21 +568,21 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
 
                 <div className="p-5 space-y-4">
                   <div className="bg-muted/40 rounded-xl p-4">
-                    <p className="text-xs text-muted-foreground mb-2">Nomor Virtual Account</p>
+                    <p className="text-xs text-muted-foreground mb-2">Virtual Account Number</p>
                     <button
                       onClick={() => copyVA(vaNumber)}
                       className="w-full text-left active:opacity-70 transition-opacity"
                     >
                       <p className={`text-lg font-mono font-bold tracking-widest leading-none ${copied ? "text-green-600" : "text-foreground"}`}>
-                        {copied ? "✓ Tersalin!" : vaNumber}
+                        {copied ? "✓ Copied!" : vaNumber}
                       </p>
                     </button>
                   </div>
 
                   <div className="flex items-center justify-between px-1">
                     <div>
-                      <p className="text-xs text-muted-foreground">Total Pembayaran</p>
-                      <p className="text-xl font-bold text-foreground">Rp {totalAmount.toLocaleString("id-ID")}</p>
+                      <p className="text-xs text-muted-foreground">Total Payment</p>
+                      <p className="text-xl font-bold text-foreground">Rp {totalAmount.toLocaleString("en-US")}</p>
                     </div>
                     <p className="text-xs text-muted-foreground">Ref: {initResult.transactionId.slice(-8)}</p>
                   </div>
@@ -590,8 +590,8 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
                   <div className="flex gap-2.5 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 rounded-xl p-3">
                     <Info size={14} className="text-blue-500 flex-shrink-0 mt-0.5" />
                     <p className="text-xs text-blue-700 dark:text-blue-300 leading-relaxed">
-                      Transfer Virtual Account hanya bisa dilakukan dari{" "}
-                      <span className="font-semibold">rekening BCA</span>. Transfer dari bank lain akan gagal diproses.
+                      Virtual Account transfers can only be made from a{" "}
+                      <span className="font-semibold">BCA account</span>. Transfers from other banks will fail.
                     </p>
                   </div>
 
@@ -631,25 +631,25 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
                   </div>
                   <div>
                     <p className="font-semibold text-foreground">{selectedOption.label}</p>
-                    <p className="text-xs text-muted-foreground">Pembayaran dompet digital</p>
+                    <p className="text-xs text-muted-foreground">E-wallet payment</p>
                   </div>
                 </div>
                 <div className="bg-muted/40 rounded-xl p-4 space-y-2 text-sm text-muted-foreground">
                   <div className="flex justify-between">
-                    <span>Nominal</span>
-                    <span className="font-semibold text-foreground">Rp {totalAmount.toLocaleString("id-ID")}</span>
+                    <span>Amount</span>
+                    <span className="font-semibold text-foreground">Rp {totalAmount.toLocaleString("en-US")}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span>Kode Referensi</span>
+                    <span>Reference Code</span>
                     <span className="font-mono text-foreground">{initResult.transactionId.slice(-10)}</span>
                   </div>
                 </div>
                 <ol className="space-y-2">
                   {[
-                    `Buka aplikasi ${selectedOption.label}`,
-                    "Pilih menu Bayar / Scan QR",
-                    "Masukkan kode referensi atau nominal yang tertera",
-                    "Konfirmasi dan selesaikan pembayaran",
+                    `Open the ${selectedOption.label} app`,
+                    "Select Pay / Scan QR",
+                    "Enter the reference code or amount shown",
+                    "Confirm and complete the payment",
                   ].map((s, i) => (
                     <li key={i} className="flex items-start gap-3 text-sm text-muted-foreground">
                       <span className="flex-shrink-0 w-5 h-5 rounded-full bg-primary/10 text-primary text-xs font-bold flex items-center justify-center mt-0.5">{i + 1}</span>
@@ -668,7 +668,7 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
       {step === "instruction" && loading && (
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm gap-3">
           <div className="h-10 w-10 rounded-full border-4 border-primary border-t-transparent animate-spin" />
-          <p className="text-white text-sm font-medium">Memeriksa pembayaran...</p>
+          <p className="text-white text-sm font-medium">Checking payment...</p>
         </div>
       )}
 
@@ -676,23 +676,23 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
       <div className="flex-none border-t border-border bg-background">
         {step === "instruction" && (
           <p className="text-xs text-center text-muted-foreground px-4 pt-3 pb-0">
-            Status diperbarui otomatis. Tekan konfirmasi setelah selesai bayar.
+            Status updates automatically. Confirm below once you've paid.
           </p>
         )}
         <div className="p-4 space-y-2">
           {step === "amount" && (
             <Button onClick={goToMethod} disabled={totalAmount < MIN_AMOUNT} className={cta.primary}>
-              Pilih Metode Pembayaran
+              Choose Payment Method
             </Button>
           )}
           {step === "method" && (
             <Button onClick={() => void goToInstruction()} disabled={!selectedOption || loading} className={cta.primary}>
-              {loading ? "Memproses..." : "Lanjutkan"}
+              {loading ? "Processing..." : "Continue"}
             </Button>
           )}
           {step === "instruction" && (
             <Button onClick={() => void confirmPayment()} disabled={loading} className={cta.primary}>
-              {loading ? "Mengkonfirmasi..." : "Saya Sudah Bayar"}
+              {loading ? "Confirming..." : "I've Paid"}
             </Button>
           )}
         </div>
@@ -703,9 +703,9 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
           <div className="w-full max-w-sm rounded-2xl bg-card shadow-xl ring-1 ring-border">
             <div className="p-6 space-y-4">
               <div className="space-y-2">
-                <h2 className="text-lg font-bold text-foreground">Perangkat Sedang Offline</h2>
+                <h2 className="text-lg font-bold text-foreground">Device Is Offline</h2>
                 <p className="text-sm text-muted-foreground leading-relaxed">
-                  Top up belum dapat diproses karena meter tidak sedang terhubung. Nyalakan perangkat terlebih dahulu atau hubungi teknisi/pengelola agar saldo dapat disinkronkan dengan aman.
+                  Top-up can't be processed right now because the meter isn't connected. Turn the device back on, or contact a technician/manager so the balance can be synced safely.
                 </p>
               </div>
               <div className="flex">
@@ -716,7 +716,7 @@ export default function TokenPurchase({ unitId, onBack }: TokenPurchaseProps) {
                   }}
                   className="w-full h-11 rounded-xl bg-primary text-primary-foreground text-sm font-semibold active:bg-primary/80 transition-colors"
                 >
-                  Kembali ke Beranda
+                  Back to Home
                 </button>
               </div>
             </div>
@@ -783,41 +783,41 @@ function SuccessScreen({ transactionId, elecAmount, waterAmount, method, onBuyAg
       </div>
 
       <div className="text-center">
-        <h1 className="text-2xl font-bold text-foreground">Pembayaran Berhasil</h1>
-        <p className="text-muted-foreground text-sm mt-1">Token akan aktif setelah perangkat mengonfirmasi sinkronisasi</p>
+        <h1 className="text-2xl font-bold text-foreground">Payment Successful</h1>
+        <p className="text-muted-foreground text-sm mt-1">Your token will activate once the device confirms the sync</p>
       </div>
 
       <Card className="w-full bg-muted/30 p-5 space-y-3">
         <div className="flex justify-between items-center pb-3 border-b border-border">
-          <span className="text-muted-foreground text-sm">ID Transaksi</span>
+          <span className="text-muted-foreground text-sm">Transaction ID</span>
           <span className="font-mono text-xs font-medium text-foreground">{transactionId.slice(-12)}</span>
         </div>
         {elecAmount > 0 && (
           <div className="flex justify-between items-center">
-            <span className="text-muted-foreground text-sm">Token Listrik</span>
-            <span className="font-semibold text-foreground">Rp {elecAmount.toLocaleString("id-ID")}</span>
+            <span className="text-muted-foreground text-sm">Electricity Token</span>
+            <span className="font-semibold text-foreground">Rp {elecAmount.toLocaleString("en-US")}</span>
           </div>
         )}
         {waterAmount > 0 && (
           <div className="flex justify-between items-center">
-            <span className="text-muted-foreground text-sm">Token Air</span>
-            <span className="font-semibold text-foreground">Rp {waterAmount.toLocaleString("id-ID")}</span>
+            <span className="text-muted-foreground text-sm">Water Token</span>
+            <span className="font-semibold text-foreground">Rp {waterAmount.toLocaleString("en-US")}</span>
           </div>
         )}
         <div className="flex justify-between items-center pt-2 border-t border-border">
           <span className="text-foreground text-sm font-semibold">Total</span>
-          <span className="font-bold text-foreground">Rp {total.toLocaleString("id-ID")}</span>
+          <span className="font-bold text-foreground">Rp {total.toLocaleString("en-US")}</span>
         </div>
         <div className="flex justify-between items-center">
-          <span className="text-muted-foreground text-sm">Metode</span>
+          <span className="text-muted-foreground text-sm">Method</span>
           <span className="font-medium text-foreground">{method?.label ?? "-"}</span>
         </div>
       </Card>
 
       <div className="w-full space-y-3 pt-4">
-        <Button className={cta.primary} onClick={onBuyAgain}>Isi Saldo Lagi</Button>
+        <Button className={cta.primary} onClick={onBuyAgain}>Top Up Again</Button>
         <Button variant="outline" className={`${cta.secondary} border-primary text-primary`} onClick={onBack}>
-          Kembali ke Beranda
+          Back to Home
         </Button>
       </div>
     </div>

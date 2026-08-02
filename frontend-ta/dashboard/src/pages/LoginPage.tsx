@@ -24,7 +24,7 @@ export default function LoginPage({ onSuccess }: LoginPageProps) {
     setLoading(true);
     // Brief artificial delay so the sign-in doesn't feel instant/fake.
     await new Promise(resolve => setTimeout(resolve, 900));
-    const payload = { sub: 'admin@netflow.demo', name: 'Admin Netflow', email: 'admin@netflow.demo' };
+    const payload = { sub: 'admin@netflow.demo', name: 'John Doe', email: 'admin@netflow.demo' };
     const token = `demo.${btoa(JSON.stringify(payload))}.sig`;
     if (onSuccess) {
       onSuccess(token);
